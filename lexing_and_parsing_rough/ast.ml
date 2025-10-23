@@ -27,22 +27,23 @@ type type_def = string * nameable_type
 (* ---------- Values ---------- *)
 
 type basic_value =
+  | VUnit
   | VInt of int
   | VFloat of float
   | VBool of bool
+  | Struct of (string * basic_value) 
   | VVar of string
 
 type new_instance = {
   type_ : basic_type;
   cap : cap;
-  default_val : basic_value option;
+  default_val : basic_value;
 }
 
 and value =
   | Basic of basic_value
   | New of new_instance
   | Array of int * new_instance
-  | Struct of (string * value) list
 
 (* ---------- Expressions ---------- *)
 
@@ -66,7 +67,7 @@ type value_expr =
 (* ---------- Statements ---------- *)
 
 type assignment = {
-  assignable_expr : assignable_expr;
+  target : assignable_expr;
   rhs : value_expr;
 }
 
