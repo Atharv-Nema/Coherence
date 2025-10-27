@@ -1,8 +1,9 @@
+#pragma once
 #include "../ast/expr.hpp"
-#include "env.hpp"
 #include "overload.hpp"
 #include <assert.h>
 #include "type_checker.hpp"
+#include <functional>
 
 template<typename ... Ts>
 struct Overload : Ts ... { 
@@ -31,6 +32,20 @@ bool capabilities_assignable(Cap c1, Cap c2) {
     return std::visit(Overload{
         // same kind: Ref, Val, Iso, Iso_cap
         [](const Cap::Ref&, const Cap::Ref&) { return true; },
+        [](const Cap::Ref&, const Cap::Iso_cap&) { return true; },
+        [](const Cap::Val&, const Cap::Val&) { return true; },
+        [](const Cap::Val&, const Cap::Iso_cap&) { return true; },
+        [](const Cap::Iso&, const Cap::Iso_cap&) { return true; },
+        [](const Cap::Locked& l1, const Cap::Locked l2) {
+            return l1.lock_name == l2.lock_name;
+        },
+        [](const Cap::Locked&, const Cap::Iso_cap&) {return true;},
+        [](const auto&, const auto&) { return false; }
+    }, c1.t, c2.t);
+}
+
+bool capabilities_sendable(Cap c1, Cap c2) {
+    return std::visit(Overload{
         [](const Cap::Ref&, const Cap::Iso_cap&) { return true; },
         [](const Cap::Val&, const Cap::Val&) { return true; },
         [](const Cap::Val&, const Cap::Iso_cap&) { return true; },
@@ -74,24 +89,15 @@ bool can_appear_in_lhs(TypeEnv& env, std::shared_ptr<ValExpr> expr) {
     // This assumes that expr is well-typed ig
     return std::visit(Overload{
         [](const ValExpr::VVar&) {return true;},
-        [&](const ValExpr::ArrayAccess& array_access) {
+        [&](const ValExpr::PointerAccess& pointer_access) {
             // First, need to check whether the internal pointer of array_access is of an assignable type
-            auto arr_type = val_expr_type(env, array_access.value);
+            auto arr_type = val_expr_type(env, pointer_access.value);
             assert(arr_type);
             auto* ptr_type = std::get_if<FullType::Pointer>(&arr_type->t);
             if(!capability_mutable(ptr_type->cap)) {
                 return false;
             }
-            return can_appear_in_lhs(env, array_access.value);
-        },
-        [&](const ValExpr::Deref& deref) {
-            auto inner_type = val_expr_type(env, deref.inner);
-            assert(inner_type);
-            auto* ptr_type = std::get_if<FullType::Pointer>(&inner_type->t);
-            if(!capability_mutable(ptr_type->cap)) {
-                return false;
-            }
-            return can_appear_in_lhs(env, deref.inner);
+            return can_appear_in_lhs(env, pointer_access.value);
         },
         [&](const ValExpr::Field& field) {
             return can_appear_in_lhs(env, field.base);
@@ -118,7 +124,7 @@ bool type_is_numeric(TypeContext& type_context, const FullType& type) {
             if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
                 return false;
             }
-            return type_is_numeric(type_context, FullType { FullType::Raw {*standard_type}});
+            return type_is_numeric(type_context, FullType {*standard_type});
         },
         [&](const BasicType::TActor&) {return false;}
     }, basic_type->t);
@@ -185,25 +191,99 @@ bool type_assignable(TypeContext& type_context, const FullType& lhs, const FullT
     return capabilities_assignable(lhs_ptr->cap, rhs_ptr->cap);
 }
 
-bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& signature, 
-    const std::vector<std::shared_ptr<ValExpr>>& arguments) {
-    // This works perfectly if overloading is not supported, which is not for now
-    if (signature.size() != arguments.size()) {
+bool type_sendable(TypeContext& type_context, const FullType& lhs, const FullType& rhs) {
+    // CR figure out how to reduce code duplication
+    if(type_is_numeric(type_context, lhs) && type_is_numeric(type_context, rhs)) {
+        return true;
+    }
+    if(!basic_type_equal(type_context, extract_basic_type(lhs), extract_basic_type(rhs))) {
         return false;
     }
-    for (size_t i = 0; i < signature.size(); ++i) {
-        // infer type of argument
-        std::optional<FullType> arg_type = val_expr_type(env, arguments[i]);
+    auto lhs_ptr = std::get_if<FullType::Pointer>(&lhs.t);
+    if(lhs_ptr == nullptr) {
+        // As the types are raw and equal and hence sendable
+        return true;
+    }
+    // Now need to look at the assignability matrix
+    auto rhs_ptr = std::get_if<FullType::Pointer>(&rhs.t);
+    assert(rhs_ptr);
+    return capabilities_sendable(lhs_ptr->cap, rhs_ptr->cap);
+}
+
+bool check_type_expr_list_valid(
+    TypeEnv& env, 
+    const std::vector<FullType>& expected_types, 
+    const std::vector<std::shared_ptr<ValExpr>>& val_expr_list, 
+    std::function<bool(
+        TypeContext& type_context, 
+        const FullType& expected_type, 
+        const FullType& arg_type)> arg_type_valid ) {
+    if (expected_types.size() != val_expr_list.size()) {
+        return false;
+    }
+    for(size_t i = 0; i < expected_types.size(); i++) {
+        std::optional<FullType> arg_type = val_expr_type(env, val_expr_list[i]);
         if(!arg_type) {
             return false;
         }
-        const FullType& expected = signature[i].type;
+        const FullType& expected_type = expected_types[i];
 
-        if (!type_assignable(env.type_context, *arg_type, expected)) {
+        if (!type_assignable(env.type_context, expected_type, *arg_type)) {
             return false;
         }
     }
     return true;
+}
+
+// std::vector<TopLevelItem::VarDecl
+
+bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& signature, const std::vector<std::shared_ptr<ValExpr>>& arguments, bool sendable) {
+    std::vector<FullType> expected_types;
+    expected_types.reserve(signature.size());
+    for(const auto& var_decl: signature) {
+        expected_types.push_back(var_decl.type);
+    }
+    return check_type_expr_list_valid(env, expected_types, arguments, (sendable) ? type_sendable: type_assignable);
+}
+
+bool struct_valid(TypeEnv &env, const NameableType::Struct& struct_contents, const ValExpr::VStruct& struct_expr) {
+    std::sort(struct_contents.members.begin(), struct_contents.members.end());
+    std::sort(struct_expr.fields.begin(), struct_expr.fields.end());
+    if (struct_contents.members.size() != struct_expr.fields.size()) {
+        return false;
+    }
+    std::vector<FullType> expected_types;
+    std::vector<std::shared_ptr<ValExpr>> struct_members;
+    size_t size = struct_contents.members.size();
+    expected_types.reserve(size);
+    struct_members.reserve(size);
+    for(int i = 0; i < size; i++) {
+        if(struct_contents.members[i].first != struct_expr.fields[i].first) {
+            return false;
+        }
+        expected_types.emplace_back(FullType { struct_contents.members[i].second});
+        struct_members.emplace_back(struct_expr.fields[i].second);
+    }
+    return check_type_expr_list_valid(env, expected_types, struct_members, full_type_equal);
+}
+// CR: Think carefully about the copying going on
+
+std::optional<NameableType::Struct> get_struct_type(TypeEnv& env, const std::string& struct_type_name) {
+    std::optional<BasicType> basic_type = standardize_type(env.type_context, struct_type_name);
+    if(!basic_type) {
+        return std::nullopt;
+    }
+    auto named_type = std::get_if<BasicType::TNamed>(&basic_type->t);
+    if(!named_type) {
+        return std::nullopt;
+    }
+    const std::string& standardized_type_name = named_type->name;
+    assert(env.type_context.find(standardized_type_name) != env.type_context.end());
+    auto struct_type = env.type_context[standardized_type_name];
+    assert(std::holds_alternative<NameableType::Struct>(struct_type->t));
+    const auto& struct_contents = std::get<NameableType::Struct>(struct_type->t);
+    return struct_contents;
+
 }
 
 std::optional<BasicType> dereferenced_type(TypeEnv& env, FullType type) {
@@ -213,3 +293,16 @@ std::optional<BasicType> dereferenced_type(TypeEnv& env, FullType type) {
     }
     return pointer->base;
 } 
+
+FullType unaliased_type(TypeEnv& env, const FullType& full_type) {
+    auto* pointer = std::get_if<FullType::Pointer>(&full_type.t);
+    if(!pointer) {
+        return full_type;
+    }
+    if(!std::holds_alternative<Cap::Iso>(pointer->cap.t)) {
+        return full_type;
+    }
+    else {
+        return FullType {FullType::Pointer {pointer->base, Cap::Iso_cap{}}};
+    }
+}

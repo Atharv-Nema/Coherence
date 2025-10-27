@@ -39,10 +39,7 @@ struct ValExpr {
         BasicType type;
         Cap cap;
         std::shared_ptr<ValExpr> default_value;
-    };
-    struct Array {
-        int size;
-        NewInstance element_info;
+        std::shared_ptr<ValExpr> size;
     };
     struct ActorConstruction {
         std::string actor_name;
@@ -51,13 +48,12 @@ struct ValExpr {
     };
 
     // Accesses
-    struct ArrayAccess {
-        int index;
+    struct PointerAccess {
+        std::shared_ptr<ValExpr> index;
         std::shared_ptr<ValExpr> value;
     };
-    struct Deref { std::shared_ptr<ValExpr> inner; };
     struct Field { std::shared_ptr<ValExpr> base;
-                   std::vector<std::string> fields; };
+                   std::string field; };
     
     // Assignments
     struct Assignment{ 
@@ -78,17 +74,10 @@ struct ValExpr {
     
     // Operations
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
-    struct ConsumeE { std::string name; };
 
     SourceSpan source_span;
-    std::variant<VUnit, VInt, VFloat, VBool, VVar, VStruct, NewInstance, Array, ActorConstruction, 
-    ArrayAccess, Deref, Field, Assignment, FuncCall, BeCall, BinOpExpr, ConsumeE> t;
+    std::variant<VUnit, VInt, VFloat, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
+    PointerAccess, Field, Assignment, FuncCall, BeCall, BinOpExpr> t;
 };
 
-// struct AssignableExpr {
-//     struct Var { std::string name; };
-//     struct Deref { std::shared_ptr<AssignableExpr> inner; };
-//     struct Field { std::shared_ptr<AssignableExpr> base;
-//                    std::vector<std::string> fields; };
-//     std::variant<Var, Deref, Field> value;
-// };
+

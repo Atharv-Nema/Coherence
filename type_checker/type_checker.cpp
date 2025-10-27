@@ -1,58 +1,69 @@
 // For typing a value expression
 #pragma once
 #include "utils.hpp"
-
+#include <algorithm>
 
 
 std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val_expr) {
     return std::visit(Overload{
-        // ---------- Literal values ----------
+        // Literal values
         [](const ValExpr::VUnit&) {
-            return FullType{ BasicType{ BasicType::TUnit{} } };
+            return std::optional(FullType{ BasicType{ BasicType::TUnit{} } });
         },
         [](const ValExpr::VInt&) {
-            return FullType{ BasicType{ BasicType::TInt{} } };
+            return std::optional(FullType{ BasicType{ BasicType::TInt{} } });
         },
         [](const ValExpr::VFloat&) {
-            return FullType{ BasicType{ BasicType::TFloat{} } };
+            return std::optional(FullType{ BasicType{ BasicType::TFloat{} } });
         },
         [](const ValExpr::VBool&) {
-            return FullType{ BasicType{ BasicType::TBool{} } };
+            return std::optional(FullType{ BasicType{ BasicType::TBool{} } });
         },
 
-        // ---------- Variable lookup ----------
+        // Variable lookup
         [&](const ValExpr::VVar& v) -> std::optional<FullType> {
-            auto it = env.var_context.find(v.name);
-            if (it == env.var_context.end())
+            std::optional<FullType> type = env.var_context.get_value(v.name);
+            if(!type) {
                 return std::nullopt;
-            return it->second;
+            }
+            return *type;
         },
-        [&](const ValExpr::VStruct& struct) {
-            
+        [&](const ValExpr::VStruct& struct_expr) -> std::optional<FullType> {
+            auto struct_contents = get_struct_type(env, struct_expr.type_name);
+            if(!struct_contents) {
+                return std::nullopt;
+            }
+            if(struct_valid(env, *struct_contents, struct_expr)) {
+                std::optional<BasicType> basic_type = standardize_type(env.type_context, struct_expr.type_name);
+                assert(basic_type);
+                return (FullType { *basic_type });
+            }
+            else {
+                return std::nullopt;
+            }
         },
         
         // Allocations
         [&](const ValExpr::NewInstance& new_instance) -> std::optional<FullType> {
+            // auto ind_typ
+            auto size_type = val_expr_type(env, new_instance.size);
+            if(!size_type) {
+                return std::nullopt;
+            }
             auto default_type = val_expr_type(env, new_instance.default_value);
             if(default_type == std::nullopt) {
                 return std::nullopt;
             }
-            auto raw_type = std::get_if<BasicType>(&default_type->t);
-            if(raw_type == nullptr) {
+            auto basic_type = std::get_if<BasicType>(&default_type->t);
+            if(!basic_type) {
                 return std::nullopt;
             }
-            if(basic_type_equal(env.type_context, raw_type->base, new_instance.type)) {
+            if(basic_type_equal(env.type_context, *basic_type, new_instance.type)) {
                 return FullType {FullType::Pointer {new_instance.type, new_instance.cap}};
             }
             return std::nullopt;
         },
 
-        [&](const ValExpr::Array& array) -> std::optional<FullType> {
-            if(array.size < 0) {
-                return std::nullopt;
-            }
-            return val_expr_type(env, ValExpr {ValExpr::NewInstance {array.element_info}});
-        },
         [&](const ValExpr::ActorConstruction& actor_construction) -> std::optional<FullType> {
             if(env.actor_name_map.find(actor_construction.actor_name) == env.actor_name_map.end()) {
                 return std::nullopt;
@@ -77,13 +88,17 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 
         // Accesses
 
-        [&](const ValExpr::ArrayAccess& array_access) -> std::optional<FullType> {
-            if(array_access.index < 0) {
-                return std::nullopt;
-            }
+        [&](const ValExpr::PointerAccess& pointer_access) -> std::optional<FullType> {
             // CR: Implement the mutual recursion and split this common code out
-            auto internal_type = val_expr_type(env, array_access.value);
+            auto index_type = val_expr_type(env, pointer_access.index);
+            if(!index_type) {
+                return std::nullopt;
+            }
+            auto internal_type = val_expr_type(env, pointer_access.value);
             if(!internal_type) {
+                return std::nullopt;
+            }
+            if(!full_type_equal(env.type_context, *index_type, FullType { BasicType {BasicType::TInt {}}})) {
                 return std::nullopt;
             }
             auto deref_type = dereferenced_type(env, *internal_type);
@@ -93,18 +108,26 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             return FullType{ *deref_type };
         },
 
-        [&](const ValExpr::Deref& dereference) -> std::optional<FullType> {
-            auto internal_type = val_expr_type(env, dereference.inner);
-            if(!internal_type) {
+        [&](const ValExpr::Field& field_access) -> std::optional<FullType> {
+            std::optional<FullType> struct_type = val_expr_type(env, field_access.base); 
+            if(!struct_type) {
                 return std::nullopt;
             }
-            auto deref_type = dereferenced_type(env, *internal_type);
-            if(!deref_type) {
+            auto named_type = std::get_if<BasicType::TNamed>(&struct_type->t);
+            if(!named_type) {
                 return std::nullopt;
             }
-            return FullType{ *deref_type };
+            auto struct_contents = get_struct_type(env, named_type->name);
+            if(!struct_contents) {
+                return std::nullopt;
+            }
+            for(const auto& [field_name, field_basic_type]: struct_contents->members) {
+                if(field_name == field_access.field) {
+                    return FullType {field_basic_type};
+                }
+            }
+            return std::nullopt;
         },
-
 
         // Assignments
         [&](const ValExpr::Assignment& assignment) -> std::optional<FullType> {
@@ -117,7 +140,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             }
             // Now just need to check whether the thingy is actually assignable scene
             if(can_appear_in_lhs(env, assignment.lhs)) {
-                return rhs_type;
+                return unaliased_type(env, *lhs_type);
             }
             else {
                 return std::nullopt;
@@ -213,13 +236,9 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                         return std::nullopt;
                     }
             }
-        },
-
-        [&](const ValExpr::ConsumeE& consume) -> std::optional<FullType> {
-            // Need to check that it is a consumable expression
         }
 
-    }, *val_expr);
+    }, val_expr->t);
 }
 
 
