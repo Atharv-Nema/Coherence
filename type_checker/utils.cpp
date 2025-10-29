@@ -1,15 +1,8 @@
-#pragma once
 #include "../ast/expr.hpp"
-#include "overload.hpp"
 #include <assert.h>
 #include "type_checker.hpp"
 #include <functional>
-
-template<typename ... Ts>
-struct Overload : Ts ... { 
-    using Ts::operator() ...;
-};
-template<class... Ts> Overload(Ts...) -> Overload<Ts...>;
+#include <utils.hpp>
 
 BasicType extract_basic_type(const FullType& full_type) {
     std::visit(Overload{
@@ -77,7 +70,9 @@ std::optional<BasicType> standardize_type(TypeContext& type_context, const std::
                 type_context.erase(type_name);
             }
             else {
-                type_context.emplace(type_name, NameableType {NameableType::Basic {*res}});
+                std::shared_ptr<NameableType> nameable_type_ptr = 
+                    std::make_shared<NameableType>(NameableType::Basic {*res});
+                type_context.emplace(type_name, nameable_type_ptr);
             }
             return res;
         }
@@ -246,9 +241,11 @@ bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::Va
     return check_type_expr_list_valid(env, expected_types, arguments, (sendable) ? type_sendable: type_assignable);
 }
 
-bool struct_valid(TypeEnv &env, const NameableType::Struct& struct_contents, const ValExpr::VStruct& struct_expr) {
-    std::sort(struct_contents.members.begin(), struct_contents.members.end());
-    std::sort(struct_expr.fields.begin(), struct_expr.fields.end());
+bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_expr) {
+    std::sort(struct_contents.members.begin(), struct_contents.members.end(), 
+    [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(struct_expr.fields.begin(), struct_expr.fields.end(),
+    [](const auto& a, const auto& b) { return a.first < b.first; });
     if (struct_contents.members.size() != struct_expr.fields.size()) {
         return false;
     }
