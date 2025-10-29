@@ -1,5 +1,4 @@
 // For typing a value expression
-#pragma once
 #include "utils.hpp"
 #include <algorithm>
 
@@ -28,8 +27,9 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             }
             return *type;
         },
-        [&](const ValExpr::VStruct& struct_expr) -> std::optional<FullType> {
-            auto struct_contents = get_struct_type(env, struct_expr.type_name);
+        // I am not taking in a const as I would want to mutate this
+        [&](ValExpr::VStruct& struct_expr) -> std::optional<FullType> {
+            std::optional<NameableType::Struct> struct_contents = get_struct_type(env, struct_expr.type_name);
             if(!struct_contents) {
                 return std::nullopt;
             }
@@ -113,10 +113,11 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             if(!struct_type) {
                 return std::nullopt;
             }
-            auto named_type = std::get_if<BasicType::TNamed>(&struct_type->t);
-            if(!named_type) {
+            auto* basic_type = std::get_if<BasicType>(&struct_type->t);
+            if(!basic_type) {
                 return std::nullopt;
             }
+            auto* named_type = std::get_if<BasicType::TNamed>(&basic_type->t);
             auto struct_contents = get_struct_type(env, named_type->name);
             if(!struct_contents) {
                 return std::nullopt;
@@ -166,7 +167,11 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             // Lookup function definition in the type context
             auto actor_type = val_expr_type(env, b.actor);
             if(!actor_type) { return std::nullopt; }
-            auto named_actor = std::get_if<BasicType::TNamed>(&actor_type->t);
+            auto basic_type = std::get_if<BasicType>(&actor_type->t);
+            if(!basic_type) {
+                return std::nullopt;
+            }
+            auto named_actor = std::get_if<BasicType::TNamed>(&basic_type->t);
             if(!named_actor) { return std::nullopt; }
 
             assert(env.actor_name_map.find(named_actor->name) != env.actor_name_map.end());
@@ -236,6 +241,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                         return std::nullopt;
                     }
             }
+            return std::nullopt;
         }
 
     }, val_expr->t);

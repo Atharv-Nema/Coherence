@@ -1,4 +1,3 @@
-#pragma once
 #include "../ast/top_level.hpp"
 #include <unordered_map>
 #include <unordered_set>

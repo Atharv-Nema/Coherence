@@ -1,6 +1,5 @@
 #pragma once
 #include "../ast/expr.hpp"
-#include "overload.hpp"
 #include <assert.h>
 #include "type_checker.hpp"
 
@@ -21,7 +20,7 @@ bool full_type_equal(TypeContext& type_context, const FullType& type_1, const Fu
 bool type_assignable(TypeContext& type_context, const FullType& lhs, const FullType& rhs);
 bool passed_in_parameters_valid(TypeEnv &env, const std::vector<TopLevelItem::VarDecl> &signature,
                                 const std::vector<std::shared_ptr<ValExpr>> &arguments);
-bool struct_valid(TypeEnv &env, const NameableType::Struct& struct_contents, const ValExpr::VStruct& struct_);
+bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_);
 std::optional<NameableType::Struct> get_struct_type(TypeEnv& env, const std::string& struct_type_name);
 FullType unaliased_type(TypeEnv &env, const FullType& full_type);
 
