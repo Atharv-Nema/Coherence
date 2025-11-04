@@ -1,6 +1,7 @@
 #pragma once
 #include "stmts.hpp"
 
+// TODO: Change the type here to include a span probably
 using TypeDef = std::pair<std::string, NameableType>;
 
 struct TopLevelItem {
@@ -31,6 +32,5 @@ struct TopLevelItem {
 };
 
 struct Program {
-    std::vector<std::string> lock_names;
     std::vector<TopLevelItem> top_level_items;
 };

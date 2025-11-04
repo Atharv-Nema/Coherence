@@ -11,7 +11,7 @@ struct Stmt {
     struct VarDeclWithInit { 
         std::string name;
         FullType type;
-        ValExpr init; 
+        std::shared_ptr<ValExpr> init; 
     };
     struct Expr { std::shared_ptr<ValExpr> expr; };
     struct If { 
