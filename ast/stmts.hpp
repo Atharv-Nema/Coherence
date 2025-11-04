@@ -24,7 +24,6 @@ struct Stmt {
         std::vector<std::shared_ptr<Stmt>> body; 
     };
     struct Atomic { 
-        std::vector<std::string> locks;
         std::vector<std::shared_ptr<Stmt>> body;
     };
     struct Return { std::shared_ptr<ValExpr> expr; };
