@@ -2,10 +2,10 @@
 #include <assert.h>
 #include "type_checker.hpp"
 #include <functional>
-#include <utils.hpp>
+#include "utils.hpp"
 
 BasicType extract_basic_type(const FullType& full_type) {
-    std::visit(Overload{
+    return std::visit(Overload{
         [](const BasicType& basic_type) {return basic_type;},
         [](const FullType::Pointer& ptr) {return ptr.base;}
     }, full_type.t);
@@ -19,6 +19,7 @@ bool ref_cap_equal(Cap c1, Cap c2) {
         assert(locked_2 != nullptr);
         return locked_1->lock_name == locked_2->lock_name;
     }
+    return true;
 }
 
 bool capabilities_assignable(Cap c1, Cap c2) {
@@ -77,6 +78,7 @@ std::optional<BasicType> standardize_type(TypeContext& type_context, const std::
             return res;
         }
     }
+    return std::nullopt;
 }
 
 bool can_appear_in_lhs(TypeEnv& env, std::shared_ptr<ValExpr> expr) {
@@ -143,6 +145,7 @@ bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const 
         }
         return basic_type_equal(type_context, *standard_type_1, *standard_type_2);
     }
+    return true;
 }
 
 bool full_type_equal(TypeContext& type_context, const FullType& type_1, const FullType& type_2) {

@@ -1,31 +1,48 @@
-%{
-#include "top_level.hpp"
-#include <memory>
-#include <iostream>
-using namespace std;
+/* ---------- HEADER SECTION (shared across .cc and .hh) ---------- */
+%code requires {
+    // Includes needed by both the parser implementation (.cc)
+    // and the generated header (.hh) that defines YYSTYPE.
+    #include "top_level.hpp"
+    #include <memory>
+    #include <string>
+    #include <vector>
 
-// Declare lexer and error handler
-int yylex(void);
+    using namespace std;
+}
 
-Program* program_root = nullptr;
-%}
+/* ---------- IMPLEMENTATION-ONLY HEADER SECTION (.cc only) ---------- */
+%code {
+    // These only go into parser.tab.cc (not the header).
+    #include <iostream>
 
-/* ---------- BISON CONFIG ---------- */
+    // Forward declaration of lexer (defined in lex.yy.cc)
+    int yylex(void);
+
+    // Global root node for the parsed program
+    Program* program_root = nullptr;
+}
+
+/* ---------- BISON CONFIGURATION ---------- */
 %define parse.error verbose
 %locations
 
+/* ---------- ERROR HANDLERS (go at bottom of parser.tab.cc) ---------- */
 %code {
     void yyerror(YYLTYPE* loc, const char* s) {
-        cerr << "Parse error at line " << loc->first_line
-            << ", column " << loc->first_column << ": " << s << endl;
+        cerr << "Parse error at line "
+             << loc->first_line << ", column " << loc->first_column
+             << ": " << s << endl;
     }
+
     void yyerror(const char* s) {
-        std::cerr << "Parse error: " << s << std::endl;
+        cerr << "Parse error: " << s << endl;
     }
 }
 
+
 /* ---------- TOKENS ---------- */
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
+%token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
 %token TOK_TYPE TOK_STRUCT
 %token TOK_INT TOK_FLOAT TOK_BOOL
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
@@ -46,12 +63,14 @@ Program* program_root = nullptr;
     double float_val;
     string* str_val;
     shared_ptr<ValExpr>* val_expr;
+    vector<shared_ptr<ValExpr>>* val_expr_list;
     shared_ptr<Stmt>* stmt;
     vector<shared_ptr<Stmt>>* stmt_list;
     BasicType* basic_type;
     FullType* full_type;
     Cap* cap;
     NameableType::Struct* struct_fields;
+    ValExpr::VStruct* struct_instance;
     vector<TopLevelItem>* top_level_list;
     TopLevelItem* top_item;
     vector<TopLevelItem::VarDecl>* var_list;
@@ -69,10 +88,12 @@ Program* program_root = nullptr;
 %type <stmt> stmt
 %type <stmt_list> stmt_list block
 %type <val_expr> val_expr
+%type <val_expr_list> val_expr_list
 %type <basic_type> basic_type
 %type <full_type> full_type
 %type <cap> cap
 %type <struct_fields> struct_fields
+%type <struct_instance> struct_instance
 %type <var_list> func_params actor_fields
 %type <actor> actor_def actor_members
 %type <actor_endpoint> actor_constructor actor_behaviour
@@ -167,7 +188,7 @@ struct_instance
     : /* empty */ { $$ = new ValExpr::VStruct(); }
     | struct_instance TOK_IDENT TOK_ASSIGN val_expr TOK_SEMI {
         $$ = $1;
-        $$->members.emplace_back(std::move(*$2), std::move(*$4));
+        $$->fields.emplace_back(std::move(*$2), std::move(*$4));
         delete $2; delete $4;
       }
 
@@ -258,12 +279,12 @@ stmt
     : full_type TOK_IDENT TOK_ASSIGN val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
+                span_from(@$),
                 Stmt::VarDeclWithInit{
                     std::move(*$2),
                     std::move(*$1),
                     std::move(*$4)
-                },
-                span_from(@$)
+                }
             }
         ));
         delete $1; delete $2; delete $4;
@@ -272,8 +293,8 @@ stmt
     | val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
-                Stmt::Expr{ std::move(*$1) },
-                span_from(@$)
+                span_from(@$),
+                Stmt::Expr{ std::move(*$1) }
             }
         ));
         delete $1;
@@ -282,8 +303,8 @@ stmt
     | TOK_RETURN val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
-                Stmt::Return{ std::move(*$2) },
-                span_from(@$)
+                span_from(@$),
+                Stmt::Return{ std::move(*$2) }
             }
         ));
         delete $2;
@@ -292,8 +313,8 @@ stmt
     | TOK_ATOMIC block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
-                Stmt::Atomic{ std::move(*$2) },
-                span_from(@$)
+                span_from(@$),
+                Stmt::Atomic{ std::move(*$2) }
             }
         ));
         delete $2;
@@ -302,12 +323,12 @@ stmt
     | TOK_IF TOK_LPAREN val_expr TOK_RPAREN block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
+                span_from(@$),
                 Stmt::If{
                     std::move(*$3),
                     std::move(*$5),
                     std::nullopt
                 },
-                span_from(@$)
             }
         ));
         delete $3; delete $5;
@@ -315,12 +336,12 @@ stmt
     | TOK_IF TOK_LPAREN val_expr TOK_RPAREN block TOK_ELSE block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
+                span_from(@$),
                 Stmt::If{
                     std::move(*$3),
                     std::move(*$5),
                     std::move(*$7)
-                },
-                span_from(@$)
+                }
             }
         ));
         delete $3; delete $5; delete $7;
@@ -329,11 +350,11 @@ stmt
     | TOK_WHILE TOK_LPAREN val_expr TOK_RPAREN block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
+                span_from(@$),
                 Stmt::While{
                     std::move(*$3),
                     std::move(*$5)
-                },
-                span_from(@$)
+                }
             }
         ));
         delete $3; delete $5;
@@ -392,21 +413,22 @@ val_expr
 
     // Struct instance
     | TOK_LBRACE struct_instance TOK_RBRACE TOK_COLON TOK_IDENT {
+        $2->type_name = std::move(*$5);
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
                 span_from(@$),
-                ValExpr::VStruct{ std::move(*$2), std::move(*$5) }
+                std::move(*$2)
             }
         ));
         delete $2; delete $5;
       }
     
     // Allocations
-    | TOK_NEW cap TOK_LSQUARE TOK_INT_LIT RSQUARE basic_type TOK_LPAREN val_expr RPAREN {
+    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE basic_type TOK_LPAREN val_expr TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
                 span_from(@$),
-                ValExpr::NewInstance{ std::move(*$6), std::move(*$2), std::move(*$8), *$4 }
+                ValExpr::NewInstance{ std::move(*$6), std::move(*$2), std::move(*$8), std::move(*$4) }
             }
         ));
         delete $2; delete $4; delete $6; delete $8;
@@ -425,12 +447,12 @@ val_expr
       }
     
     // Accesses
-    | val_expr TOK_LSQUARE TOK_INT_LIT TOK_RSQUARE {
+    | val_expr TOK_LSQUARE val_expr TOK_RSQUARE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
                 span_from(@$),
                 ValExpr::PointerAccess{
-                    *$3, std::move(*$1)
+                    std::move(*$3), std::move(*$1)
                 }
             }
         ));
