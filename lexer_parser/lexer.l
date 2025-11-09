@@ -31,6 +31,7 @@ using namespace std;
 "true"      return TOK_TRUE;
 "false"     return TOK_FALSE;
 
+":="        return TOK_INITIALIZE;
 "=>"        return TOK_ARROW;
 "="         return TOK_ASSIGN;
 "<="        return TOK_LEQ;

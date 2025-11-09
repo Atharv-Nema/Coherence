@@ -1,5 +1,6 @@
 #pragma once
 #include "expr.hpp"
+#include <unordered_set>
 
 // These define everything that can be in a line ending with a semi-colon as a part of a body (so not
 // top level function declarations and stuff like that). Unlike expr, it also includes statements
@@ -13,6 +14,10 @@ struct Stmt {
         FullType type;
         std::shared_ptr<ValExpr> init; 
     };
+    struct MemberInitialize {
+        std::string member_name;
+        std::shared_ptr<ValExpr> init;
+    };
     struct Expr { std::shared_ptr<ValExpr> expr; };
     struct If { 
         std::shared_ptr<ValExpr> cond;
@@ -24,9 +29,10 @@ struct Stmt {
         std::vector<std::shared_ptr<Stmt>> body; 
     };
     struct Atomic { 
+        std::unordered_set<std::string> locks_dereferenced;
         std::vector<std::shared_ptr<Stmt>> body;
     };
     struct Return { std::shared_ptr<ValExpr> expr; };
     SourceSpan source_span;
-    std::variant<VarDeclWithInit, Expr, If, While, Return, Atomic> t;
+    std::variant<VarDeclWithInit, MemberInitialize, Expr, If, While, std::shared_ptr<Atomic>, Return> t;
 };

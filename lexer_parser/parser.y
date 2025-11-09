@@ -6,6 +6,7 @@
     #include <memory>
     #include <string>
     #include <vector>
+    #include <unordered_set>
 
     using namespace std;
 }
@@ -43,7 +44,7 @@
 /* ---------- TOKENS ---------- */
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
 %token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
-%token TOK_TYPE TOK_STRUCT
+%token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
 %token TOK_INT TOK_FLOAT TOK_BOOL
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
 %token TOK_TRUE TOK_FALSE
@@ -250,6 +251,7 @@ func_def
         $$->return_type = std::move(*$7);
         $$->params = std::move(*$4);
         $$->body = std::move(*$8);
+        $$->locks_dereferenced = std::unordered_set<std::string>();
         delete $2; delete $4; delete $7; delete $8;
       }
     ;
@@ -289,7 +291,18 @@ stmt
         ));
         delete $1; delete $2; delete $4;
       }
-
+    | TOK_IDENT TOK_INITIALIZE val_expr TOK_SEMI {
+        $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
+            Stmt {
+                span_from(@$),
+                Stmt::MemberInitialize {
+                    std::move(*$1),
+                    std::move(*$3)
+                }
+            }
+        ));
+        delete $1; delete $3;
+      }
     | val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
@@ -314,7 +327,7 @@ stmt
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
                 span_from(@$),
-                Stmt::Atomic{ std::move(*$2) }
+                Stmt::Atomic{ std::unordered_set<std::string>(), std::move(*$2) }
             }
         ));
         delete $2;

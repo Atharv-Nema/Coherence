@@ -235,13 +235,13 @@ bool check_type_expr_list_valid(
 
 // std::vector<TopLevelItem::VarDecl
 
-bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& signature, const std::vector<std::shared_ptr<ValExpr>>& arguments, bool sendable) {
+bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& signature, const std::vector<std::shared_ptr<ValExpr>>& arguments, bool parameters_being_sent) {
     std::vector<FullType> expected_types;
     expected_types.reserve(signature.size());
     for(const auto& var_decl: signature) {
         expected_types.push_back(var_decl.type);
     }
-    return check_type_expr_list_valid(env, expected_types, arguments, (sendable) ? type_sendable: type_assignable);
+    return check_type_expr_list_valid(env, expected_types, arguments, (parameters_being_sent) ? type_sendable: type_assignable);
 }
 
 bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_expr) {
@@ -286,14 +286,6 @@ std::optional<NameableType::Struct> get_struct_type(TypeEnv& env, const std::str
 
 }
 
-std::optional<BasicType> dereferenced_type(TypeEnv& env, FullType type) {
-    auto pointer = std::get_if<FullType::Pointer>(&type.t);
-    if(!pointer) {
-        return std::nullopt;
-    }
-    return pointer->base;
-} 
-
 FullType unaliased_type(TypeEnv& env, const FullType& full_type) {
     auto* pointer = std::get_if<FullType::Pointer>(&full_type.t);
     if(!pointer) {
@@ -305,4 +297,208 @@ FullType unaliased_type(TypeEnv& env, const FullType& full_type) {
     else {
         return FullType {FullType::Pointer {pointer->base, Cap::Iso_cap{}}};
     }
+}
+
+bool type_check_stmt_list(TypeEnv &env, const std::vector<std::shared_ptr<Stmt>>& stmt_list) {
+    for(auto stmt: stmt_list) {
+        if(!type_check_statement(env, stmt)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement) {
+    // Adds error messages here I guess
+    return std::visit(Overload{
+        [&](const Stmt::Atomic& atomic_block) {
+            if(atomic_block.body.size() == 0) {
+                return false;
+            }
+            return statement_returns(env, atomic_block.body.back());
+        },
+        [&](const Stmt::Return& return_stmt) {
+            // It is already checked that [return_stmt] has the correct type.
+            // Perhaps an assert here will be good, but I guess semantically
+            // this guy just checks that the statement returns.
+            return true;
+        },
+        [&](const Stmt::If& if_stmt) {
+            if(if_stmt.then_body.size() == 0) {
+                return false;
+            }
+            if(!if_stmt.else_body) {
+                return false;
+            }
+            if(if_stmt.else_body->size() == 0) {
+                return false;
+            }
+            bool if_block_returns = statement_returns(env, if_stmt.then_body.back());
+            bool else_block_returns = statement_returns(env, if_stmt.else_body->back());
+            return if_block_returns && else_block_returns;
+        },
+        [&](const auto&) {return false;}
+    }, last_statement->t);
+}
+
+bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& args) {
+    // Returns false if there are duplicates, true otherwise
+    auto curr_actor = env.var_context.get_enclosing_actor();
+    if(curr_actor != nullptr) {
+        env.var_context.insert_variable("this", FullType {BasicType {BasicType::TActor {curr_actor->name}}});
+    }
+    for(const TopLevelItem::VarDecl& arg: args) {
+        if(env.var_context.variable_already_defined_in_scope(arg.name)) {
+            return false;
+        }
+        env.var_context.insert_variable(arg.name, arg.type);
+    }
+    return false;
+}
+
+bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def) {
+    if(env.func_name_map.key_in_curr_scope(func_def->name)) {
+        return false;
+    }
+    env.func_name_map.insert(func_def->name, func_def);
+    // Creating a scope
+    ScopeGuard guard(env.var_context, func_def);
+
+    if(!add_arguments_to_scope(env, func_def->params)) {
+        return false;
+    }
+    
+    // Checking that each individual statement is well-formed
+    if(!type_check_stmt_list(env, func_def->body)) {
+        return false;
+    }
+    // Now checking that the last statement actually returns something
+    if(func_def->body.size() == 0) {
+        return false;
+    }
+    return statement_returns(env, func_def->body.back());
+}
+
+bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
+    // Creating a scope
+    ScopeGuard guard(env.var_context, behaviour_def);
+    
+    if(!add_arguments_to_scope(env, behaviour_def->params)) {
+        return false;
+    }
+    // Checking that each individual statement is well-formed
+    return type_check_stmt_list(env, behaviour_def->body);
+}
+
+bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::shared_ptr<ValExpr> val_expr) {
+    // To implement
+    return true;
+}
+
+std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
+    TypeEnv& env, 
+    const std::unordered_set<std::string>& unassigned_members, 
+    std::vector<std::shared_ptr<Stmt>> stmt_list);
+
+std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
+    TypeEnv& env, 
+    const std::unordered_set<std::string>& unassigned_members, 
+    std::shared_ptr<Stmt> stmt) {
+    // returns the newly assigned variables in the statement. If it encounters a violation, it logs
+    // and returns std::nullopt
+    std::unordered_set<std::string> new_assigned_var;
+    return std::visit(Overload{
+        [&](const Stmt::VarDeclWithInit&) {return new_assigned_var;},
+        [&](const Stmt::MemberInitialize& mem_init) {
+            if(unassigned_members.find(mem_init.member_name) != unassigned_members.end()) {
+                new_assigned_var.emplace(mem_init.member_name);
+            }
+            return new_assigned_var;
+        },
+        [&](const Stmt::Expr& expr) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_vars(unassigned_members, expr.expr)) {
+                return std::nullopt;
+            }
+            return new_assigned_var;
+        },
+        [&](const Stmt::If& if_expr) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_vars(unassigned_members, if_expr.cond)) {
+                return std::nullopt;
+            }
+            auto then_block_assigned_vars = new_assigned_var_in_stmt_list(env, unassigned_members, if_expr.then_body);
+            if(!then_block_assigned_vars) {
+                return std::nullopt;
+            }
+            if(!if_expr.else_body) {
+                return new_assigned_var;
+            }
+            auto else_block_assigned_vars = new_assigned_var_in_stmt_list(env, unassigned_members, *if_expr.else_body);
+            if(!else_block_assigned_vars) {
+                return std::nullopt;
+            }
+            // Now need to take the intersection to be conservative
+            for(const auto& var: *then_block_assigned_vars) {
+                if(else_block_assigned_vars->find(var) != else_block_assigned_vars->end()) {
+                    new_assigned_var.emplace(var);
+                }
+            }
+            return new_assigned_var;
+        },
+        [&](const Stmt::While& while_expr) -> std::optional<std::unordered_set<std::string>> {
+            // TODO hard thing need to implement
+            if(valexpr_accesses_vars(unassigned_members, while_expr.cond)) {
+                return std::nullopt;
+            }
+            return new_assigned_var_in_stmt_list(env, unassigned_members, while_expr.body);
+        },
+        [&](const Stmt::Atomic& atomic_expr) {
+            return new_assigned_var_in_stmt_list(env, unassigned_members, atomic_expr.body);
+        },
+        [&](const Stmt::Return& return_expr) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_vars(unassigned_members, return_expr.expr)) {
+                return std::nullopt;
+            }
+            return new_assigned_var;
+        }
+        
+
+    }, stmt->t);
+}
+
+std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
+    TypeEnv& env, 
+    const std::unordered_set<std::string>& unassigned_members, 
+    std::vector<std::shared_ptr<Stmt>> stmt_list) {
+    std::unordered_set<std::string> curr_unassigned_members = unassigned_members;
+    std::unordered_set<std::string> newly_assigned_members;
+    for(auto stmt: stmt_list) {
+        auto new_assigned_var = new_assigned_variable_in_stmt(env, curr_unassigned_members, stmt);
+        if(!new_assigned_var) {
+            return std::nullopt;
+        }
+        for(const std::string& var: *new_assigned_var) {
+            assert(curr_unassigned_members.find(var) != curr_unassigned_members.end());
+            curr_unassigned_members.erase(var);
+            newly_assigned_members.emplace(var);
+        }
+    }
+    return newly_assigned_members;
+}
+
+
+bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
+    // Creating a scope for the constructor
+    ScopeGuard guard(env.var_context, constructor_def);
+    if(!add_arguments_to_scope(env, constructor_def->params)) {
+        return false;
+    }
+    // The rule is that you cannot use a member variable unless it has been assigned, and you cannot use the
+    // [this] member until all members have been assigned
+
+    // First we do a simple top-level check not doing an analysis into the initialization stuff
+    if(!type_check_stmt_list(env, constructor_def->body)) {
+        return false;
+    }
+
+    // After this is done, we do a recursive check of the initialization
 }

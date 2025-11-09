@@ -21,7 +21,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 
         // Variable lookup
         [&](const ValExpr::VVar& v) -> std::optional<FullType> {
-            std::optional<FullType> type = env.var_context.get_value(v.name);
+            std::optional<FullType> type = env.var_context.get_variable_type(v.name);
             if(!type) {
                 return std::nullopt;
             }
@@ -69,13 +69,9 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return std::nullopt;
             }
             auto actor_def = env.actor_name_map[actor_construction.actor_name];
-            for(int i = 0; i < actor_def->constructors.size(); i++) {
-                // do stuff
-
-            }
-            for(const auto& constructors: actor_def->constructors) {
-                if(constructors.name == actor_def->name) {
-                    if(passed_in_parameters_valid(env, constructors.params, actor_construction.args)) {
+            for(const auto& constructor: actor_def->constructors) {
+                if(constructor->name == actor_construction.constructor_name) {
+                    if(passed_in_parameters_valid(env, constructor->params, actor_construction.args)) {
                         return FullType {BasicType {BasicType::TActor {actor_def->name}}};
                     }
                     else {
@@ -94,18 +90,24 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             if(!index_type) {
                 return std::nullopt;
             }
+            if(!full_type_equal(env.type_context, *index_type, FullType { BasicType {BasicType::TInt {}}})) {
+                return std::nullopt;
+            }
             auto internal_type = val_expr_type(env, pointer_access.value);
             if(!internal_type) {
                 return std::nullopt;
             }
-            if(!full_type_equal(env.type_context, *index_type, FullType { BasicType {BasicType::TInt {}}})) {
+            auto* pointer_type = std::get_if<FullType::Pointer>(&internal_type->t);
+            if(pointer_type == nullptr) {
                 return std::nullopt;
             }
-            auto deref_type = dereferenced_type(env, *internal_type);
-            if(!deref_type) {
-                return std::nullopt;
+            if(auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t)) {
+                if(!env.var_context.in_atomic_section()) {
+                    return std::nullopt;
+                }
+                env.var_context.add_lock(locked_cap->lock_name);
             }
-            return FullType{ *deref_type };
+            return FullType {pointer_type->base};
         },
 
         [&](const ValExpr::Field& field_access) -> std::optional<FullType> {
@@ -156,8 +158,15 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return std::nullopt;
             }
             auto func_def = it->second;
-            
-            if(passed_in_parameters_valid(env, func_def->params, f.args)) {
+            if(func_def->locks_dereferenced.size() != 0) {
+                if(!env.var_context.in_atomic_section()) {
+                    return std::nullopt;
+                }
+                for(const std::string& s: func_def->locks_dereferenced) {
+                    env.var_context.add_lock(s);
+                }
+            }
+            if(passed_in_parameters_valid(env, func_def->params, f.args, false)) {
                 return func_def->return_type;
             }
             return std::nullopt;
@@ -176,9 +185,9 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 
             assert(env.actor_name_map.find(named_actor->name) != env.actor_name_map.end());
             auto actor_def = env.actor_name_map[named_actor->name];
-            for(const auto& behaviour: actor_def->member_behaviours) {
-                if(behaviour.name == b.behaviour_name) {
-                    if(passed_in_parameters_valid(env, behaviour.params, b.args)) {
+            for(auto behaviour: actor_def->member_behaviours) {
+                if(behaviour->name == b.behaviour_name) {
+                    if(passed_in_parameters_valid(env, behaviour->params, b.args, true)) {
                         return FullType { BasicType {BasicType::TUnit {}}};
                     }
                     else {
@@ -247,6 +256,143 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
     }, val_expr->t);
 }
 
+bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
+    return std::visit(Overload{
+        [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
+            if(env.var_context.variable_already_defined_in_scope(var_decl_with_init.name)) {
+                return false;
+            }
+            env.var_context.insert_variable(var_decl_with_init.name, var_decl_with_init.type);
+            return true;
+        },
+        [&](const Stmt::MemberInitialize& member_init) {
+            if(env.var_context.get_local_member(member_init.member_name)) {
+                return false;
+            }
+            auto expected_type = env.var_context.get_actor_member(member_init.member_name);
+            if(!expected_type) {
+                return false;
+            }
+            auto present_type = val_expr_type(env, member_init.init);
+            if(!present_type) {
+                return false;
+            }
+            return full_type_equal(env.type_context, *expected_type, *present_type);
+        },
+        [&](const Stmt::Expr& val_expr) {
+            auto type = val_expr_type(env, val_expr.expr);
+            return type != std::nullopt;
+        },
+        [&](const Stmt::If& if_expr) {
+            auto cond_type = val_expr_type(env, if_expr.cond);
+            if(!cond_type) {
+                return false;
+            }
+            if(!full_type_equal(env.type_context, FullType {BasicType {BasicType::TBool{}}}, *cond_type)) {
+                return false;
+            }
+            // Creating a scope for the if block
+            env.var_context.create_new_scope();
+            bool if_block_type_check = type_check_stmt_list(env, if_expr.then_body);
+            env.var_context.pop_scope();
+            env.var_context.create_new_scope();
+            bool else_block_type_check = if_expr.else_body ? type_check_stmt_list(env, *if_expr.else_body) : true;
+            env.var_context.pop_scope();
+            return if_block_type_check && else_block_type_check;
+        },
+        [&](const Stmt::While& while_expr) {
+            // creating scope for the cond
+            auto cond_type = val_expr_type(env, while_expr.cond);
+            if(!cond_type) {
+                return false;
+            }
+            if(!full_type_equal(env.type_context, FullType {BasicType {BasicType::TBool{}}}, *cond_type)) {
+                return false;
+            }
+            // Creating a scope for the body
+            env.var_context.create_new_scope();
+            bool body_valid = type_check_stmt_list(env, while_expr.body);
+            env.var_context.pop_scope();
+            return body_valid;
+        },
+        [&](std::shared_ptr<Stmt::Atomic> atomic_block) {
+            if(!env.var_context.in_atomic_section()) {
+                env.var_context.create_new_scope(atomic_block);
+            }
+            else {
+                env.var_context.create_new_scope();
+            }
+            bool body_valid = type_check_stmt_list(env, atomic_block->body);
+            env.var_context.pop_scope();
+            return body_valid;
+        },
+        [&](const Stmt::Return& return_stmt) {
+            auto return_expr_type = val_expr_type(env, return_stmt.expr);
+            if(!return_expr_type) {
+                return false;
+            }
+            auto expected_return_type = env.var_context.get_expected_function_return_type();
+            if(!expected_return_type) {
+                return false;
+            }
+            if(!full_type_equal(env.type_context, *return_expr_type, *expected_return_type)) {
+                return false;
+            }
+            return true;
+        }
+    }, stmt->t);
+}
 
+
+bool type_check_toplevel_item(TypeEnv& env, std::shared_ptr<TopLevelItem> toplevel_item) {
+    return std::visit(Overload{
+        [&](const TopLevelItem::TypeDef& type_def) {
+            if(env.type_context.find(type_def.type_name) != env.type_context.end()) {
+                return false;
+            }
+            env.type_context.emplace(type_def.type_name, type_def.nameable_type);
+            return true;
+        },
+        [&](std::shared_ptr<TopLevelItem::Func> func_def) {
+            return type_check_function(env, func_def);
+        },
+        [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
+            // Checking that the fields are unique
+            if(env.actor_name_map.find(actor_def->name) != env.actor_name_map.end()) {
+                return false;
+            }
+            // Add the current actor to the scope
+            env.actor_name_map[actor_def->name] = actor_def;
+            
+            // First type-check the functions (simple)
+            // Creating a scope for the functions within the actor
+            ScopeGuard actor_func_scope(env.func_name_map);
+            for(auto mem_func: actor_def->member_funcs) {
+                if(!type_check_function(env, mem_func)) {
+                    return false;
+                }
+            }
+
+            // Now type checking the behaviours
+            for(auto mem_behaviour: actor_def->member_behaviours) {
+                if(!type_check_behaviour(env, mem_behaviour)) {
+                    return false;
+                }
+            }
+
+            // Type checking constructors
+            for(auto constructor: actor_def->constructors) {
+                if(!type_check_constructor(env, constructor)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }, toplevel_item->t);
+}
+
+bool type_check_program(std::shared_ptr<Program> root) {
+
+}
 
 

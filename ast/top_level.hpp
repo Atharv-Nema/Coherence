@@ -2,9 +2,12 @@
 #include "stmts.hpp"
 
 // TODO: Change the type here to include a span probably
-using TypeDef = std::pair<std::string, NameableType>;
 
 struct TopLevelItem {
+    struct TypeDef {
+        std::string type_name;
+        std::shared_ptr<NameableType> nameable_type;
+    };
     struct VarDecl {
         std::string name;
         FullType type;
@@ -14,21 +17,28 @@ struct TopLevelItem {
         FullType return_type;
         std::vector<VarDecl> params;
         std::vector<std::shared_ptr<Stmt>> body;
+        std::unordered_set<std::string> locks_dereferenced;
     };
-    struct ActorEndpoints {
+    struct Behaviour {
         std::string name;
         std::vector<VarDecl> params;
         std::vector<std::shared_ptr<Stmt>> body;
     };
+    struct Constructor {
+        std::string name;
+        std::vector<VarDecl> params;
+        std::vector<std::shared_ptr<Stmt>> body;
+        std::unordered_set<std::string> locks_dereferenced;
+    };
     struct Actor {
         std::string name;
-        std::vector<VarDecl> member_vars;
-        std::vector<Func> member_funcs;
-        std::vector<ActorEndpoints> constructors;
-        std::vector<ActorEndpoints> member_behaviours;
+        std::unordered_map<std::string, FullType> member_vars;
+        std::vector<std::shared_ptr<Func>> member_funcs;
+        std::vector<std::shared_ptr<Constructor>> constructors;
+        std::vector<std::shared_ptr<Behaviour>> member_behaviours;
     };
     SourceSpan source_span;
-    std::variant<TypeDef, Func, Actor> t;
+    std::variant<TypeDef, std::shared_ptr<Func>, std::shared_ptr<Actor>> t;
 };
 
 struct Program {

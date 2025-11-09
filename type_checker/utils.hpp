@@ -19,9 +19,12 @@ bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const 
 bool full_type_equal(TypeContext& type_context, const FullType& type_1, const FullType& type_2);
 bool type_assignable(TypeContext& type_context, const FullType& lhs, const FullType& rhs);
 bool passed_in_parameters_valid(TypeEnv &env, const std::vector<TopLevelItem::VarDecl> &signature,
-                                const std::vector<std::shared_ptr<ValExpr>> &arguments);
+                                const std::vector<std::shared_ptr<ValExpr>> &arguments, bool parameters_being_sent);
 bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_);
+bool type_check_stmt_list(TypeEnv &env, const std::vector<std::shared_ptr<Stmt>>& stmt_list);
 std::optional<NameableType::Struct> get_struct_type(TypeEnv& env, const std::string& struct_type_name);
 FullType unaliased_type(TypeEnv &env, const FullType& full_type);
-
-std::optional<BasicType> dereferenced_type(TypeEnv& env, FullType type);
+bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement);
+bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def);
+bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def);
+bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Constructor> constructor_def);
