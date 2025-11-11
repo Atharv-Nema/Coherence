@@ -7,6 +7,7 @@
     #include <string>
     #include <vector>
     #include <unordered_set>
+    #include <unordered_map>
 
     using namespace std;
 }
@@ -75,11 +76,13 @@
     vector<TopLevelItem>* top_level_list;
     TopLevelItem* top_item;
     vector<TopLevelItem::VarDecl>* var_list;
-    TopLevelItem::Func* func;
-    TopLevelItem::Actor* actor;
-    TopLevelItem::ActorEndpoints* actor_endpoint;
+    std::shared_ptr<TopLevelItem::Func>* func;
+    std::shared_ptr<TopLevelItem::Actor>* actor;
+    std::unordered_map<std::string, FullType>* actor_fields;
+    std::shared_ptr<TopLevelItem::Constructor>* actor_constructor;
+    std::shared_ptr<TopLevelItem::Behaviour>* actor_behaviour;
     Program* program;
-    TypeDef* type_def;
+    TopLevelItem::TypeDef* type_def;
 }
 
 /* ---------- TYPE DECLARATIONS ---------- */
@@ -95,9 +98,11 @@
 %type <cap> cap
 %type <struct_fields> struct_fields
 %type <struct_instance> struct_instance
-%type <var_list> func_params actor_fields
+%type <var_list> func_params 
+%type <actor_fields> actor_fields
 %type <actor> actor_def actor_members
-%type <actor_endpoint> actor_constructor actor_behaviour
+%type <actor_constructor> actor_constructor
+%type <actor_behaviour> actor_behaviour
 %type <func> func_def
 %type <type_def> type_def
 
@@ -161,16 +166,16 @@ top_level_item
 /* ---------- TYPE DEFINITIONS ---------- */
 type_def
     : TOK_TYPE TOK_IDENT TOK_ASSIGN TOK_STRUCT TOK_LBRACE struct_fields TOK_RBRACE TOK_SEMI {
-        $$ = new TypeDef(
+        $$ = new TopLevelItem::TypeDef(
             std::move(*$2),
-            NameableType{ NameableType::Struct{ std::move($6->members) } }
+            make_shared<NameableType>(NameableType::Struct{ std::move($6->members) })
         );
         delete $2; delete $6;
       }
     | TOK_TYPE TOK_IDENT TOK_ASSIGN basic_type TOK_SEMI {
-        $$ = new TypeDef(
+        $$ = new TopLevelItem::TypeDef(
             std::move(*$2),
-            NameableType{ NameableType::Basic{ std::move(*$4) } }
+            make_shared<NameableType>(NameableType::Basic{ std::move(*$4) })
         );
         delete $2; delete $4;
       }
@@ -197,37 +202,41 @@ struct_instance
 actor_def
     : TOK_ACTOR TOK_IDENT TOK_LBRACE actor_fields actor_members TOK_RBRACE {
         $$ = $5;
-        $$->name = std::move(*$2);
-        $$->member_vars = std::move(*$4);
+        (*$$)->name = std::move(*$2);
+        (*$$)->member_vars = std::move(*$4);
         delete $2; delete $4;
       }
     ;
 
 /* ---------- ACTOR FIELDS ---------- */
 actor_fields
-    : /* empty */ { $$ = new vector<TopLevelItem::VarDecl>(); }
+    : /* empty */ { $$ = new unordered_map<std::string, FullType>(); }
     | actor_fields TOK_IDENT TOK_COLON full_type TOK_SEMI {
         $$ = $1;
-        $$->emplace_back( std::move(*$2), std::move(*$4) );
+        $$->emplace(std::move(*$2), std::move(*$4));
         delete $2; delete $4;
       }
     ;
 
 /* ---------- ACTOR MEMBERS ---------- */
 actor_members
-    : /* empty */ { $$ = new TopLevelItem::Actor(); }
-    | actor_members actor_constructor { $$ = $1; $$->constructors.emplace_back(std::move(*$2)); delete $2; }
-    | actor_members func_def          { $$ = $1; $$->member_funcs.emplace_back(std::move(*$2)); delete $2; }
-    | actor_members actor_behaviour   { $$ = $1; $$->member_behaviours.emplace_back(std::move(*$2)); delete $2; }
+    : /* empty */ { 
+        $$ = new shared_ptr<TopLevelItem::Actor>(make_shared<TopLevelItem::Actor>());
+        }
+    | actor_members actor_constructor { $$ = $1; (*$$)->constructors.emplace_back(std::move(*$2)); delete $2; }
+    | actor_members func_def          { $$ = $1; (*$$)->member_funcs.emplace_back(std::move(*$2)); delete $2; }
+    | actor_members actor_behaviour   { $$ = $1; (*$$)->member_behaviours.emplace_back(std::move(*$2)); delete $2; }
     ;
 
 /* ---------- CONSTRUCTORS ---------- */
 actor_constructor
     : TOK_NEW TOK_IDENT TOK_LPAREN func_params TOK_RPAREN block {
-        $$ = new TopLevelItem::ActorEndpoints();
-        $$->name = std::move(*$2);
-        $$->params = std::move(*$4);
-        $$->body = std::move(*$6);
+        $$ = new shared_ptr<TopLevelItem::Constructor>(
+            make_shared<TopLevelItem::Constructor>()
+        );
+        (*$$)->name = std::move(*$2);
+        (*$$)->params = std::move(*$4);
+        (*$$)->body = std::move(*$6);
         delete $2; delete $4; delete $6;
       }
     ;
@@ -235,10 +244,10 @@ actor_constructor
 /* ---------- BEHAVIOURS ---------- */
 actor_behaviour
     : TOK_BE TOK_IDENT TOK_LPAREN func_params TOK_RPAREN block {
-        $$ = new TopLevelItem::ActorEndpoints();
-        $$->name = std::move(*$2);
-        $$->params = std::move(*$4);
-        $$->body = std::move(*$6);
+        $$ = new shared_ptr<TopLevelItem::Behaviour>(make_shared<TopLevelItem::Behaviour>());
+        (*$$)->name = std::move(*$2);
+        (*$$)->params = std::move(*$4);
+        (*$$)->body = std::move(*$6);
         delete $2; delete $4; delete $6;
       }
     ;
@@ -246,12 +255,12 @@ actor_behaviour
 /* ---------- FUNCTIONS ---------- */
 func_def
     : TOK_FUNC TOK_IDENT TOK_LPAREN func_params TOK_RPAREN TOK_ARROW full_type block {
-        $$ = new TopLevelItem::Func();
-        $$->name = std::move(*$2);
-        $$->return_type = std::move(*$7);
-        $$->params = std::move(*$4);
-        $$->body = std::move(*$8);
-        $$->locks_dereferenced = std::unordered_set<std::string>();
+        $$ = new shared_ptr<TopLevelItem::Func>(make_shared<TopLevelItem::Func>());
+        (*$$)->name = std::move(*$2);
+        (*$$)->return_type = std::move(*$7);
+        (*$$)->params = std::move(*$4);
+        (*$$)->body = std::move(*$8);
+        (*$$)->locks_dereferenced = std::unordered_set<std::string>();
         delete $2; delete $4; delete $7; delete $8;
       }
     ;
@@ -327,7 +336,7 @@ stmt
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
                 span_from(@$),
-                Stmt::Atomic{ std::unordered_set<std::string>(), std::move(*$2) }
+                make_shared<Stmt::Atomic>(std::unordered_set<std::string>(), std::move(*$2))
             }
         ));
         delete $2;

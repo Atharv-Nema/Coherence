@@ -63,7 +63,8 @@ struct ValExpr {
 
     // Callable calls
     struct FuncCall { 
-        std::string func; std::vector<std::shared_ptr<ValExpr>> args; 
+        std::string func; 
+        std::vector<std::shared_ptr<ValExpr>> args; 
     };
 
     struct BeCall {

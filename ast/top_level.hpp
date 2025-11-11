@@ -1,5 +1,6 @@
 #pragma once
 #include "stmts.hpp"
+#include <unordered_map>
 
 // TODO: Change the type here to include a span probably
 

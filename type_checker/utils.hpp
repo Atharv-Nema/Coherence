@@ -2,12 +2,9 @@
 #include "../ast/expr.hpp"
 #include <assert.h>
 #include "type_checker.hpp"
+#include "env.cpp"
+#include "pattern_matching_boilerplate.hpp"
 
-template<typename ... Ts>
-struct Overload : Ts ... { 
-    using Ts::operator() ...;
-};
-template<class... Ts> Overload(Ts...) -> Overload<Ts...>;
 
 BasicType extract_basic_type(const FullType& full_type);
 std::optional<BasicType> standardize_type(TypeContext& type_context, const std::string& type_name);

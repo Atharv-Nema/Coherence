@@ -1,5 +1,6 @@
 // For typing a value expression
 #include "utils.hpp"
+#include <iostream>
 #include <algorithm>
 
 
@@ -71,7 +72,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             auto actor_def = env.actor_name_map[actor_construction.actor_name];
             for(const auto& constructor: actor_def->constructors) {
                 if(constructor->name == actor_construction.constructor_name) {
-                    if(passed_in_parameters_valid(env, constructor->params, actor_construction.args)) {
+                    if(passed_in_parameters_valid(env, constructor->params, actor_construction.args, false)) {
                         return FullType {BasicType {BasicType::TActor {actor_def->name}}};
                     }
                     else {
@@ -153,11 +154,11 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
         // Callables
         [&](const ValExpr::FuncCall& f) -> std::optional<FullType> {
             // Lookup function definition in the type context
-            auto it = env.func_name_map.find(f.func);
-            if(it == env.func_name_map.end()) {
+            auto func_def_opt = env.func_name_map.get_value(f.func);
+            if(!func_def_opt) {
                 return std::nullopt;
             }
-            auto func_def = it->second;
+            auto func_def = *func_def_opt;
             if(func_def->locks_dereferenced.size() != 0) {
                 if(!env.var_context.in_atomic_section()) {
                     return std::nullopt;
@@ -259,7 +260,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
     return std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
-            if(env.var_context.variable_already_defined_in_scope(var_decl_with_init.name)) {
+            if(!env.var_context.variable_overridable_in_scope(var_decl_with_init.name)) {
                 return false;
             }
             env.var_context.insert_variable(var_decl_with_init.name, var_decl_with_init.type);
@@ -344,7 +345,7 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
 }
 
 
-bool type_check_toplevel_item(TypeEnv& env, std::shared_ptr<TopLevelItem> toplevel_item) {
+bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
             if(env.type_context.find(type_def.type_name) != env.type_context.end()) {
@@ -362,7 +363,7 @@ bool type_check_toplevel_item(TypeEnv& env, std::shared_ptr<TopLevelItem> toplev
                 return false;
             }
             // Add the current actor to the scope
-            env.actor_name_map[actor_def->name] = actor_def;
+            env.actor_name_map.emplace(actor_def->name, actor_def);
             
             // First type-check the functions (simple)
             // Creating a scope for the functions within the actor
@@ -388,11 +389,24 @@ bool type_check_toplevel_item(TypeEnv& env, std::shared_ptr<TopLevelItem> toplev
             }
             return true;
         }
-    }, toplevel_item->t);
+    }, toplevel_item.t);
 }
 
 bool type_check_program(std::shared_ptr<Program> root) {
-
+    bool program_typechecks = true;
+    TypeEnv env;
+    for(auto top_level_item: root->top_level_items) {
+        program_typechecks = type_check_toplevel_item(env, top_level_item) && program_typechecks;
+    }
+    if(!program_typechecks) {
+        // std::cerr << "Program does not typecheck" << std::endl;
+        return false;
+    }
+    // Checking whether there is an actor with name [Main]
+    if(env.actor_name_map.find("Main") == env.actor_name_map.end()) {
+        return false;
+    }
+    return true;
 }
 
 

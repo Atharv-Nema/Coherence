@@ -1,8 +1,9 @@
+#pragma once
 #include "../ast/top_level.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <assert.h>
-
+#include "pattern_matching_boilerplate.hpp"
 
 // A structure to automatically pop from a scope on returning
 template <typename T>
@@ -141,8 +142,8 @@ public:
     std::optional<FullType> get_expected_function_return_type() {
         assert(var_type_map.num_scopes() > 0);
         ScopeMetadata& curr_scope_metadata = var_type_map.get_current_scope_metadata();
-        if(auto* func_def = std::get_if<TopLevelItem::Func>(&curr_scope_metadata.curr_callable)) {
-            return func_def->return_type;
+        if(auto* func_def = std::get_if<std::shared_ptr<TopLevelItem::Func>>(&curr_scope_metadata.curr_callable)) {
+            return (*func_def)->return_type;
         }
         return std::nullopt;
     }
@@ -152,8 +153,9 @@ public:
         return curr_scope_metadata.atomic_section != nullptr; 
     }
 
-    bool variable_already_defined_in_scope(const std::string& var_name) {
-        return var_type_map.key_in_curr_scope(var_name);
+    bool variable_overridable_in_scope(const std::string& var_name) {
+        // CR: For now, it should not override any actor member or any variable in the local scope
+        return !(var_type_map.key_in_curr_scope(var_name)) && !(get_actor_member(var_name));
     }
 
     std::shared_ptr<TopLevelItem::Actor> get_enclosing_actor() {
@@ -166,7 +168,7 @@ public:
         // Note that insert assumes that [var_name] is not in the latest scope. 
         // Shadowing is allowed. However, multiple declarations in the same as
         assert(var_type_map.num_scopes() > 0);
-        assert(!variable_already_defined_in_scope(var_name));
+        assert(variable_overridable_in_scope(var_name));
         var_type_map.insert(var_name, var_type);
     }
     std::optional<FullType> get_actor_member(const std::string& var_name) {

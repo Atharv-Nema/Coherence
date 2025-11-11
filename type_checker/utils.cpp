@@ -233,9 +233,12 @@ bool check_type_expr_list_valid(
     return true;
 }
 
-// std::vector<TopLevelItem::VarDecl
-
-bool passed_in_parameters_valid(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& signature, const std::vector<std::shared_ptr<ValExpr>>& arguments, bool parameters_being_sent) {
+// CR: Need to improve the API here. A boolean flag is pretty bad code
+bool passed_in_parameters_valid(
+    TypeEnv& env, 
+    const std::vector<TopLevelItem::VarDecl>& signature, 
+    const std::vector<std::shared_ptr<ValExpr>>& arguments, 
+    bool parameters_being_sent) {
     std::vector<FullType> expected_types;
     expected_types.reserve(signature.size());
     for(const auto& var_decl: signature) {
@@ -348,7 +351,7 @@ bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDec
         env.var_context.insert_variable("this", FullType {BasicType {BasicType::TActor {curr_actor->name}}});
     }
     for(const TopLevelItem::VarDecl& arg: args) {
-        if(env.var_context.variable_already_defined_in_scope(arg.name)) {
+        if(!env.var_context.variable_overridable_in_scope(arg.name)) {
             return false;
         }
         env.var_context.insert_variable(arg.name, arg.type);
@@ -390,39 +393,105 @@ bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour>
     return type_check_stmt_list(env, behaviour_def->body);
 }
 
+bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::shared_ptr<ValExpr> val_expr);
+
+bool valexpr_list_accesses_vars(
+    const std::unordered_set<std::string>& vars, 
+    const std::vector<std::shared_ptr<ValExpr>>& val_expr_list) {
+    for(std::shared_ptr<ValExpr> val_expr: val_expr_list) {
+        if(valexpr_accesses_vars(vars, val_expr)) {
+            return true;
+        }
+    }
+    return false;
+}
+// CR: This is a general comment. Think carefully about the shadowing of the members of an actor
+
 bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::shared_ptr<ValExpr> val_expr) {
-    // To implement
-    return true;
+    // Returns whether [valexpr] accesses any variable in [vars]
+    // CR: Think carefully about do I want to log error messages here when I get to that
+    return std::visit(Overload{
+        [&](const ValExpr::VVar& var) {
+            return vars.find(var.name) != vars.end();
+        },
+        [&](const ValExpr::VStruct& struct_instance) {
+            // CR: Try using advanced C++ features to do this functionally using [valexpr_list_accesses_vars]
+            for(const auto&[k, v]: struct_instance.fields) {
+                if(valexpr_accesses_vars(vars, v)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        [&](const ValExpr::NewInstance& new_instance) {
+            return valexpr_accesses_vars(vars, new_instance.default_value) || valexpr_accesses_vars(vars, new_instance.size);
+        },
+        [&](const ValExpr::ActorConstruction& actor_construction) {
+            return valexpr_list_accesses_vars(vars, actor_construction.args);
+        },
+        [&](const ValExpr::PointerAccess& pointer_access) {
+            return valexpr_accesses_vars(vars, pointer_access.index) || valexpr_accesses_vars(vars, pointer_access.value);
+        },
+        [&](const ValExpr::Field& field_access) {
+            return valexpr_accesses_vars(vars, field_access.base);
+        },
+        [&](const ValExpr::Assignment& assignment) {
+            return valexpr_accesses_vars(vars, assignment.lhs) || valexpr_accesses_vars(vars, assignment.rhs);
+        },
+        [&](const ValExpr::FuncCall& func_call) {
+            return valexpr_list_accesses_vars(vars, func_call.args);
+        },
+        [&](const ValExpr::BeCall& be_call) {
+            return valexpr_list_accesses_vars(vars, be_call.args);
+        },
+        [&](const ValExpr::BinOpExpr& bin_op_expr) {
+            return valexpr_accesses_vars(vars, bin_op_expr.lhs) || valexpr_accesses_vars(vars, bin_op_expr.rhs);
+        },
+        [&](const auto&) { return false; }
+    }, val_expr->t);
 }
 
+bool valexpr_accesses_uninitialized(std::unordered_set<std::string>& unassigned_members, std::shared_ptr<ValExpr> val_expr) {
+    // This is a wrapper around [valexpr_accesses_vars] to add the [this] variable when necessary
+    assert(unassigned_members.find("this") == unassigned_members.end());
+    if(unassigned_members.size() != 0) {
+        unassigned_members.insert("this");
+    }
+    bool result = valexpr_accesses_vars(unassigned_members, val_expr);
+    unassigned_members.erase("this");
+    return result;
+}
+
+// NOTE: All these functions are very specific to the constructor case.
 std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
     TypeEnv& env, 
-    const std::unordered_set<std::string>& unassigned_members, 
-    std::vector<std::shared_ptr<Stmt>> stmt_list);
-
+    std::unordered_set<std::string>& unassigned_members, 
+    const std::vector<std::shared_ptr<Stmt>>& stmt_list);
 std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
     TypeEnv& env, 
-    const std::unordered_set<std::string>& unassigned_members, 
+    std::unordered_set<std::string>& unassigned_members, 
     std::shared_ptr<Stmt> stmt) {
     // returns the newly assigned variables in the statement. If it encounters a violation, it logs
     // and returns std::nullopt
     std::unordered_set<std::string> new_assigned_var;
     return std::visit(Overload{
-        [&](const Stmt::VarDeclWithInit&) {return new_assigned_var;},
-        [&](const Stmt::MemberInitialize& mem_init) {
+        [&](const Stmt::VarDeclWithInit&) -> std::optional<std::unordered_set<std::string>> {
+            return new_assigned_var;
+        },
+        [&](const Stmt::MemberInitialize& mem_init) -> std::optional<std::unordered_set<std::string>> {
             if(unassigned_members.find(mem_init.member_name) != unassigned_members.end()) {
                 new_assigned_var.emplace(mem_init.member_name);
             }
             return new_assigned_var;
         },
         [&](const Stmt::Expr& expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_vars(unassigned_members, expr.expr)) {
+            if(valexpr_accesses_uninitialized(unassigned_members, expr.expr)) {
                 return std::nullopt;
             }
             return new_assigned_var;
         },
         [&](const Stmt::If& if_expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_vars(unassigned_members, if_expr.cond)) {
+            if(valexpr_accesses_uninitialized(unassigned_members, if_expr.cond)) {
                 return std::nullopt;
             }
             auto then_block_assigned_vars = new_assigned_var_in_stmt_list(env, unassigned_members, if_expr.then_body);
@@ -446,29 +515,27 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
         },
         [&](const Stmt::While& while_expr) -> std::optional<std::unordered_set<std::string>> {
             // TODO hard thing need to implement
-            if(valexpr_accesses_vars(unassigned_members, while_expr.cond)) {
+            if(valexpr_accesses_uninitialized(unassigned_members, while_expr.cond)) {
                 return std::nullopt;
             }
             return new_assigned_var_in_stmt_list(env, unassigned_members, while_expr.body);
         },
-        [&](const Stmt::Atomic& atomic_expr) {
-            return new_assigned_var_in_stmt_list(env, unassigned_members, atomic_expr.body);
+        [&](std::shared_ptr<Stmt::Atomic> atomic_expr) -> std::optional<std::unordered_set<std::string>> {
+            return new_assigned_var_in_stmt_list(env, unassigned_members, atomic_expr->body);
         },
         [&](const Stmt::Return& return_expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_vars(unassigned_members, return_expr.expr)) {
+            if(valexpr_accesses_uninitialized(unassigned_members, return_expr.expr)) {
                 return std::nullopt;
             }
             return new_assigned_var;
         }
-        
-
     }, stmt->t);
 }
 
 std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
     TypeEnv& env, 
-    const std::unordered_set<std::string>& unassigned_members, 
-    std::vector<std::shared_ptr<Stmt>> stmt_list) {
+    std::unordered_set<std::string>& unassigned_members, 
+    const std::vector<std::shared_ptr<Stmt>>& stmt_list) {
     std::unordered_set<std::string> curr_unassigned_members = unassigned_members;
     std::unordered_set<std::string> newly_assigned_members;
     for(auto stmt: stmt_list) {
@@ -501,4 +568,22 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
     }
 
     // After this is done, we do a recursive check of the initialization
+    std::unordered_set<std::string> unassigned_members;
+    auto enclosing_actor = env.var_context.get_enclosing_actor();
+    assert(enclosing_actor != nullptr);
+    for(const auto& [k, v]: enclosing_actor->member_vars) {
+        assert(unassigned_members.find(k) == unassigned_members.end());
+        unassigned_members.insert(k);
+    }
+    auto assigned_vars = new_assigned_var_in_stmt_list(env, unassigned_members, constructor_def->body);
+    if(!assigned_vars) {
+        return false;
+    }
+    bool all_assigned = true;
+    for(const auto& k: unassigned_members) {
+        if(assigned_vars->find(k) == assigned_vars->end()) {
+            all_assigned = false;
+        }
+    }
+    return all_assigned;
 }
