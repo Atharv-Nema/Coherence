@@ -1,3 +1,4 @@
+%option noyywrap
 %{
 #include "parser.tab.hpp"
 #include <string>

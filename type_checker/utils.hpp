@@ -5,7 +5,7 @@
 #include "env.cpp"
 #include "pattern_matching_boilerplate.hpp"
 
-
+void report_error_location(const SourceSpan& span);
 BasicType extract_basic_type(const FullType& full_type);
 std::optional<BasicType> standardize_type(TypeContext& type_context, const std::string& type_name);
 bool can_appear_in_lhs(TypeEnv& env, std::shared_ptr<ValExpr> expr);

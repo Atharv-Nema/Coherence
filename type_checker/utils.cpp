@@ -1,8 +1,14 @@
 #include "../ast/expr.hpp"
 #include <assert.h>
 #include "type_checker.hpp"
+#include <iostream>
 #include <functional>
 #include "utils.hpp"
+
+void report_error_location(const SourceSpan& span) {
+    std::cerr << "Error between line " << span.start.line << ", column " << span.start.char_no 
+    << " and line " << span.end.line << ", column " << span.end.char_no << std::endl;
+}
 
 BasicType extract_basic_type(const FullType& full_type) {
     return std::visit(Overload{
@@ -343,6 +349,7 @@ bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement) {
         [&](const auto&) {return false;}
     }, last_statement->t);
 }
+// Principle to be followed: Error messages are added when the real error occurs
 
 bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& args) {
     // Returns false if there are duplicates, true otherwise
@@ -356,7 +363,7 @@ bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDec
         }
         env.var_context.insert_variable(arg.name, arg.type);
     }
-    return false;
+    return true;
 }
 
 bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def) {
@@ -555,6 +562,7 @@ std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
 
 bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
     // Creating a scope for the constructor
+
     ScopeGuard guard(env.var_context, constructor_def);
     if(!add_arguments_to_scope(env, constructor_def->params)) {
         return false;
@@ -566,7 +574,6 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
     if(!type_check_stmt_list(env, constructor_def->body)) {
         return false;
     }
-
     // After this is done, we do a recursive check of the initialization
     std::unordered_set<std::string> unassigned_members;
     auto enclosing_actor = env.var_context.get_enclosing_actor();

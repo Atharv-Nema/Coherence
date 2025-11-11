@@ -10,9 +10,4 @@ add_library(type_checker
     utils.cpp
 )
 
-# Include the AST headers
-target_include_directories(type_checker PUBLIC
-    ${PROJECT_SOURCE_DIR}/ast
-)
-
 message(STATUS "TypeChecker configured successfully.")

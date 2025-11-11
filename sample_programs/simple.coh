@@ -1,0 +1,12 @@
+actor Main {
+    a: int;
+    b: int;
+    new create() {
+        a := 4;
+        b := 5;
+        b = 5;
+        a = b + 4;
+        int c = b;
+        int d = 3;
+    }
+}

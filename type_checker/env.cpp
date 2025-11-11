@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <assert.h>
 #include "pattern_matching_boilerplate.hpp"
+// CR: Remove include iostream
+#include <iostream>
 
 // A structure to automatically pop from a scope on returning
 template <typename T>

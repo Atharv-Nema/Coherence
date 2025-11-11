@@ -360,6 +360,8 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
             if(env.actor_name_map.find(actor_def->name) != env.actor_name_map.end()) {
+                report_error_location(toplevel_item.source_span);
+                std::cerr << "Error: Actor '" << actor_def->name << "' already defined." << std::endl;
                 return false;
             }
             // Add the current actor to the scope
@@ -368,6 +370,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
             // First type-check the functions (simple)
             // Creating a scope for the functions within the actor
             ScopeGuard actor_func_scope(env.func_name_map);
+            ScopeGuard actor_var_scope(env.var_context, nullptr, actor_def, std::monostate());
             for(auto mem_func: actor_def->member_funcs) {
                 if(!type_check_function(env, mem_func)) {
                     return false;
@@ -392,18 +395,21 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     }, toplevel_item.t);
 }
 
-bool type_check_program(std::shared_ptr<Program> root) {
+bool type_check_program(Program* root) {
     bool program_typechecks = true;
     TypeEnv env;
+    env.func_name_map.create_new_scope();
     for(auto top_level_item: root->top_level_items) {
         program_typechecks = type_check_toplevel_item(env, top_level_item) && program_typechecks;
     }
     if(!program_typechecks) {
-        // std::cerr << "Program does not typecheck" << std::endl;
+        // CR: This error message is probably redundant
+        std::cerr << "Program does not typecheck" << std::endl;
         return false;
     }
     // Checking whether there is an actor with name [Main]
     if(env.actor_name_map.find("Main") == env.actor_name_map.end()) {
+        std::cerr << "Error: Actor Main not found" << std::endl;
         return false;
     }
     return true;
