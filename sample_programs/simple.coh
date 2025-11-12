@@ -8,5 +8,10 @@ actor Main {
         a = b + 4;
         int c = b;
         int d = 3;
+        do_stuff(c, d);
+    }
+    be do_stuff(int a_, int b_) {
+        a = a_;
+        b = b_;
     }
 }

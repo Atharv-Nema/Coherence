@@ -4,12 +4,10 @@
 #include <cstdio>
 #include "../ast/top_level.hpp"
 #include "../type_checker/type_checker.hpp"
+#include "../lexer_parser/parser.tab.hpp"
+#include "../lexer_parser/lex.yy.h"
 
-// Declared by the generated parser (parser.tab.hh / parser.tab.hpp)
-extern int yyparse();
-extern FILE* yyin;
 
-// The parser fills this in
 extern Program* program_root;
 
 int main(int argc, char* argv[]) {
@@ -36,36 +34,45 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // --- 1. Open file for parsing ---
-    yyin = fopen(filename.c_str(), "r");
-    if (!yyin) {
+    FILE* input = fopen(filename.c_str(), "r");
+    if (!input) {
         std::cerr << "Error: Cannot open file " << filename << "\n";
         return 1;
     }
 
-    std::cout << "Parsing " << filename << "...\n";
-    if (yyparse() != 0) {
-        std::cerr << "Parse failed.\n";
-        fclose(yyin);
+    // --- Initialize scanner ---
+    yyscan_t scanner;
+    if (yylex_init(&scanner)) {
+        std::cerr << "Error: Could not initialize scanner.\n";
+        fclose(input);
         return 1;
     }
-    fclose(yyin);
+    yyset_in(input, scanner);
 
-    if (!program_root) {
-        std::cerr << "Parse produced no program.\n";
+    std::cout << "Parsing " << filename << "...\n";
+    if (yyparse(scanner) != 0) {
+        std::cerr << "Parse failed.\n";
+        yylex_destroy(scanner);
+        fclose(input);
         return 1;
     }
 
     std::cout << "Parsing successful.\n";
+    fclose(input);
+    yylex_destroy(scanner);
 
-    // --- 2. Type checking ---
+    if (!program_root) {
+        std::cerr << "Error: No program produced by parser.\n";
+        return 1;
+    }
+
     std::cout << "Running type checker...\n";
-
     TypeEnv env;
     bool ok = type_check_program(program_root);
 
     if (!ok) {
         std::cerr << "Type checking failed.\n";
+        delete program_root;
         return 1;
     }
 

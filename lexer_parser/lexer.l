@@ -1,13 +1,34 @@
-%option noyywrap
+%option noyywrap nodefault reentrant bison-bridge bison-locations
+
 %{
 #include "parser.tab.hpp"
 #include <string>
 using namespace std;
-#define YY_DECL int yylex()
+
+/* Our own line/column counters */
+static int curr_line   = 1;
+static int curr_column = 1;
+
+/* Track token location */
+#define YY_USER_ACTION                                                   \
+    do {                                                                 \
+        yylloc->first_line   = curr_line;                                \
+        yylloc->first_column = curr_column;                              \
+        for (int i = 0; i < yyleng; ++i) {                               \
+            if (yytext[i] == '\n') {                                     \
+                curr_line++;                                             \
+                curr_column = 1;                                         \
+            } else {                                                     \
+                curr_column++;                                           \
+            }                                                            \
+        }                                                                \
+        yylloc->last_line   = curr_line;                                 \
+        yylloc->last_column = curr_column - 1;                           \
+    } while (0);
+
 %}
 
 %%
-
 "actor"     return TOK_ACTOR;
 "new"       return TOK_NEW;
 "func"      return TOK_FUNC;
@@ -56,13 +77,13 @@ using namespace std;
 "//".*                                 { /* ignore line comments */ }
 "/*"([^*]|\n|\*+[^*/])*\*+"/"         { /* ignore block comments */ }
 
-"-"?[0-9]+"."[0-9]+       { yylval.float_val = stod(yytext); return TOK_FLOAT_LIT; }
-"-"?[0-9]+                { yylval.int_val = stoi(yytext); return TOK_INT_LIT; }
+"-"?[0-9]+"."[0-9]+   { yylval->float_val = stod(yytext); return TOK_FLOAT_LIT; }
+"-"?[0-9]+            { yylval->int_val   = stoi(yytext); return TOK_INT_LIT; }
 
-[a-zA-Z_][a-zA-Z0-9_']*   { yylval.str_val = new string(yytext); return TOK_IDENT; }
+[a-zA-Z_][a-zA-Z0-9_']*   { yylval->str_val = new string(yytext); return TOK_IDENT; }
 
 [ \t\r\n]+                { /* ignore */ }
 
-.                         { /* ignore */ }
+.                         { /* ignore for now */ }
 
 %%

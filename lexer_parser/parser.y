@@ -1,7 +1,5 @@
 /* ---------- HEADER SECTION (shared across .cc and .hh) ---------- */
 %code requires {
-    // Includes needed by both the parser implementation (.cc)
-    // and the generated header (.hh) that defines YYSTYPE.
     #include "top_level.hpp"
     #include <memory>
     #include <string>
@@ -10,56 +8,34 @@
     #include <unordered_map>
 
     using namespace std;
-}
 
-/* ---------- IMPLEMENTATION-ONLY HEADER SECTION (.cc only) ---------- */
-%code {
-    // These only go into parser.tab.cc (not the header).
-    #include <iostream>
-
-    // Forward declaration of lexer (defined in lex.yy.cc)
-    int yylex(void);
-
-    // Global root node for the parsed program
-    Program* program_root = nullptr;
+    // yyscan_t is defined in lex.yy.h, but we forward-declare it here
+    typedef void* yyscan_t;
 }
 
 /* ---------- BISON CONFIGURATION ---------- */
-%define parse.error verbose
+%define api.pure full
 %locations
+%lex-param   { yyscan_t yyscanner }
+%parse-param { yyscan_t yyscanner }
 
-/* ---------- ERROR HANDLERS (go at bottom of parser.tab.cc) ---------- */
+/* ---------- IMPLEMENTATION-ONLY SECTION (.cc only) ---------- */
 %code {
-    void yyerror(YYLTYPE* loc, const char* s) {
-        cerr << "Parse error at line "
-             << loc->first_line << ", column " << loc->first_column
-             << ": " << s << endl;
-    }
+    #include <iostream>
+    #include "lex.yy.h"   // from Flex; gives yyget_text, yyscan_t, etc.
 
-    void yyerror(const char* s) {
-        cerr << "Parse error: " << s << endl;
+    Program* program_root = nullptr;
+
+    void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* msg) {
+        std::cerr << "Parse error at line "
+                  << loc->first_line << ", column " << loc->first_column
+                  << ": " << msg
+                  << " (near '" << yyget_text(scanner) << "')"
+                  << std::endl;
     }
 }
 
-
-/* ---------- TOKENS ---------- */
-%token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
-%token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
-%token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
-%token TOK_INT TOK_FLOAT TOK_BOOL
-%token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
-%token TOK_TRUE TOK_FALSE
-%token TOK_ARROW TOK_ASSIGN
-%token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER
-%token TOK_LPAREN TOK_RPAREN TOK_LBRACE TOK_RBRACE TOK_LSQUARE TOK_RSQUARE
-%token TOK_COLON TOK_SEMI TOK_COMMA
-%token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH
-
-%token <int_val> TOK_INT_LIT
-%token <float_val> TOK_FLOAT_LIT
-%token <str_val> TOK_IDENT
-
-/* ---------- UNION (Semantic Values) ---------- */
+/* ---------- SEMANTIC VALUE UNION ---------- */
 %union {
     int int_val;
     double float_val;
@@ -85,26 +61,43 @@
     TopLevelItem::TypeDef* type_def;
 }
 
+/* ---------- TOKENS ---------- */
+%token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
+%token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
+%token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
+%token TOK_INT TOK_FLOAT TOK_BOOL
+%token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
+%token TOK_TRUE TOK_FALSE
+%token TOK_ARROW TOK_ASSIGN
+%token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER
+%token TOK_LPAREN TOK_RPAREN TOK_LBRACE TOK_RBRACE TOK_LSQUARE TOK_RSQUARE
+%token TOK_COLON TOK_SEMI TOK_COMMA
+%token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH
+
+%token <int_val>   TOK_INT_LIT
+%token <float_val> TOK_FLOAT_LIT
+%token <str_val>   TOK_IDENT
+
 /* ---------- TYPE DECLARATIONS ---------- */
-%type <program> program
-%type <top_level_list> top_level_items
-%type <top_item> top_level_item
-%type <stmt> stmt
-%type <stmt_list> stmt_list block
-%type <val_expr> val_expr
-%type <val_expr_list> val_expr_list
-%type <basic_type> basic_type
-%type <full_type> full_type
-%type <cap> cap
-%type <struct_fields> struct_fields
+%type <program>         program
+%type <top_level_list>  top_level_items
+%type <top_item>        top_level_item
+%type <stmt>            stmt
+%type <stmt_list>       stmt_list block
+%type <val_expr>        val_expr
+%type <val_expr_list>   val_expr_list
+%type <basic_type>      basic_type
+%type <full_type>       full_type
+%type <cap>             cap
+%type <struct_fields>   struct_fields
 %type <struct_instance> struct_instance
-%type <var_list> func_params 
-%type <actor_fields> actor_fields
-%type <actor> actor_def actor_members
+%type <var_list>        func_params 
+%type <actor_fields>    actor_fields
+%type <actor>           actor_def actor_members
 %type <actor_constructor> actor_constructor
 %type <actor_behaviour> actor_behaviour
-%type <func> func_def
-%type <type_def> type_def
+%type <func>            func_def
+%type <type_def>        type_def
 
 /* ---------- OPERATOR PRECEDENCE ---------- */
 %left TOK_PLUS TOK_MINUS
@@ -113,10 +106,10 @@
 
 /* ---------- HELPER CODE ---------- */
 %code {
-inline SourceSpan span_from(const YYLTYPE& loc) {
-    return { {loc.first_line, loc.first_column},
-             {loc.last_line,  loc.last_column} };
-}
+    inline SourceSpan span_from(const YYLTYPE& loc) {
+        return { {loc.first_line, loc.first_column},
+                {loc.last_line,  loc.last_column} };
+    }
 }
 
 %%
@@ -391,7 +384,7 @@ stmt
 // List of val_exprs (used for parameters sent to function calls)
 val_expr_list
     : /* empty */ { $$ = new vector<shared_ptr<ValExpr>>(); }
-    | val_expr_list val_expr  { $$ = $1; $$->push_back(*$2); delete $2; }
+    | val_expr_list TOK_COMMA val_expr  { $$ = $1; $$->push_back(*$3); delete $3; }
     ;
 
 
