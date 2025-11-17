@@ -6,12 +6,22 @@
     #include <vector>
     #include <unordered_set>
     #include <unordered_map>
+    #include <iostream>
 
     using namespace std;
 
     // yyscan_t is defined in lex.yy.h, but we forward-declare it here
     typedef void* yyscan_t;
 }
+
+/* Enable conflict warnings and diagnostics */
+%define parse.error detailed
+%define lr.type ielr
+%define parse.lac full
+
+/* Expect no conflicts */
+%expect 0
+%expect-rr 0
 
 /* ---------- BISON CONFIGURATION ---------- */
 %define api.pure full
@@ -84,8 +94,8 @@
 %type <top_item>        top_level_item
 %type <stmt>            stmt
 %type <stmt_list>       stmt_list block
-%type <val_expr>        val_expr
-%type <val_expr_list>   val_expr_list
+%type <val_expr>        val_expr 
+%type <val_expr_list>   val_expr_list nonempty_val_expr_list
 %type <basic_type>      basic_type
 %type <full_type>       full_type
 %type <cap>             cap
@@ -100,9 +110,11 @@
 %type <type_def>        type_def
 
 /* ---------- OPERATOR PRECEDENCE ---------- */
+%right TOK_ASSIGN
 %left TOK_PLUS TOK_MINUS
 %left TOK_STAR TOK_SLASH
 %left TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER
+%left FIELD_ACCESS
 
 /* ---------- HELPER CODE ---------- */
 %code {
@@ -305,6 +317,16 @@ stmt
         ));
         delete $1; delete $3;
       }
+    | val_expr TOK_DOT TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN TOK_SEMI {
+        $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
+            Stmt {
+                span_from(@$),
+                Stmt::BehaviourCall{ *$1, *$3, std::move(*$5) }
+            }
+        ));
+        delete $1; delete $3; delete $5;
+      }
+
     | val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt {
@@ -384,12 +406,18 @@ stmt
 // List of val_exprs (used for parameters sent to function calls)
 val_expr_list
     : /* empty */ { $$ = new vector<shared_ptr<ValExpr>>(); }
-    | val_expr_list TOK_COMMA val_expr  { $$ = $1; $$->push_back(*$3); delete $3; }
+    | nonempty_val_expr_list  { $$ = $1; }
     ;
 
+nonempty_val_expr_list
+    : val_expr { 
+        $$ = new vector<shared_ptr<ValExpr>>();
+        $$->push_back(*$1);
+        delete $1;
+    }
+    | nonempty_val_expr_list TOK_COMMA val_expr { $$ = $1; $$->push_back(*$3); delete $3; }
 
 
-// Need to add FuncCall, BeCall, Assignment, FieldAccess, PointerAccess, ActorConstruction, Unit
 val_expr
     : TOK_LPAREN TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
@@ -439,7 +467,7 @@ val_expr
       }
     
     // Allocations
-    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE basic_type TOK_LPAREN val_expr TOK_RPAREN {
+    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE basic_type TOK_LPAREN val_expr TOK_RPAREN %prec FIELD_ACCESS {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
                 span_from(@$),
@@ -474,16 +502,16 @@ val_expr
         delete $1; delete $3;
       }
 
-    | val_expr TOK_IDENT {
+    | val_expr TOK_DOT TOK_IDENT %prec FIELD_ACCESS {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
                 span_from(@$),
                 ValExpr::Field{
-                    std::move(*$1), std::move(*$2)
+                    std::move(*$1), std::move(*$3)
                 }
             }
         ));
-        delete $1; delete $2;
+        delete $1; delete $3;
       }
     
     | val_expr TOK_ASSIGN val_expr {
@@ -496,8 +524,6 @@ val_expr
         delete $1; delete $3;  
       }
 
-
-    // Callable stuff
     | TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr {
@@ -508,15 +534,7 @@ val_expr
         delete $1; delete $3;
       }
     
-    | val_expr TOK_DOT TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {
-        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr {
-                span_from(@$),
-                ValExpr::BeCall{ *$1, *$3, std::move(*$5) }
-            }
-        ));
-        delete $1; delete $3; delete $5;
-  }
+    
 
 
 
@@ -549,10 +567,15 @@ val_expr
 
 /* ---------- TYPES ---------- */
 basic_type
-    : TOK_INT   { $$ = new BasicType(); $$->t = BasicType::TInt{}; }
+    : TOK_LPAREN TOK_RPAREN { $$ = new BasicType(); $$->t = BasicType::TUnit{}; }
+    | TOK_INT   { $$ = new BasicType(); $$->t = BasicType::TInt{}; }
     | TOK_FLOAT { $$ = new BasicType(); $$->t = BasicType::TFloat{}; }
     | TOK_BOOL  { $$ = new BasicType(); $$->t = BasicType::TBool{}; }
-    | TOK_IDENT { $$ = new BasicType(); $$->t = BasicType::TNamed{ *$1 }; delete $1; }
+    // CR: To fix: The actor type
+    | TOK_IDENT { 
+        $$ = new BasicType(); 
+        $$->t = BasicType::TNamed{ *$1 }; 
+        delete $1; }
     ;
 
 full_type
