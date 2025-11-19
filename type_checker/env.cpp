@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <assert.h>
-#include "pattern_matching_boilerplate.hpp"
+#include "../global_utils/pattern_matching_boilerplate.hpp"
 // CR: Remove include iostream
 #include <iostream>
 
@@ -193,6 +193,7 @@ public:
 
     std::optional<FullType> get_variable_type(const std::string& var_name) {
         // First priority for any local variables, then for actor variables
+        // Does not perform the logging
         auto local_member = get_local_member(var_name);
         if(local_member) {
             return local_member;

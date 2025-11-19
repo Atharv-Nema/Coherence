@@ -67,18 +67,13 @@ struct ValExpr {
         std::vector<std::shared_ptr<ValExpr>> args; 
     };
 
-    struct BeCall {
-        std::shared_ptr<ValExpr> actor;
-        std::string behaviour_name;
-        std::vector<std::shared_ptr<ValExpr>> args; 
-    };
     
     // Operations
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
 
     SourceSpan source_span;
     std::variant<VUnit, VInt, VFloat, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
-    PointerAccess, Field, Assignment, FuncCall, BeCall, BinOpExpr> t;
+    PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };
 
 

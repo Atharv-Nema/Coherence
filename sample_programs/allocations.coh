@@ -9,10 +9,10 @@ actor Main {
         b := 5;
         b = 5;
         a = b + 4;
-        var c: int = b;
+        var c: int ref = new ref[1 + 2] int(0);
         var d: int = 3;
-        random_func(c, d);
-        this->do_stuff(c, d);
+        random_func(c[3 - 1], d);
+        this->do_stuff(c[2 - 1], d);
     }
     be do_stuff(int a_, int b_) {
         a = a_;

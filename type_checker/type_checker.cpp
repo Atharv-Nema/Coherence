@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include <iostream>
 #include <algorithm>
+// #include "../ast/debug_printer.cpp"
 
 
 std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val_expr) {
@@ -24,6 +25,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
         [&](const ValExpr::VVar& v) -> std::optional<FullType> {
             std::optional<FullType> type = env.var_context.get_variable_type(v.name);
             if(!type) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Variable " << v.name << " not defined" << std::endl;
                 return std::nullopt;
             }
             return *type;
@@ -32,6 +35,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
         [&](ValExpr::VStruct& struct_expr) -> std::optional<FullType> {
             std::optional<NameableType::Struct> struct_contents = get_struct_type(env, struct_expr.type_name);
             if(!struct_contents) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Internal type of " << struct_expr.type_name << " is not a struct" << std::endl;
                 return std::nullopt;
             }
             if(struct_valid(env, *struct_contents, struct_expr)) {
@@ -40,15 +45,17 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return (FullType { *basic_type });
             }
             else {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Field types do not match the type of the struct" << std::endl;
                 return std::nullopt;
             }
         },
         
         // Allocations
         [&](const ValExpr::NewInstance& new_instance) -> std::optional<FullType> {
-            // auto ind_typ
             auto size_type = val_expr_type(env, new_instance.size);
             if(!size_type) {
+                // No need to log as the previous [val_expr_type] call would have performed the logging
                 return std::nullopt;
             }
             auto default_type = val_expr_type(env, new_instance.default_value);
@@ -57,16 +64,22 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             }
             auto basic_type = std::get_if<BasicType>(&default_type->t);
             if(!basic_type) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Default value expr does not match the intended type" << std::endl;
                 return std::nullopt;
             }
             if(basic_type_equal(env.type_context, *basic_type, new_instance.type)) {
                 return FullType {FullType::Pointer {new_instance.type, new_instance.cap}};
             }
+            report_error_location(val_expr->source_span);
+            std::cerr << "Default value expr does not match the intended type" << std::endl;
             return std::nullopt;
         },
 
         [&](const ValExpr::ActorConstruction& actor_construction) -> std::optional<FullType> {
             if(env.actor_name_map.find(actor_construction.actor_name) == env.actor_name_map.end()) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Actor " << actor_construction.actor_name << " not found" << std::endl;
                 return std::nullopt;
             }
             auto actor_def = env.actor_name_map[actor_construction.actor_name];
@@ -76,22 +89,26 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                         return FullType {BasicType {BasicType::TActor {actor_def->name}}};
                     }
                     else {
+                        report_error_location(val_expr->source_span);
+                        std::cerr << "Parameters passed into the constructor are not valid" << std::endl;
                         return std::nullopt;
                     }
                 }
             }
+            report_error_location(val_expr->source_span);
+            std::cerr << "Actor constructor not found" << std::endl;
             return std::nullopt;
         },
 
         // Accesses
-
         [&](const ValExpr::PointerAccess& pointer_access) -> std::optional<FullType> {
-            // CR: Implement the mutual recursion and split this common code out
             auto index_type = val_expr_type(env, pointer_access.index);
             if(!index_type) {
                 return std::nullopt;
             }
             if(!full_type_equal(env.type_context, *index_type, FullType { BasicType {BasicType::TInt {}}})) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Index type is not int" << std::endl;
                 return std::nullopt;
             }
             auto internal_type = val_expr_type(env, pointer_access.value);
@@ -100,10 +117,14 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             }
             auto* pointer_type = std::get_if<FullType::Pointer>(&internal_type->t);
             if(pointer_type == nullptr) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Dereferenced object is not a pointer" << std::endl;
                 return std::nullopt;
             }
             if(auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t)) {
                 if(!env.var_context.in_atomic_section()) {
+                    report_error_location(val_expr->source_span);
+                    std::cerr << "Dereferencing an object protected by a lock outside an atomic section" << std::endl;
                     return std::nullopt;
                 }
                 env.var_context.add_lock(locked_cap->lock_name);
@@ -118,11 +139,15 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             }
             auto* basic_type = std::get_if<BasicType>(&struct_type->t);
             if(!basic_type) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Field access on an expression which is not of a struct type" << std::endl;
                 return std::nullopt;
             }
             auto* named_type = std::get_if<BasicType::TNamed>(&basic_type->t);
             auto struct_contents = get_struct_type(env, named_type->name);
             if(!struct_contents) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Field access on an expression which is not of a struct type" << std::endl;
                 return std::nullopt;
             }
             for(const auto& [field_name, field_basic_type]: struct_contents->members) {
@@ -130,6 +155,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                     return FullType {field_basic_type};
                 }
             }
+            report_error_location(val_expr->source_span);
+            std::cerr << "Field " << field_access.field << " is not part of the struct" << std::endl;
             return std::nullopt;
         },
 
@@ -140,6 +167,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             auto rhs_type = val_expr_type(env, assignment.rhs);
             if(!rhs_type) { return std::nullopt; }
             if(!type_assignable(env.type_context, *lhs_type, *rhs_type)) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "These types are not compatible in an assignment" << std::endl;
                 return std::nullopt;
             }
             // Now just need to check whether the thingy is actually assignable scene
@@ -147,6 +176,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return unaliased_type(env, *lhs_type);
             }
             else {
+                report_error_location(val_expr->source_span);
+                std::cerr << "This expression cannot appear in the lhs of an assignment" << std::endl;
                 return std::nullopt;
             }
         },
@@ -156,46 +187,23 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             // Lookup function definition in the type context
             auto func_def_opt = env.func_name_map.get_value(f.func);
             if(!func_def_opt) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Function not found" << std::endl;
                 return std::nullopt;
             }
             auto func_def = *func_def_opt;
             if(func_def->locks_dereferenced.size() != 0) {
-                if(!env.var_context.in_atomic_section()) {
-                    return std::nullopt;
-                }
-                for(const std::string& s: func_def->locks_dereferenced) {
-                    env.var_context.add_lock(s);
+                if(env.var_context.in_atomic_section()) {
+                    for(const std::string& s: func_def->locks_dereferenced) {
+                        env.var_context.add_lock(s);
+                    }
                 }
             }
             if(passed_in_parameters_valid(env, func_def->params, f.args, false)) {
                 return func_def->return_type;
             }
-            return std::nullopt;
-        },
-
-        [&](const ValExpr::BeCall& b) -> std::optional<FullType> {
-            // Lookup function definition in the type context
-            auto actor_type = val_expr_type(env, b.actor);
-            if(!actor_type) { return std::nullopt; }
-            auto basic_type = std::get_if<BasicType>(&actor_type->t);
-            if(!basic_type) {
-                return std::nullopt;
-            }
-            auto named_actor = std::get_if<BasicType::TNamed>(&basic_type->t);
-            if(!named_actor) { return std::nullopt; }
-
-            assert(env.actor_name_map.find(named_actor->name) != env.actor_name_map.end());
-            auto actor_def = env.actor_name_map[named_actor->name];
-            for(auto behaviour: actor_def->member_behaviours) {
-                if(behaviour->name == b.behaviour_name) {
-                    if(passed_in_parameters_valid(env, behaviour->params, b.args, true)) {
-                        return FullType { BasicType {BasicType::TUnit {}}};
-                    }
-                    else {
-                        return std::nullopt;
-                    }
-                }
-            }
+            report_error_location(val_expr->source_span);
+            std::cerr << "Passed in parameters are not valid" << std::endl;
             return std::nullopt;
         },
 
@@ -216,12 +224,16 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                     }
                     
                     if(!basic_type_equal(env.type_context, lhs_base, rhs_base)) {
+                        report_error_location(val_expr->source_span);
+                        std::cerr << "Types not compatible for equality checking" << std::endl;
                         return std::nullopt;
                     }
                     if(auto* named_type = std::get_if<BasicType::TNamed>(&lhs_base.t)) {
                         auto standard_type = standardize_type(env.type_context, named_type->name);
                         assert(standard_type);
                         if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
+                            report_error_location(val_expr->source_span);
+                            std::cerr << "Type cannot be equality compared" << std::endl;
                             return std::nullopt;
                         }
                     }
@@ -231,6 +243,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 case BinOp::Mul:
                 case BinOp::Div:
                     if(!(type_is_numeric(env.type_context, *lhs_t) && type_is_numeric(env.type_context, *rhs_t))) {
+                        report_error_location(val_expr->source_span);
+                        std::cerr << "Type not compatible for arithmetic" << std::endl;
                         return std::nullopt;
                     }
                     if(basic_type_equal(env.type_context, lhs_base, BasicType { BasicType::TFloat {}}) ||
@@ -248,9 +262,12 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                         return FullType {BasicType {BasicType::TBool {}}};
                     }
                     else {
+                        report_error_location(val_expr->source_span);
+                        std::cerr << "Type not compatible for comparisons" << std::endl;
                         return std::nullopt;
                     }
             }
+            assert(false);
             return std::nullopt;
         }
 
@@ -261,6 +278,18 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
     return std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
             if(!env.var_context.variable_overridable_in_scope(var_decl_with_init.name)) {
+                return false;
+            }
+            auto init_expr_type = val_expr_type(env, var_decl_with_init.init);
+            if(!init_expr_type) {
+                return false;
+            }
+            auto expected_type = var_decl_with_init.type;
+            if(!full_type_equal(env.type_context, *init_expr_type, expected_type)) {
+                report_error_location(stmt->source_span);
+                std::cerr << 
+                "Assigned expression type is not compatible with the declaration type" 
+                << std::endl;
                 return false;
             }
             env.var_context.insert_variable(var_decl_with_init.name, var_decl_with_init.type);
@@ -279,6 +308,41 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
                 return false;
             }
             return full_type_equal(env.type_context, *expected_type, *present_type);
+        },
+        [&](const Stmt::BehaviourCall& b) {
+            auto actor_type = val_expr_type(env, b.actor);
+            if(!actor_type) { return false; }
+            auto basic_type = std::get_if<BasicType>(&actor_type->t);
+            if(!basic_type) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Type of the expression is not of an actor" << std::endl;
+                return false;
+            }
+            // CR: Fix TActor in the parser
+            auto named_actor = std::get_if<BasicType::TActor>(&basic_type->t);
+            if(!named_actor) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Type of the expression is not of an actor" << std::endl;
+                return false;
+            }
+
+            assert(env.actor_name_map.find(named_actor->name) != env.actor_name_map.end());
+            auto actor_def = env.actor_name_map[named_actor->name];
+            for(auto behaviour: actor_def->member_behaviours) {
+                if(behaviour->name == b.behaviour_name) {
+                    if(passed_in_parameters_valid(env, behaviour->params, b.args, true)) {
+                        return true;
+                    }
+                    else {
+                        report_error_location(stmt->source_span);
+                        std::cerr << "Passed in parameters to the behaviour are not valid" << std::endl;
+                        return false;
+                    }
+                }
+            }
+            report_error_location(stmt->source_span);
+            std::cerr << "Actor behaviour not found" << std::endl;
+            return false;
         },
         [&](const Stmt::Expr& val_expr) {
             auto type = val_expr_type(env, val_expr.expr);
@@ -334,9 +398,14 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             }
             auto expected_return_type = env.var_context.get_expected_function_return_type();
             if(!expected_return_type) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Expected return type is not defined. Hint: Are you returning outside a function" << std::endl;
                 return false;
             }
-            if(!full_type_equal(env.type_context, *return_expr_type, *expected_return_type)) {
+            if (!full_type_equal(env.type_context, *return_expr_type, *expected_return_type))
+            {
+                report_error_location(stmt->source_span);
+                std::cerr << "Return type does not match with the expected return type of the function" << std::endl;
                 return false;
             }
             return true;
@@ -349,19 +418,21 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
             if(env.type_context.find(type_def.type_name) != env.type_context.end()) {
+                report_error_location(toplevel_item.source_span);
+                std::cerr << "Type " << type_def.type_name << " already defined" << std::endl;
                 return false;
             }
             env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             return true;
         },
         [&](std::shared_ptr<TopLevelItem::Func> func_def) {
-            return type_check_function(env, func_def);
+            return type_check_function(env, func_def, toplevel_item.source_span);
         },
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
             if(env.actor_name_map.find(actor_def->name) != env.actor_name_map.end()) {
                 report_error_location(toplevel_item.source_span);
-                std::cerr << "Error: Actor '" << actor_def->name << "' already defined." << std::endl;
+                std::cerr << "Actor " << actor_def->name << " already defined." << std::endl;
                 return false;
             }
             // Add the current actor to the scope
@@ -372,7 +443,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
             ScopeGuard actor_func_scope(env.func_name_map);
             ScopeGuard actor_var_scope(env.var_context, nullptr, actor_def, std::monostate());
             for(auto mem_func: actor_def->member_funcs) {
-                if(!type_check_function(env, mem_func)) {
+                if(!type_check_function(env, mem_func, toplevel_item.source_span)) {
                     return false;
                 }
             }

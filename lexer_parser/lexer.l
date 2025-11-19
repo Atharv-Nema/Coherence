@@ -52,8 +52,10 @@ static int curr_column = 1;
 
 "true"      return TOK_TRUE;
 "false"     return TOK_FALSE;
+"var"       return TOK_VAR;
 
 ":="        return TOK_INITIALIZE;
+"->"        return TOK_SEND;
 "=>"        return TOK_ARROW;
 "="         return TOK_ASSIGN;
 "<="        return TOK_LEQ;

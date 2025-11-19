@@ -3,7 +3,7 @@
 #include <assert.h>
 #include "type_checker.hpp"
 #include "env.cpp"
-#include "pattern_matching_boilerplate.hpp"
+#include "../global_utils/pattern_matching_boilerplate.hpp"
 
 void report_error_location(const SourceSpan& span);
 BasicType extract_basic_type(const FullType& full_type);
@@ -22,6 +22,6 @@ bool type_check_stmt_list(TypeEnv &env, const std::vector<std::shared_ptr<Stmt>>
 std::optional<NameableType::Struct> get_struct_type(TypeEnv& env, const std::string& struct_type_name);
 FullType unaliased_type(TypeEnv &env, const FullType& full_type);
 bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement);
-bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def);
+bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def, SourceSpan& source_span);
 bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def);
 bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Constructor> constructor_def);

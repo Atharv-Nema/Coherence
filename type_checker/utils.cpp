@@ -167,7 +167,7 @@ bool full_type_equal(TypeContext& type_context, const FullType& type_1, const Fu
             }
         },
         [&](const BasicType& type_1_basic) {
-            if(auto type_2_basic = std::get_if<BasicType>(&type_1.t)) {
+            if(auto type_2_basic = std::get_if<BasicType>(&type_2.t)) {
                 return basic_type_equal(type_context, type_1_basic, *type_2_basic);
             }
             else {
@@ -232,7 +232,7 @@ bool check_type_expr_list_valid(
         }
         const FullType& expected_type = expected_types[i];
 
-        if (!type_assignable(env.type_context, expected_type, *arg_type)) {
+        if (!arg_type_valid(env.type_context, expected_type, *arg_type)) {
             return false;
         }
     }
@@ -254,6 +254,7 @@ bool passed_in_parameters_valid(
 }
 
 bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_expr) {
+    // Does not perform logging
     std::sort(struct_contents.members.begin(), struct_contents.members.end(), 
     [](const auto& a, const auto& b) { return a.first < b.first; });
     std::sort(struct_expr.fields.begin(), struct_expr.fields.end(),
@@ -366,8 +367,10 @@ bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDec
     return true;
 }
 
-bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def) {
+bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def, SourceSpan& source_span) {
     if(env.func_name_map.key_in_curr_scope(func_def->name)) {
+        report_error_location(source_span);
+        std::cerr << "Function already defined" << std::endl;
         return false;
     }
     env.func_name_map.insert(func_def->name, func_def);
@@ -375,6 +378,8 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
     ScopeGuard guard(env.var_context, func_def);
 
     if(!add_arguments_to_scope(env, func_def->params)) {
+        report_error_location(source_span);
+        std::cerr << "Function argument names are not valid" << std::endl;
         return false;
     }
     
@@ -384,15 +389,20 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
     }
     // Now checking that the last statement actually returns something
     if(func_def->body.size() == 0) {
+        report_error_location(source_span);
+        std::cerr << "Function does not return" << std::endl;
         return false;
     }
-    return statement_returns(env, func_def->body.back());
+    if(!statement_returns(env, func_def->body.back())) {
+        report_error_location(source_span);
+        std::cerr << "Last statement of the function does not return" << std::endl;
+    }
+    return true;
 }
 
 bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
     // Creating a scope
     ScopeGuard guard(env.var_context, behaviour_def);
-    
     if(!add_arguments_to_scope(env, behaviour_def->params)) {
         return false;
     }
@@ -448,9 +458,6 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
         [&](const ValExpr::FuncCall& func_call) {
             return valexpr_list_accesses_vars(vars, func_call.args);
         },
-        [&](const ValExpr::BeCall& be_call) {
-            return valexpr_list_accesses_vars(vars, be_call.args);
-        },
         [&](const ValExpr::BinOpExpr& bin_op_expr) {
             return valexpr_accesses_vars(vars, bin_op_expr.lhs) || valexpr_accesses_vars(vars, bin_op_expr.rhs);
         },
@@ -467,6 +474,17 @@ bool valexpr_accesses_uninitialized(std::unordered_set<std::string>& unassigned_
     bool result = valexpr_accesses_vars(unassigned_members, val_expr);
     unassigned_members.erase("this");
     return result;
+}
+
+bool valexpr_list_accesses_uninitialized(
+    std::unordered_set<std::string>& vars, 
+    const std::vector<std::shared_ptr<ValExpr>>& val_expr_list) {
+    for(std::shared_ptr<ValExpr> val_expr: val_expr_list) {
+        if(valexpr_accesses_uninitialized(vars, val_expr)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // NOTE: All these functions are very specific to the constructor case.
@@ -488,6 +506,14 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
         [&](const Stmt::MemberInitialize& mem_init) -> std::optional<std::unordered_set<std::string>> {
             if(unassigned_members.find(mem_init.member_name) != unassigned_members.end()) {
                 new_assigned_var.emplace(mem_init.member_name);
+            }
+            return new_assigned_var;
+        },
+        [&](const Stmt::BehaviourCall& b) -> std::optional<std::unordered_set<std::string>> {
+            // return valexpr_list_accesses_vars(vars, be_call.args);
+            if(valexpr_accesses_uninitialized(unassigned_members, b.actor) 
+            || valexpr_list_accesses_uninitialized(unassigned_members, b.args)) {
+                return std::nullopt;
             }
             return new_assigned_var;
         },
@@ -564,6 +590,7 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
     // Creating a scope for the constructor
 
     ScopeGuard guard(env.var_context, constructor_def);
+
     if(!add_arguments_to_scope(env, constructor_def->params)) {
         return false;
     }
