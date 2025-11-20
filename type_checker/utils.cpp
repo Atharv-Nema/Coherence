@@ -83,6 +83,12 @@ std::optional<BasicType> standardize_type(TypeContext& type_context, const std::
             }
             return res;
         }
+        else {
+            return basic_type->type;
+        }
+    }
+    else {
+        return BasicType {BasicType::TNamed {type_name}};
     }
     return std::nullopt;
 }

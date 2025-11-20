@@ -69,7 +69,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return std::nullopt;
             }
             if(basic_type_equal(env.type_context, *basic_type, new_instance.type)) {
-                return FullType {FullType::Pointer {new_instance.type, new_instance.cap}};
+                return unaliased_type(env, FullType {FullType::Pointer {new_instance.type, new_instance.cap}});
             }
             report_error_location(val_expr->source_span);
             std::cerr << "Default value expr does not match the intended type" << std::endl;
@@ -285,7 +285,7 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
                 return false;
             }
             auto expected_type = var_decl_with_init.type;
-            if(!full_type_equal(env.type_context, *init_expr_type, expected_type)) {
+            if(!type_assignable(env.type_context, expected_type, *init_expr_type)) {
                 report_error_location(stmt->source_span);
                 std::cerr << 
                 "Assigned expression type is not compatible with the declaration type" 
@@ -307,7 +307,7 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             if(!present_type) {
                 return false;
             }
-            return full_type_equal(env.type_context, *expected_type, *present_type);
+            return type_assignable(env.type_context, *expected_type, *present_type);
         },
         [&](const Stmt::BehaviourCall& b) {
             auto actor_type = val_expr_type(env, b.actor);

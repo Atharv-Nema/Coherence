@@ -33,6 +33,7 @@ struct FullType {
 
 // [NameableType] represents all types that can occur on the RHS of a type assignment
 struct NameableType {
+    // CR: Fix this to just use [BasicType] directly
     struct Basic { BasicType type; };
     struct Struct { std::vector<std::pair<std::string, BasicType>> members; };
     std::variant<Basic, Struct> t;

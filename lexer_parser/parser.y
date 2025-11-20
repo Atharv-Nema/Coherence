@@ -7,6 +7,7 @@
     #include <unordered_set>
     #include <unordered_map>
     #include <iostream>
+    #include <assert.h>
 
     using namespace std;
 
@@ -170,14 +171,26 @@ top_level_item
 
 /* ---------- TYPE DEFINITIONS ---------- */
 type_def
-    : TOK_TYPE TOK_IDENT TOK_ASSIGN TOK_STRUCT TOK_LBRACE struct_fields TOK_RBRACE TOK_SEMI {
+    : TOK_TYPE TOK_IDENT TOK_ASSIGN TOK_STRUCT TOK_LBRACE struct_fields TOK_RBRACE {
+        const std::string& name = *$2;
+        if (std::isupper(name[0])) {
+            yyerror(&@2, yyscanner,
+                    "User defined type names must not begin with a capital letter");
+            YYERROR;
+        }
         $$ = new TopLevelItem::TypeDef(
             std::move(*$2),
             make_shared<NameableType>(NameableType::Struct{ std::move($6->members) })
         );
         delete $2; delete $6;
       }
-    | TOK_TYPE TOK_IDENT TOK_ASSIGN basic_type TOK_SEMI {
+    | TOK_TYPE TOK_IDENT TOK_ASSIGN basic_type {
+        const std::string& name = *$2;
+        if (std::isupper(name[0])) {
+            yyerror(&@2, yyscanner,
+                    "User defined type names must not begin with a capital letter");
+            YYERROR;
+        }
         $$ = new TopLevelItem::TypeDef(
             std::move(*$2),
             make_shared<NameableType>(NameableType::Basic{ std::move(*$4) })
@@ -207,6 +220,12 @@ struct_instance
 /* ---------- ACTOR DEFINITION ---------- */
 actor_def
     : TOK_ACTOR TOK_IDENT TOK_LBRACE actor_fields actor_members TOK_RBRACE {
+        const std::string& name = *$2;
+        if (!std::isupper(name[0])) {
+            yyerror(&@2, yyscanner,
+                    "Actor names must begin with a capital letter");
+            YYERROR;
+        }
         $$ = $5;
         (*$$)->name = std::move(*$2);
         (*$$)->member_vars = std::move(*$4);
@@ -671,9 +690,23 @@ basic_type
         $$->t = BasicType::TBool{};
       }
     /* Named basic type */
+    // | TOK_IDENT {
+    //     $$ = new BasicType();
+    //     $$->t = BasicType::TNamed{ *$1 };
+    //     delete $1;
+    //   }
     | TOK_IDENT {
         $$ = new BasicType();
-        $$->t = BasicType::TNamed{ *$1 };
+        std::string &name = *$1;
+        assert(name.size() > 0);
+        if (std::isupper(name[0])) {
+            // Actor type
+            $$->t = BasicType::TActor{ std::move(*$1) };
+        } else {
+            // Regular named type
+            $$->t = BasicType::TNamed{ std::move(*$1) };
+        }
+
         delete $1;
       }
     ;
