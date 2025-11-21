@@ -316,12 +316,13 @@ FullType unaliased_type(TypeEnv& env, const FullType& full_type) {
 }
 
 bool type_check_stmt_list(TypeEnv &env, const std::vector<std::shared_ptr<Stmt>>& stmt_list) {
+    bool result = true;
     for(auto stmt: stmt_list) {
         if(!type_check_statement(env, stmt)) {
-            return false;
+            result = false;
         }
     }
-    return true;
+    return result;
 }
 
 bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement) {
@@ -472,7 +473,35 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
     }, val_expr->t);
 }
 
-bool valexpr_accesses_uninitialized(std::unordered_set<std::string>& unassigned_members, std::shared_ptr<ValExpr> val_expr) {
+bool valexpr_calls_actor_function(TypeEnv &env, std::shared_ptr<ValExpr> val_expr) {
+    return std::visit(Overload{
+        [&](const ValExpr::FuncCall& func_call) {
+            if(env.var_context.get_enclosing_actor()) {
+                // So we are inside an actor
+                if(env.func_name_map.key_in_curr_scope(func_call.func)) {
+                    // Calling a function of the enclosing actor
+                    return true;
+                }
+            }
+            else {
+                // Should only be called when type checking the contents of an actor
+                assert(false);
+            }
+            for(auto arg: func_call.args) {
+                if(valexpr_calls_actor_function(env, arg)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        [&](const auto&) {return false;}
+    }, val_expr->t);
+}
+
+bool valexpr_accesses_uninitialized(
+    TypeEnv &env,
+    std::unordered_set<std::string>& unassigned_members, 
+    std::shared_ptr<ValExpr> val_expr) {
     // This is a wrapper around [valexpr_accesses_vars] to add the [this] variable when necessary
     assert(unassigned_members.find("this") == unassigned_members.end());
     if(unassigned_members.size() != 0) {
@@ -480,14 +509,25 @@ bool valexpr_accesses_uninitialized(std::unordered_set<std::string>& unassigned_
     }
     bool result = valexpr_accesses_vars(unassigned_members, val_expr);
     unassigned_members.erase("this");
-    return result;
+    if(result) {
+        return true;
+    }
+    if(unassigned_members.size() != 0) {
+        if(valexpr_calls_actor_function(env, val_expr)) {
+            return true;
+        }
+    }
+    return false;
 }
 
+
 bool valexpr_list_accesses_uninitialized(
+    TypeEnv &env,
     std::unordered_set<std::string>& vars, 
     const std::vector<std::shared_ptr<ValExpr>>& val_expr_list) {
     for(std::shared_ptr<ValExpr> val_expr: val_expr_list) {
-        if(valexpr_accesses_uninitialized(vars, val_expr)) {
+        if (valexpr_accesses_uninitialized(env, vars, val_expr))
+        {
             return true;
         }
     }
@@ -518,20 +558,20 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
         },
         [&](const Stmt::BehaviourCall& b) -> std::optional<std::unordered_set<std::string>> {
             // return valexpr_list_accesses_vars(vars, be_call.args);
-            if(valexpr_accesses_uninitialized(unassigned_members, b.actor) 
-            || valexpr_list_accesses_uninitialized(unassigned_members, b.args)) {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, b.actor) 
+            || valexpr_list_accesses_uninitialized(env, unassigned_members, b.args)) {
                 return std::nullopt;
             }
             return new_assigned_var;
         },
         [&](const Stmt::Expr& expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_uninitialized(unassigned_members, expr.expr)) {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, expr.expr)) {
                 return std::nullopt;
             }
             return new_assigned_var;
         },
         [&](const Stmt::If& if_expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_uninitialized(unassigned_members, if_expr.cond)) {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, if_expr.cond)) {
                 return std::nullopt;
             }
             auto then_block_assigned_vars = new_assigned_var_in_stmt_list(env, unassigned_members, if_expr.then_body);
@@ -555,7 +595,7 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
         },
         [&](const Stmt::While& while_expr) -> std::optional<std::unordered_set<std::string>> {
             // TODO hard thing need to implement
-            if(valexpr_accesses_uninitialized(unassigned_members, while_expr.cond)) {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, while_expr.cond)) {
                 return std::nullopt;
             }
             return new_assigned_var_in_stmt_list(env, unassigned_members, while_expr.body);
@@ -564,7 +604,7 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
             return new_assigned_var_in_stmt_list(env, unassigned_members, atomic_expr->body);
         },
         [&](const Stmt::Return& return_expr) -> std::optional<std::unordered_set<std::string>> {
-            if(valexpr_accesses_uninitialized(unassigned_members, return_expr.expr)) {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, return_expr.expr)) {
                 return std::nullopt;
             }
             return new_assigned_var;

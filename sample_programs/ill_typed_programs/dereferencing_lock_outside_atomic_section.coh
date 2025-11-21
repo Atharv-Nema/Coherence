@@ -1,0 +1,7 @@
+actor Main {
+    new create() {
+        var x: int locked<A> = new locked<A>[1] int(0);
+        // Error here
+        x[0];
+    }
+}

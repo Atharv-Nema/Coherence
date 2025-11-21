@@ -1,0 +1,29 @@
+actor Other {
+    new create() {}
+    be iso_behaviour(int iso x) {}
+    be val_behaviour(int val x) {
+        // Modifying a val isnot allowed
+        x[0] = 2;
+    }
+    be ref_behaviour(int ref x) {}
+}
+
+actor Main {
+    new create() {
+        var other_instance: Other = new Other.create();
+        var x1: int iso = new iso[1] int(0);
+        var x2: int val = new val[1] int(0);
+        var x3: int ref = new ref[1] int(0);
+        // this will create an alias to an iso which is not allowed
+        other_instance->iso_behaviour(x1);
+        // sending a ref is not allowed
+        other_instance->ref_behaviour(x3);
+
+        // Creating an alias to an iso is not allowed
+        var x4: int iso = x1;
+
+        // A val does not allow mutable aliases
+        var x5: int ref = x2;
+
+    }
+}

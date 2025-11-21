@@ -1,0 +1,33 @@
+
+// Unfortunately, I have not implemented good error messages yet for errors when constructor 
+// uses uninitialized members in unsafe ways. You can see that the program typechecks when the 
+// b initializations are uncommented
+actor Other {
+    a: int;
+    b: int;
+    be dummy_behaviour() {}
+    func dummy_function() => int {
+        return 1;
+    }
+    new create() {
+        a := 4;
+        // b := 3;
+    }
+    new create2() {
+        a := 4;
+        // b := 3;
+        // Not allowed to access [this] until all fields are initialized
+        this->dummy_behaviour();
+    }
+    new create3() {
+        a := 4;
+        // b := 3;
+        // Not allowed to call member functions until all fields are initialized
+        dummy_function();
+    }
+}
+
+actor Main {
+    new create() {
+    }
+}

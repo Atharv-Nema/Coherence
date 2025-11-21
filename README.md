@@ -60,7 +60,7 @@ From the root of the repository, follow these steps:
     This should not work, as the compiler is not ready yet. <br>
     To only run the type checker, run it with the <code> --only-typecheck</code> flag
     ```sh
-    ./compiler/coherence --only-typecheck ../sample_programs/simple.coh
+    ./compiler/coherence --only-typecheck ../sample_programs/well_typed_programs/simple.coh
     ```
 
 ---
