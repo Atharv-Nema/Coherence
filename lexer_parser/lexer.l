@@ -56,6 +56,8 @@ static int curr_column = 1;
 
 "."         return TOK_DOT;
 ":="        return TOK_INITIALIZE;
+"=="        return TOK_EQ;
+"!="        return TOK_NEQ;
 "->"        return TOK_SEND;
 "=>"        return TOK_ARROW;
 "="         return TOK_ASSIGN;

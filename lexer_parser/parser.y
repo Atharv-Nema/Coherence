@@ -77,7 +77,7 @@
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
 %token TOK_TRUE TOK_FALSE
 %token TOK_SEND TOK_ARROW TOK_ASSIGN
-%token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER
+%token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER TOK_EQ TOK_NEQ
 %token TOK_LPAREN TOK_RPAREN TOK_LBRACE TOK_RBRACE TOK_LSQUARE TOK_RSQUARE
 %token TOK_COLON TOK_SEMI TOK_COMMA
 %token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH
@@ -94,7 +94,7 @@
 %type <stmt>            stmt
 %type <stmt_list>       stmt_list block
 %type <val_expr>        val_expr
-%type <val_expr>        assignment_expr additive_expr multiplicative_expr postfix_expr primary_expr
+%type <val_expr>        assignment_expr comparison_expr additive_expr multiplicative_expr postfix_expr primary_expr
 %type <val_expr_list>   val_expr_list nonempty_val_expr_list
 %type <basic_type>      basic_type
 %type <full_type>       full_type
@@ -110,10 +110,7 @@
 %type <type_def>        type_def
 
 /* ---------- OPERATOR PRECEDENCE ---------- */
-// %right TOK_ASSIGN
-// %left  TOK_PLUS TOK_MINUS
-// %left  TOK_STAR TOK_SLASH
-// %left  TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER
+// Not needed for now
 
 /* ---------- HELPER CODE ---------- */
 %code {
@@ -476,7 +473,7 @@ val_expr
 
 /* Assignment: right-associative, lhs is a postfix_expr */
 assignment_expr
-    : additive_expr { $$ = $1; }
+    : comparison_expr { $$ = $1; }
     | postfix_expr TOK_ASSIGN assignment_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
@@ -491,7 +488,60 @@ assignment_expr
       }
     ;
 
-/* Additive level: + and - */
+/* Boolean comparisons: <, <=, >, >=, ==, != */
+comparison_expr
+    : additive_expr { $$ = $1; }
+    | additive_expr TOK_LESS additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Lt, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | additive_expr TOK_LEQ additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Leq, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | additive_expr TOK_GREATER additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Gt, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | additive_expr TOK_GEQ additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Geq, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | additive_expr TOK_EQ additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Eq, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | additive_expr TOK_NEQ additive_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@$),
+                ValExpr::BinOpExpr{ std::move(*$1), BinOp::Neq, std::move(*$3) }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    ;
+
+
 additive_expr
     : multiplicative_expr { $$ = $1; }
     | additive_expr TOK_PLUS multiplicative_expr {
@@ -689,12 +739,6 @@ basic_type
         $$ = new BasicType();
         $$->t = BasicType::TBool{};
       }
-    /* Named basic type */
-    // | TOK_IDENT {
-    //     $$ = new BasicType();
-    //     $$->t = BasicType::TNamed{ *$1 };
-    //     delete $1;
-    //   }
     | TOK_IDENT {
         $$ = new BasicType();
         std::string &name = *$1;
@@ -712,7 +756,10 @@ basic_type
     ;
 
 full_type
-    : basic_type {
+    : TOK_LPAREN full_type TOK_RPAREN {
+        $$ = $2;
+      }
+    | basic_type {
         $$ = new FullType();
         $$->t = *$1;
         delete $1;
@@ -737,10 +784,10 @@ cap
         $$ = new Cap();
         $$->t = Cap::Iso{};
       }
-    | TOK_LOCKED TOK_IDENT {
+    | TOK_LOCKED TOK_LESS TOK_IDENT TOK_GREATER {
         $$ = new Cap();
-        $$->t = Cap::Locked{ *$2 };
-        delete $2;
+        $$->t = Cap::Locked{ *$3 };
+        delete $3;
       }
     ;
 

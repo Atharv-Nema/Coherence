@@ -402,6 +402,7 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
     if(!statement_returns(env, func_def->body.back())) {
         report_error_location(source_span);
         std::cerr << "Last statement of the function does not return" << std::endl;
+        return false;
     }
     return true;
 }
