@@ -2,10 +2,10 @@
 #include <string>
 #include <filesystem>
 #include <cstdio>
-#include "../ast/top_level.hpp"
-#include "../type_checker/type_checker.hpp"
-#include "../lexer_parser/parser.tab.hpp"
-#include "../lexer_parser/lex.yy.h"
+#include "top_level.hpp"
+#include "type_checker.hpp"
+#include "parser.tab.hpp"
+#include "lex.yy.h"
 
 
 extern Program* program_root;
