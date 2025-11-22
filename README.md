@@ -42,22 +42,24 @@ From the root of the repository, follow these steps:
     cmake -S . -B build
     ```
 
-3.  **Build the project:**
 
-    ```sh
-    make ./build
-    ```
-
-4.  **Change into the build directory:**
+3.  **Change into the build directory:**
 
     ```sh
     cd build
     ```
 
+4.  **Build the project:**
+
+    ```sh
+    make
+    ```
+
+
 5.  **Run the compiler on a source file:**
 
     ```sh
-    ./compiler/coherence ../sample_programs/simple.coh
+    ./compiler/coherence ../sample_programs/well_typed_programs/simple.coh
     ```
     This should not work, as the compiler is not ready yet. <br>
     To only run the type checker, run it with the <code> --only-typecheck</code> flag
