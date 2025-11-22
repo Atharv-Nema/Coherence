@@ -34,22 +34,24 @@ From the root of the repository, follow these steps:
     mkdir build
     ```
 
-2.  **Change into the build directory:**
+
+
+2.  **Generate the build files with CMake:**
+
+    ```sh
+    cmake -S . -B build
+    ```
+
+3.  **Build the project:**
+
+    ```sh
+    make ./build
+    ```
+
+4.  **Change into the build directory:**
 
     ```sh
     cd build
-    ```
-
-3.  **Generate the build files with CMake:**
-
-    ```sh
-    cmake ..
-    ```
-
-4.  **Build the project:**
-
-    ```sh
-    make
     ```
 
 5.  **Run the compiler on a source file:**
