@@ -1,0 +1,138 @@
+#pragma once
+#include <cstdint>
+#include <unordered_map>
+#include <memory>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <atomic>
+#include <assert.h>
+
+struct MailboxItem {
+    void* message;
+    void* frame;                 
+    SuspendTag (*resume_fn)(void*);
+    void (*destroy_fn)(void*);
+};
+
+template <typename T>
+class ThreadSafeDeque {
+private:
+    mutable std::mutex dq_lock;
+    std::deque<T> dq;
+
+public:
+    void emplace_back(const T& item) {
+        std::lock_guard<std::mutex> lock(dq_lock);
+        dq.emplace_back(item);
+    }
+
+    void emplace_front(const T& item) {
+        std::lock_guard<std::mutex> lock(dq_lock);
+        dq.emplace_front(item);
+    }
+
+    std::optional<T> try_pop_front() {
+        std::lock_guard<std::mutex> lock(dq_lock);
+        if (dq.empty()) return std::nullopt;
+        T front_ele = dq.front();
+        dq.pop_front();
+        return front_ele;
+    }
+
+    bool empty() const {
+        std::lock_guard<std::mutex> lock(dq_lock);
+        return dq.empty();
+    }
+
+    std::size_t size() const {
+        std::lock_guard<std::mutex> lock(dq_lock);
+        return dq.size();
+    }
+};
+
+template <typename K, typename V>
+class ThreadSafeMap {
+private:
+    std::mutex map_lock;
+    std::unordered_map<K, V> map;
+
+public:
+    void insert(const K& key, const V& value) {
+        std::lock_guard<std::mutex> lock(map_lock);
+        map.emplace(key, value);
+    }
+
+    std::optional<V> get_value(const K& key) {
+        std::lock_guard<std::mutex> lock(map_lock);
+        auto it = map.find(key);
+        if (it == map.end()) {
+            return std::nullopt;
+        }
+        return it->second;
+    }
+};
+
+class UserMutex {
+private:
+    std::atomic<bool> locked {false};
+    // Queue of ids of actor instances waiting on this mutex
+    ThreadSafeDeque<std::uint64_t> wait_queue;
+
+public:
+    bool lock(std::uint64_t instance_id) {
+        // Returns true if acquired immediately, false if suspended.
+        bool expected = false;
+        // CR: In later stages, may want to experiment with more efficient memory models
+        if (locked.compare_exchange_strong(expected, true, std::memory_order_seq_cst)) {
+            return true;
+        }
+        wait_queue.emplace_back(instance_id);
+        return false;
+    }
+
+    void unlock(RuntimeDS* runtime) {
+        using State = ActorInstanceState::State;
+
+        // Try to wake the next waiting actor
+        std::optional<std::uint64_t> actor_instance_id_opt = wait_queue.try_pop_front();
+
+        if (actor_instance_id_opt) {
+            std::uint64_t actor_instance_id = *actor_instance_id_opt;
+
+            // Lookup actor
+            auto actor_instance_state_opt = 
+                runtime->id_actor_instance_map.get_value(actor_instance_id);
+            assert(actor_instance_state_opt != std::nullopt);
+            auto actor_instance_state = *actor_instance_state_opt;
+            assert(!actor_instance_state->mailbox.empty());
+            State expected = State::WAITING;
+            bool successful_exchange = actor_instance_state->state.compare_exchange_strong(
+                expected, State::RUNNABLE
+            );
+
+            // Actor instance can only be waiting on one lock at any given point of time. Race
+            // conditions should not occur.
+            assert(successful_exchange);
+            runtime->schedule_queue.emplace_back(actor_instance_id);
+            return;
+        }
+        locked.store(false, std::memory_order_seq_cst);
+    }
+};
+
+
+struct ActorInstanceState {
+    enum class State {EMPTY, WAITING, RUNNABLE, RUNNING};
+    std::atomic<State> state;
+    void* llvm_actor_object;
+    const std::uint64_t instance_id;
+    ThreadSafeDeque<MailboxItem> mailbox;
+};
+
+struct RuntimeDS {
+    std::uint64_t instances_created;
+    ThreadSafeDeque<std::uint64_t> schedule_queue;
+    ThreadSafeMap<std::uint64_t, std::shared_ptr<ActorInstanceState>> id_actor_instance_map;
+    std::unordered_map<std::uint64_t, UserMutex> mutex_map;
+};
