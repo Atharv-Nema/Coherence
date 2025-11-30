@@ -23,6 +23,7 @@ void handle_behaviour_call(
     actor_instance->mailbox.emplace_back(MailboxItem { message, frame, resume_fn });
     if(actor_instance->state.compare_exchange_strong(expected, State::RUNNABLE)) {
         runtime_ds->schedule_queue.emplace_back(instance_id);
+        runtime_ds->thread_bed.release();
     }
 }
 

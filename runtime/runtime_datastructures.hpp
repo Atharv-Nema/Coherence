@@ -7,6 +7,7 @@
 #include <optional>
 #include <atomic>
 #include <assert.h>
+#include <semaphore>
 
 struct MailboxItem {
     void* message;
@@ -117,7 +118,7 @@ public:
             runtime->schedule_queue.emplace_back(actor_instance_id);
             return;
         }
-        locked.store(false, std::memory_order_seq_cst);
+        locked = false;
     }
 };
 
@@ -131,7 +132,10 @@ struct ActorInstanceState {
 };
 
 struct RuntimeDS {
-    std::uint64_t instances_created;
+    // When the schedule queue is empty, threads can sleep in [thread_bed]
+    std::binary_semaphore thread_bed;
+    std::atomic<std::uint8_t> threads_asleep;
+    std::atomic<std::uint64_t> instances_created;
     ThreadSafeDeque<std::uint64_t> schedule_queue;
     ThreadSafeMap<std::uint64_t, std::shared_ptr<ActorInstanceState>> id_actor_instance_map;
     std::unordered_map<std::uint64_t, UserMutex> mutex_map;
