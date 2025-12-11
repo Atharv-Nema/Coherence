@@ -14,12 +14,14 @@ Make sure you have the following installed:
 - `make`
 - `flex`
 - `bison`
+- `boost`
 
 On Ubuntu, for example:
 
 ```sh
 sudo apt update
 sudo apt install build-essential cmake flex bison
+sudo apt install libboost-all-dev
 ```
 
 ## Build Instructions

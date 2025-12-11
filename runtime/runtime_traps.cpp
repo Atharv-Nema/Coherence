@@ -12,16 +12,16 @@ void handle_behaviour_call(
     uint64_t instance_id,
     void* message,
     void* frame,
-    SuspendTag(*resume_fn)(void*),
-    void (*destroy_fn)(void*)
+    void (*behaviour_fn)(void*)
 ) {
     using State = ActorInstanceState::State;
     auto actor_instance_opt = runtime_ds->id_actor_instance_map.get_value(instance_id);
     assert(actor_instance_opt != std::nullopt);
     std::shared_ptr<ActorInstanceState> actor_instance = *actor_instance_opt;
     State expected = State::EMPTY;
-    actor_instance->mailbox.emplace_back(MailboxItem { message, frame, resume_fn });
+    actor_instance->mailbox.emplace_back(MailboxItem { instance_id, message, behaviour_fn });
     if(actor_instance->state.compare_exchange_strong(expected, State::RUNNABLE)) {
+        // We are doing compare_exchange_strong so that only one 
         runtime_ds->schedule_queue.emplace_back(instance_id);
         runtime_ds->thread_bed.release();
     }
@@ -36,14 +36,7 @@ std::uint64_t handle_actor_creation(void* llvm_actor_object)
 {
     std::uint64_t instance_id = ++(runtime_ds->instances_created);
 
-    auto state = std::make_shared<ActorInstanceState>(
-        ActorInstanceState{
-            ActorInstanceState::State::EMPTY,
-            llvm_actor_object,
-            instance_id,
-            ThreadSafeDeque<MailboxItem>{}
-        }
-    );
+    auto state = std::make_shared<ActorInstanceState>(llvm_actor_object, instance_id);
 
     runtime_ds->id_actor_instance_map.insert(instance_id, state);
     return instance_id;

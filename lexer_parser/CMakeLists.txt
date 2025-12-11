@@ -1,9 +1,3 @@
-cmake_minimum_required(VERSION 3.16)
-project(LexerParser LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 find_package(FLEX REQUIRED)
 find_package(BISON REQUIRED)
 
@@ -39,9 +33,12 @@ add_library(lexer_parser
     ${FLEX_Lexer_OUTPUTS}
 )
 
+# CR: Probably make [ast] a library
 target_include_directories(lexer_parser PUBLIC
-    ${CMAKE_SOURCE_DIR}/ast
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} 
 )
+
+target_link_libraries(lexer_parser PUBLIC ast)
 
 message(STATUS "LexerParser configured successfully.")

@@ -3,17 +3,18 @@
 
 extern RuntimeDS* runtime_ds;
 
-// Non interrupting traps (called directly from LLVM)
-extern "C" {
-    enum SuspendTagKind: uint32_t {
-        RETURN = 0,
-        LOCK   = 1
-    };
-    struct SuspendTag {
-        SuspendTagKind kind;
-        uint64_t lock_id;
-    };
 
+enum SuspendTagKind: uint32_t {
+    RETURN = 0,
+    LOCK   = 1
+};
+struct SuspendTag {
+    SuspendTagKind kind;
+    uint64_t lock_id;
+};
+
+extern "C" {  
+    // Non interrupting traps (called directly from LLVM)
     void handle_unlock(uint64_t lock_id);
     void handle_behaviour_call(
         uint64_t instance_id, 
