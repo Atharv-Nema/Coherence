@@ -1,9 +1,8 @@
 #pragma once
-#include "../ast/expr.hpp"
-#include <assert.h>
+#include "expr.hpp"
 #include "type_checker.hpp"
 #include "env.cpp"
-#include "../global_utils/pattern_matching_boilerplate.hpp"
+#include "pattern_matching_boilerplate.hpp"
 
 void report_error_location(const SourceSpan& span);
 BasicType extract_basic_type(const FullType& full_type);

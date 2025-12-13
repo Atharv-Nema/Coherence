@@ -2,13 +2,18 @@
 #include "utils.hpp"
 #include <iostream>
 #include <algorithm>
-// #include "../ast/debug_printer.cpp"
+#include <optional>
 
+// CR: Allow assignment of sensible struct types
+// CR: Allow recursion and implement top to bottom thing correctly for actors.
+// CR: Add type information to the ast at appropriate points.
+// CR: Fix the weird logic for nameable types (introduce the invariant that the nameable
+// type cannot be a BasicType::TNamed)
 
 std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val_expr) {
-    return std::visit(Overload{
+    std::optional<FullType> full_type = std::visit(Overload{
         // Literal values
-        [](const ValExpr::VUnit&) {
+        [&](const ValExpr::VUnit&) {
             return std::optional(FullType{ BasicType{ BasicType::TUnit{} } });
         },
         [](const ValExpr::VInt&) {
@@ -76,28 +81,28 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
             return std::nullopt;
         },
 
-        [&](const ValExpr::ActorConstruction& actor_construction) -> std::optional<FullType> {
-            if(env.actor_name_map.find(actor_construction.actor_name) == env.actor_name_map.end()) {
+        [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::optional<FullType> {
+            if(env.actor_frontend_map.find(actor_constr_expr.actor_name) == env.actor_frontend_map.end()) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Actor " << actor_construction.actor_name << " not found" << std::endl;
+                std::cerr << "Actor " << actor_constr_expr.actor_name << " not found" << std::endl;
                 return std::nullopt;
             }
-            auto actor_def = env.actor_name_map[actor_construction.actor_name];
-            for(const auto& constructor: actor_def->constructors) {
-                if(constructor->name == actor_construction.constructor_name) {
-                    if(passed_in_parameters_valid(env, constructor->params, actor_construction.args, false)) {
-                        return FullType {BasicType {BasicType::TActor {actor_def->name}}};
-                    }
-                    else {
-                        report_error_location(val_expr->source_span);
-                        std::cerr << "Parameters passed into the constructor are not valid" << std::endl;
-                        return std::nullopt;
-                    }
-                }
+            auto& actor_constructors = 
+                (env.actor_frontend_map[actor_constr_expr.actor_name])->constructors;
+            if(actor_constructors.find(actor_constr_expr.constructor_name) == actor_constructors.end()) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Actor " << actor_constr_expr.actor_name << " does not have constructor "
+                    << actor_constr_expr.constructor_name << std::endl;
+                return std::nullopt; 
             }
-            report_error_location(val_expr->source_span);
-            std::cerr << "Actor constructor not found" << std::endl;
-            return std::nullopt;
+            std::shared_ptr<TopLevelItem::Constructor> constructor = 
+                actor_constructors[actor_constr_expr.constructor_name];
+            if(!passed_in_parameters_valid(env, constructor->params, actor_constr_expr.args, false)) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Parameters passed into the constructor are not valid" << std::endl;
+                return std::nullopt;
+            }
+            return FullType {BasicType {BasicType::TActor {actor_constr_expr.actor_name}}};
         },
 
         // Accesses
@@ -272,6 +277,10 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
         }
 
     }, val_expr->t);
+    if(full_type != std::nullopt) {
+        val_expr->expr_type = *full_type;
+    }
+    return full_type;
 }
 
 bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
@@ -287,8 +296,7 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             auto expected_type = var_decl_with_init.type;
             if(!type_assignable(env.type_context, expected_type, *init_expr_type)) {
                 report_error_location(stmt->source_span);
-                std::cerr << 
-                "Assigned expression type is not compatible with the declaration type" 
+                std::cerr <<  "Assigned expression type is not compatible with the declaration type" 
                 << std::endl;
                 return false;
             }
@@ -318,31 +326,29 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
                 std::cerr << "Type of the expression is not of an actor" << std::endl;
                 return false;
             }
-            // CR: Fix TActor in the parser
-            auto named_actor = std::get_if<BasicType::TActor>(&basic_type->t);
+            BasicType::TActor* named_actor = std::get_if<BasicType::TActor>(&basic_type->t);
             if(!named_actor) {
                 report_error_location(stmt->source_span);
                 std::cerr << "Type of the expression is not of an actor" << std::endl;
                 return false;
             }
 
-            assert(env.actor_name_map.find(named_actor->name) != env.actor_name_map.end());
-            auto actor_def = env.actor_name_map[named_actor->name];
-            for(auto behaviour: actor_def->member_behaviours) {
-                if(behaviour->name == b.behaviour_name) {
-                    if(passed_in_parameters_valid(env, behaviour->params, b.args, true)) {
-                        return true;
-                    }
-                    else {
-                        report_error_location(stmt->source_span);
-                        std::cerr << "Passed in parameters to the behaviour are not valid" << std::endl;
-                        return false;
-                    }
-                }
+            assert(env.actor_frontend_map.find(named_actor->name) != env.actor_frontend_map.end());
+            auto& actor_behaviours = env.actor_frontend_map[named_actor->name]->member_behaviours;
+            if(actor_behaviours.find(b.behaviour_name) == actor_behaviours.end()) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Actor " << named_actor->name << " does not have behaviour "
+                    << b.behaviour_name << std::endl;
+                return false;
             }
-            report_error_location(stmt->source_span);
-            std::cerr << "Actor behaviour not found" << std::endl;
-            return false;
+            std::shared_ptr<TopLevelItem::Behaviour> called_behaviour 
+                = actor_behaviours[b.behaviour_name];
+            if(!passed_in_parameters_valid(env, called_behaviour->params, b.args, true)) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Passed in parameters to the behaviour are not valid" << std::endl;
+                return false;
+            }
+            return true;
         },
         [&](const Stmt::Expr& val_expr) {
             auto type = val_expr_type(env, val_expr.expr);
@@ -430,34 +436,37 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
         },
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
-            if(env.actor_name_map.find(actor_def->name) != env.actor_name_map.end()) {
+            if(env.actor_frontend_map.find(actor_def->name) != env.actor_frontend_map.end()) {
                 report_error_location(toplevel_item.source_span);
                 std::cerr << "Actor " << actor_def->name << " already defined." << std::endl;
                 return false;
             }
-            // Add the current actor to the scope
-            env.actor_name_map.emplace(actor_def->name, actor_def);
+            // Create an actor frontend
+            std::shared_ptr<ActorFrontend> actor_frontend = std::make_shared<ActorFrontend>();
+            actor_frontend->actor_name = actor_def->name;
+            env.actor_frontend_map.emplace(actor_def->name, actor_frontend);
             
-            // First type-check the functions (simple)
             // Creating a scope for the functions within the actor
             ScopeGuard actor_func_scope(env.func_name_map);
+            // This is empty because we can get the actor members from [actor_def] and we need
+            // to differentiate between actor members and normal member variables.
             ScopeGuard actor_var_scope(env.var_context, nullptr, actor_def, std::monostate());
-            for(auto mem_func: actor_def->member_funcs) {
-                if(!type_check_function(env, mem_func, toplevel_item.source_span)) {
-                    return false;
-                }
-            }
-
-            // Now type checking the behaviours
-            for(auto mem_behaviour: actor_def->member_behaviours) {
-                if(!type_check_behaviour(env, mem_behaviour)) {
-                    return false;
-                }
-            }
-
-            // Type checking constructors
-            for(auto constructor: actor_def->constructors) {
-                if(!type_check_constructor(env, constructor)) {
+            // Typecheck members as they come
+            for(auto actor_mem: actor_def->actor_members) {
+                bool type_checked_successfully = std::visit(Overload{
+                    [&](std::shared_ptr<TopLevelItem::Func> mem_func) {
+                        return type_check_function(env, mem_func, toplevel_item.source_span);
+                    },
+                    [&](std::shared_ptr<TopLevelItem::Behaviour> mem_behaviour) {
+                        actor_frontend->member_behaviours[mem_behaviour->name] = mem_behaviour;
+                        return type_check_behaviour(env, mem_behaviour);
+                    },
+                    [&](std::shared_ptr<TopLevelItem::Constructor> mem_constructor) {
+                        actor_frontend->constructors[mem_constructor->name] = mem_constructor;
+                        return type_check_constructor(env, mem_constructor);
+                    }
+                }, actor_mem);
+                if(!type_checked_successfully) {
                     return false;
                 }
             }
@@ -479,7 +488,7 @@ bool type_check_program(Program* root) {
         return false;
     }
     // Checking whether there is an actor with name [Main]
-    if(env.actor_name_map.find("Main") == env.actor_name_map.end()) {
+    if(env.actor_frontend_map.find("Main") == env.actor_frontend_map.end()) {
         std::cerr << "Error: Actor Main not found" << std::endl;
         return false;
     }

@@ -4,6 +4,10 @@ actor Main {
     func random_func(int a_, int b_) => float {
         return a_ + b_ + 3.01;
     }
+    be do_stuff(int a_, int b_) {
+        a = a_;
+        b = b_;
+    }
     new create() {
         a := 4;
         b := 5;
@@ -14,8 +18,5 @@ actor Main {
         random_func(c, d);
         this->do_stuff(c, d);
     }
-    be do_stuff(int a_, int b_) {
-        a = a_;
-        b = b_;
-    }
+    
 }

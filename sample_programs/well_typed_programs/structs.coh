@@ -9,6 +9,7 @@ actor Main {
         var struct_instance: t = {
             a = 5;
             b = 4;
+            c = 3;
         }: t;
     }
 }

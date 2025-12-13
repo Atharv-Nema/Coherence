@@ -34,9 +34,11 @@ struct TopLevelItem {
     struct Actor {
         std::string name;
         std::unordered_map<std::string, FullType> member_vars;
-        std::vector<std::shared_ptr<Func>> member_funcs;
-        std::vector<std::shared_ptr<Constructor>> constructors;
-        std::vector<std::shared_ptr<Behaviour>> member_behaviours;
+        std::vector<std::variant<
+            std::shared_ptr<Func>,
+            std::shared_ptr<Constructor>,
+            std::shared_ptr<Behaviour>
+        >> actor_members;
     };
     SourceSpan source_span;
     std::variant<TypeDef, std::shared_ptr<Func>, std::shared_ptr<Actor>> t;

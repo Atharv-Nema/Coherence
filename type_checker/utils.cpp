@@ -1,9 +1,8 @@
-#include "../ast/expr.hpp"
 #include <assert.h>
-#include "type_checker.hpp"
 #include <iostream>
 #include <functional>
 #include "utils.hpp"
+#include <iostream>
 
 void report_error_location(const SourceSpan& span) {
     std::cerr << "Error between line " << span.start.line << ", column " << span.start.char_no 
@@ -409,6 +408,7 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
 }
 
 bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
+    // CR: Perhaps this takes in a source_span to for better error messages
     // Creating a scope
     ScopeGuard guard(env.var_context, behaviour_def);
     if(!add_arguments_to_scope(env, behaviour_def->params)) {

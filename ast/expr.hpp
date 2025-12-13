@@ -72,6 +72,7 @@ struct ValExpr {
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
 
     SourceSpan source_span;
+    FullType expr_type;
     std::variant<VUnit, VInt, VFloat, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
     PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };

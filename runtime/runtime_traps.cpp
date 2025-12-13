@@ -11,7 +11,6 @@ void handle_unlock(std::uint64_t lock_id) {
 void handle_behaviour_call(
     uint64_t instance_id,
     void* message,
-    void* frame,
     void (*behaviour_fn)(void*)
 ) {
     using State = ActorInstanceState::State;
@@ -42,11 +41,11 @@ std::uint64_t handle_actor_creation(void* llvm_actor_object)
     return instance_id;
 }
 
-// Returns true if lock acquired, false if caller must suspend.
-// CR: Note that this is a very thin wrapper. Think carefully about whether
-// this is needed
-bool handle_lock(uint64_t actor_instance_id, uint64_t lock_id) {
-    assert(runtime_ds->mutex_map.find(lock_id) != runtime_ds->mutex_map.end());
-    UserMutex& mtx = runtime_ds->mutex_map[lock_id];
-    return mtx.lock(actor_instance_id);
+void suspend_instance(uint64_t actor_instance_id, void* suspend_tag) {
+    auto actor_instance_opt = runtime_ds->id_actor_instance_map.get_value(actor_instance_id);
+    assert(actor_instance_opt != std::nullopt);
+    auto actor_instance = *actor_instance_opt;
+    boost_ctx::fcontext_t main_ctx = actor_instance->next_continuation;
+    boost_ctx::transfer_t t = boost_ctx::jump_fcontext(main_ctx, suspend_tag);
+    actor_instance->next_continuation = t.fctx;
 }

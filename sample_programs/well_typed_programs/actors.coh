@@ -1,6 +1,6 @@
-type t = {
-    a: int,
-    b: int
+type t = struct {
+    a: int;
+    b: int;
 }
 
 actor Other {

@@ -247,17 +247,17 @@ actor_members
       }
     | actor_members actor_constructor {
         $$ = $1;
-        (*$$)->constructors.emplace_back(std::move(*$2));
+        (*$$)->actor_members.emplace_back(std::move(*$2));
         delete $2;
       }
     | actor_members func_def {
         $$ = $1;
-        (*$$)->member_funcs.emplace_back(std::move(*$2));
+        (*$$)->actor_members.emplace_back(std::move(*$2));
         delete $2;
       }
     | actor_members actor_behaviour {
         $$ = $1;
-        (*$$)->member_behaviours.emplace_back(std::move(*$2));
+        (*$$)->actor_members.emplace_back(std::move(*$2));
         delete $2;
       }
     ;
@@ -478,6 +478,7 @@ assignment_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::Assignment{
                     std::move(*$1),
                     std::move(*$3)
@@ -493,7 +494,9 @@ comparison_expr
     : additive_expr { $$ = $1; }
     | additive_expr TOK_LESS additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Lt, std::move(*$3) }
             }
         ));
@@ -501,7 +504,9 @@ comparison_expr
       }
     | additive_expr TOK_LEQ additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Leq, std::move(*$3) }
             }
         ));
@@ -509,7 +514,9 @@ comparison_expr
       }
     | additive_expr TOK_GREATER additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Gt, std::move(*$3) }
             }
         ));
@@ -517,7 +524,9 @@ comparison_expr
       }
     | additive_expr TOK_GEQ additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Geq, std::move(*$3) }
             }
         ));
@@ -525,7 +534,9 @@ comparison_expr
       }
     | additive_expr TOK_EQ additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Eq, std::move(*$3) }
             }
         ));
@@ -533,7 +544,9 @@ comparison_expr
       }
     | additive_expr TOK_NEQ additive_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@$),
+            ValExpr{ 
+                span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Neq, std::move(*$3) }
             }
         ));
@@ -548,6 +561,7 @@ additive_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Add,
@@ -561,6 +575,7 @@ additive_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Sub,
@@ -579,6 +594,7 @@ multiplicative_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Mul,
@@ -592,6 +608,7 @@ multiplicative_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Div,
@@ -610,6 +627,7 @@ postfix_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::PointerAccess{
                     std::move(*$3),
                     std::move(*$1)
@@ -622,6 +640,7 @@ postfix_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::Field{
                     std::move(*$1),
                     std::move(*$3)
@@ -637,32 +656,32 @@ primary_expr
     : TOK_LPAREN val_expr TOK_RPAREN { $$ = $2; }
     | TOK_LPAREN TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VUnit{} }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VUnit{} }
         ));
       }
     | TOK_INT_LIT {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VInt{ $1 } }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VInt{ $1 } }
         ));
       }
     | TOK_FLOAT_LIT {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VFloat{ $1 } }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VFloat{ $1 } }
         ));
       }
     | TOK_TRUE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VBool{ true } }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VBool{ true } }
         ));
       }
     | TOK_FALSE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VBool{ false } }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VBool{ false } }
         ));
       }
     | TOK_IDENT {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), ValExpr::VVar{ *$1 } }
+            ValExpr{ span_from(@1), FullType(), ValExpr::VVar{ *$1 } }
         ));
         delete $1;
       }
@@ -672,6 +691,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 std::move(*$2)
             }
         ));
@@ -682,6 +702,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::NewInstance{
                     std::move(*$6),  // BasicType
                     std::move(*$2),  // Cap
@@ -697,6 +718,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::ActorConstruction{
                     std::move(*$2),  // actor_name
                     std::move(*$4),  // constructor_name
@@ -711,6 +733,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
+                FullType(),
                 ValExpr::FuncCall{
                     std::move(*$1),
                     std::move(*$3)

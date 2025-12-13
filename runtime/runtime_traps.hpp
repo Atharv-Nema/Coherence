@@ -17,11 +17,9 @@ extern "C" {
     // Non interrupting traps (called directly from LLVM)
     void handle_unlock(uint64_t lock_id);
     void handle_behaviour_call(
-        uint64_t instance_id, 
+        uint64_t instance_id,
         void* message,
-        void* frame,
-        SuspendTag (*resume_fn)(void*),
-        void (*destroy_fn)(void*)
+        void (*behaviour_fn)(void*)
     );
     /* 
     It is llvm's responsibility to allocate space for the actor instance. It passes it
@@ -35,7 +33,5 @@ extern "C" {
     */
     std::uint64_t handle_actor_creation(void* llvm_actor_object);
 
-    // Interrupting traps (called indirectly from the runtime)
-    // Returns true if lock has been successfully acquired, false if it is waiting
-    bool handle_lock(uint64_t actor_instance_id, uint64_t lock_id);
+    void suspend_instance(uint64_t actor_instance_id, void* suspend_tag);
 }
