@@ -14,6 +14,9 @@ bool capabilities_assignable(Cap c1, Cap c2);
 bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const BasicType& type_2);
 bool full_type_equal(TypeContext& type_context, const FullType& type_1, const FullType& type_2);
 bool type_assignable(TypeContext& type_context, const FullType& lhs, const FullType& rhs);
+std::optional<FullType> get_actor_member_type(TypeEnv& env, const std::string& var_name);
+std::optional<FullType> get_variable_type(TypeEnv& env, const std::string& var_name);
+bool variable_overridable_in_scope(TypeEnv& env, const std::string& var_name);
 bool passed_in_parameters_valid(TypeEnv &env, const std::vector<TopLevelItem::VarDecl> &signature,
                                 const std::vector<std::shared_ptr<ValExpr>> &arguments, bool parameters_being_sent);
 bool struct_valid(TypeEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_);

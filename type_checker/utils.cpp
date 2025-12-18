@@ -3,6 +3,7 @@
 #include <functional>
 #include "utils.hpp"
 #include <iostream>
+#include "defer.cpp"
 
 void report_error_location(const SourceSpan& span) {
     std::cerr << "Error between line " << span.start.line << ", column " << span.start.char_no 
@@ -219,6 +220,36 @@ bool type_sendable(TypeContext& type_context, const FullType& lhs, const FullTyp
     return capabilities_sendable(lhs_ptr->cap, rhs_ptr->cap);
 }
 
+std::optional<FullType> get_actor_member_type(TypeEnv& env, const std::string& var_name) {
+    if(!env.curr_actor) {
+        return std::nullopt;
+    }
+    if(env.curr_actor->member_vars.find(var_name) == 
+        env.curr_actor->member_vars.end()) {
+        return std::nullopt;
+    }
+    return env.curr_actor->member_vars[var_name];
+}
+
+std::optional<FullType> get_variable_type(TypeEnv& env, const std::string& var_name) {
+    auto local_member = env.var_context.get_value(var_name);
+    if(local_member) {
+        return local_member;
+    }
+    return get_actor_member_type(env, var_name);
+}
+
+bool variable_overridable_in_scope(TypeEnv& env, const std::string& var_name) {
+    if(env.var_context.key_in_curr_scope(var_name)) {
+        return false;
+    }
+    if(env.curr_actor && 
+       env.curr_actor->member_vars.find(var_name) != env.curr_actor->member_vars.end()) {
+        return false;
+    }
+    return true;
+}
+
 bool check_type_expr_list_valid(
     TypeEnv& env, 
     const std::vector<FullType>& expected_types, 
@@ -360,15 +391,17 @@ bool statement_returns(TypeEnv &env, std::shared_ptr<Stmt> last_statement) {
 
 bool add_arguments_to_scope(TypeEnv& env, const std::vector<TopLevelItem::VarDecl>& args) {
     // Returns false if there are duplicates, true otherwise
-    auto curr_actor = env.var_context.get_enclosing_actor();
-    if(curr_actor != nullptr) {
-        env.var_context.insert_variable("this", FullType {BasicType {BasicType::TActor {curr_actor->name}}});
+    if(env.curr_actor != nullptr) {
+        env.var_context.insert(
+            "this", 
+            FullType {BasicType {BasicType::TActor {env.curr_actor->name}}}
+        );
     }
     for(const TopLevelItem::VarDecl& arg: args) {
-        if(!env.var_context.variable_overridable_in_scope(arg.name)) {
+        if(!variable_overridable_in_scope(env, arg.name)) {
             return false;
         }
-        env.var_context.insert_variable(arg.name, arg.type);
+        env.var_context.insert(arg.name, arg.type);
     }
     return true;
 }
@@ -381,7 +414,14 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
     }
     env.func_name_map.insert(func_def->name, func_def);
     // Creating a scope
-    ScopeGuard guard(env.var_context, func_def);
+    ScopeGuard guard(env.var_context);
+    // Setting [curr_func]
+    env.curr_func = func_def;
+    env.atomic_section_data.change_callable(func_def->locks_dereferenced);
+    Defer d([&](void){
+        env.curr_func = nullptr;
+        env.atomic_section_data.exit_callable();
+    });
 
     if(!add_arguments_to_scope(env, func_def->params)) {
         report_error_location(source_span);
@@ -410,7 +450,8 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
 bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
     // CR: Perhaps this takes in a source_span to for better error messages
     // Creating a scope
-    ScopeGuard guard(env.var_context, behaviour_def);
+    ScopeGuard guard(env.var_context);
+    env.atomic_section_data.exit_callable();
     if(!add_arguments_to_scope(env, behaviour_def->params)) {
         return false;
     }
@@ -476,7 +517,7 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
 bool valexpr_calls_actor_function(TypeEnv &env, std::shared_ptr<ValExpr> val_expr) {
     return std::visit(Overload{
         [&](const ValExpr::FuncCall& func_call) {
-            if(env.var_context.get_enclosing_actor()) {
+            if(env.curr_actor) {
                 // So we are inside an actor
                 if(env.func_name_map.key_in_curr_scope(func_call.func)) {
                     // Calling a function of the enclosing actor
@@ -635,8 +676,9 @@ std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
 
 bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
     // Creating a scope for the constructor
-
-    ScopeGuard guard(env.var_context, constructor_def);
+    ScopeGuard guard(env.var_context);
+    env.atomic_section_data.change_callable(constructor_def->locks_dereferenced);
+    Defer d{[&](void){env.atomic_section_data.exit_callable();}};
 
     if(!add_arguments_to_scope(env, constructor_def->params)) {
         return false;
@@ -650,9 +692,8 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
     }
     // After this is done, we do a recursive check of the initialization
     std::unordered_set<std::string> unassigned_members;
-    auto enclosing_actor = env.var_context.get_enclosing_actor();
-    assert(enclosing_actor != nullptr);
-    for(const auto& [k, v]: enclosing_actor->member_vars) {
+    assert(env.curr_actor != nullptr);
+    for(const auto& [k, v]: env.curr_actor->member_vars) {
         assert(unassigned_members.find(k) == unassigned_members.end());
         unassigned_members.insert(k);
     }

@@ -294,7 +294,7 @@ func_def
         (*$$)->return_type = std::move(*$7);
         (*$$)->params = std::move(*$4);
         (*$$)->body = std::move(*$8);
-        (*$$)->locks_dereferenced = std::unordered_set<std::string>();
+        (*$$)->locks_dereferenced = std::make_shared<std::unordered_set<std::string>>();
         delete $2; delete $4; delete $7; delete $8;
       }
     ;

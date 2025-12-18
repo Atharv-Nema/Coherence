@@ -1,0 +1,10 @@
+actor Main {
+    new create() {
+        var iso_int: int iso = new iso[1] int(3);
+        var a: int = 4;
+        if(true) {
+            var a: int = 5;
+        }
+    }
+}
+

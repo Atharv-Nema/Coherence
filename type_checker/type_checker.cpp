@@ -3,12 +3,13 @@
 #include <iostream>
 #include <algorithm>
 #include <optional>
+#include "defer.cpp"
 
 // CR: Allow assignment of sensible struct types
-// CR: Allow recursion and implement top to bottom thing correctly for actors.
-// CR: Add type information to the ast at appropriate points.
 // CR: Fix the weird logic for nameable types (introduce the invariant that the nameable
 // type cannot be a BasicType::TNamed)
+// CR: Improve the logic of [ScopedStore], and use it to simplify the logic here. Fix the terrible design
+// and breaking of SRP in [VarContext]
 
 std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val_expr) {
     std::optional<FullType> full_type = std::visit(Overload{
@@ -28,7 +29,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 
         // Variable lookup
         [&](const ValExpr::VVar& v) -> std::optional<FullType> {
-            std::optional<FullType> type = env.var_context.get_variable_type(v.name);
+            std::optional<FullType> type = get_variable_type(env, v.name);
             if(!type) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Variable " << v.name << " not defined" << std::endl;
@@ -127,12 +128,12 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return std::nullopt;
             }
             if(auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t)) {
-                if(!env.var_context.in_atomic_section()) {
+                if(!env.atomic_section_data.in_atomic_section()) {
                     report_error_location(val_expr->source_span);
                     std::cerr << "Dereferencing an object protected by a lock outside an atomic section" << std::endl;
                     return std::nullopt;
                 }
-                env.var_context.add_lock(locked_cap->lock_name);
+                env.atomic_section_data.add_lock(locked_cap->lock_name);
             }
             return FullType {pointer_type->base};
         },
@@ -197,13 +198,8 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                 return std::nullopt;
             }
             auto func_def = *func_def_opt;
-            if(func_def->locks_dereferenced.size() != 0) {
-                if(env.var_context.in_atomic_section()) {
-                    for(const std::string& s: func_def->locks_dereferenced) {
-                        env.var_context.add_lock(s);
-                    }
-                }
-            }
+            env.atomic_section_data.add_locks_from_set(func_def->locks_dereferenced);
+
             if(passed_in_parameters_valid(env, func_def->params, f.args, false)) {
                 return func_def->return_type;
             }
@@ -286,7 +282,7 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
 bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
     return std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
-            if(!env.var_context.variable_overridable_in_scope(var_decl_with_init.name)) {
+            if(!variable_overridable_in_scope(env, var_decl_with_init.name)) {
                 return false;
             }
             auto init_expr_type = val_expr_type(env, var_decl_with_init.init);
@@ -300,15 +296,20 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
                 << std::endl;
                 return false;
             }
-            env.var_context.insert_variable(var_decl_with_init.name, var_decl_with_init.type);
+            env.var_context.insert(var_decl_with_init.name, var_decl_with_init.type);
             return true;
         },
         [&](const Stmt::MemberInitialize& member_init) {
-            if(env.var_context.get_local_member(member_init.member_name)) {
+            if(env.var_context.get_value(member_init.member_name)) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Cannot initialize a non-member variable" << std::endl;
                 return false;
             }
-            auto expected_type = env.var_context.get_actor_member(member_init.member_name);
+            auto expected_type = get_actor_member_type(env, member_init.member_name);
             if(!expected_type) {
+                report_error_location(stmt->source_span);
+                std::cerr << "Actor member " << member_init.member_name << 
+                " does not exist" << std::endl;
                 return false;
             }
             auto present_type = val_expr_type(env, member_init.init);
@@ -387,14 +388,9 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             return body_valid;
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_block) {
-            if(!env.var_context.in_atomic_section()) {
-                env.var_context.create_new_scope(atomic_block);
-            }
-            else {
-                env.var_context.create_new_scope();
-            }
+            ScopeGuard scoped_guard(env.var_context);
+            env.atomic_section_data.enter_atomic_section(atomic_block);
             bool body_valid = type_check_stmt_list(env, atomic_block->body);
-            env.var_context.pop_scope();
             return body_valid;
         },
         [&](const Stmt::Return& return_stmt) {
@@ -402,14 +398,13 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             if(!return_expr_type) {
                 return false;
             }
-            auto expected_return_type = env.var_context.get_expected_function_return_type();
-            if(!expected_return_type) {
+            if(!env.curr_func) {
                 report_error_location(stmt->source_span);
-                std::cerr << "Expected return type is not defined. Hint: Are you returning outside a function" << std::endl;
+                std::cerr << "Returns outside a function are not allowed" << std::endl;
                 return false;
             }
-            if (!full_type_equal(env.type_context, *return_expr_type, *expected_return_type))
-            {
+            auto expected_return_type = env.curr_func->return_type;
+            if (!full_type_equal(env.type_context, *return_expr_type, expected_return_type)) {
                 report_error_location(stmt->source_span);
                 std::cerr << "Return type does not match with the expected return type of the function" << std::endl;
                 return false;
@@ -448,12 +443,12 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
             
             // Creating a scope for the functions within the actor
             ScopeGuard actor_func_scope(env.func_name_map);
-            // This is empty because we can get the actor members from [actor_def] and we need
-            // to differentiate between actor members and normal member variables.
-            ScopeGuard actor_var_scope(env.var_context, nullptr, actor_def, std::monostate());
+            env.curr_actor = actor_def;
+            Defer d([&](void){env.curr_actor = nullptr;});
+            bool type_checked_successfully = true;
             // Typecheck members as they come
             for(auto actor_mem: actor_def->actor_members) {
-                bool type_checked_successfully = std::visit(Overload{
+                type_checked_successfully =  std::visit(Overload{
                     [&](std::shared_ptr<TopLevelItem::Func> mem_func) {
                         return type_check_function(env, mem_func, toplevel_item.source_span);
                     },
@@ -465,12 +460,9 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
                         actor_frontend->constructors[mem_constructor->name] = mem_constructor;
                         return type_check_constructor(env, mem_constructor);
                     }
-                }, actor_mem);
-                if(!type_checked_successfully) {
-                    return false;
-                }
+                }, actor_mem) && type_checked_successfully;
             }
-            return true;
+            return type_checked_successfully;
         }
     }, toplevel_item.t);
 }
