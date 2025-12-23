@@ -35,19 +35,18 @@ void map_emit_llvm_function_sig(
     std::ostream& output_file,
     const std::string& function_name,
     const std::string& llvm_return_type,
-    const std::vector<std::string>& hidden_parameters,
     const std::vector<T>& parameters,
     std::function<std::string(T)> llvm_param_gen) {
     output_file << "define " << llvm_return_type << " " << "@" << function_name << "(";
-    map_emit_list<std::string> {
-        output_file,
-        hidden_parameters,
-        ", ",
-        [](const std::string& s) {return s;}
-    };
-    if(parameters.size() > 0) {
-        output_file << ", ";
-    }
+    // map_emit_list<std::string> {
+    //     output_file,
+    //     hidden_parameters,
+    //     ", ",
+    //     [](const std::string& s) {return s;}
+    // };
+    // if(parameters.size() > 0) {
+    //     output_file << ", ";
+    // }
     map_emit_list<T>(
         output_file, 
         parameters, 

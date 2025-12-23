@@ -22,6 +22,11 @@ void map_emit_llvm_function_sig(
     std::ostream& output_file,
     const std::string& function_name,
     const std::string& llvm_return_type,
-    const std::vector<std::string>& hidden_parameters,
+    // const std::vector<std::string>& hidden_parameters,
     const std::vector<T>& parameters,
     std::function<std::string(T)> llvm_param_gen);
+
+// template <typename T>
+// void generate_callable_allocas(
+//     stsd
+// )
