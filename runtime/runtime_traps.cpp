@@ -26,6 +26,13 @@ void handle_behaviour_call(
     }
 }
 
+void* get_instance_struct(uint64_t instance_id) {
+    auto actor_instance_opt = runtime_ds->id_actor_instance_map.get_value(instance_id);
+    assert(actor_instance_opt != std::nullopt);
+    auto actor_instance = *actor_instance_opt;
+    return actor_instance->llvm_actor_object; 
+} 
+
 
 // Called by LLVM right after allocating actor memory.
 // Only registers the actor and returns its unique instance_id.

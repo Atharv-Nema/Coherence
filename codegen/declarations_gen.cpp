@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <variant>
 #include <sstream>
+#include <ranges>
 
 
 // Units represented using empty struct named [%unit]
@@ -57,17 +58,25 @@ std::shared_ptr<LLVMTypeInfo> llvm_type_of_full_type(
 std::string get_llvm_type_size(GenState &gen_state, const std::string& llvm_type_name) {
     // %szptr = getelementptr T, ptr null, i64 1
     // %sz = ptrtoint ptr %szptr to i64
-    std::string size_ptr_reg = gen_state.reg_gen.new_temp_reg();
+    std::string size_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
     gen_state.output_file << "%" << size_ptr_reg << " = getlementptr " << llvm_type_name
     << ", ptr null, i64 1" << std::endl;
-    std::string size_reg = gen_state.reg_gen.new_temp_reg();
+    std::string size_reg = gen_state.reg_label_gen.new_temp_reg();
     gen_state.output_file << "%" << size_reg << " = ptrtoint ptr " << "%" << size_ptr_reg 
     << " to i64" << std::endl;
     return size_reg;
 }
 
 std::string llvm_struct_of_actor(std::shared_ptr<TopLevelItem::Actor> actor_def) {
-    return actor_def->name + ".actor.struct";
+    return "%" + actor_def->name + ".actor.struct";
+}
+
+std::string llvm_struct_of_be(const std::string& actor_name, const std::string& be_name) {
+    return "%" + be_name + "." + actor_name + "." + "struct";
+}
+
+std::string actor_name_of_full_type(FullType full_type) {
+    return std::get<BasicType::TActor>(std::get<BasicType>(full_type.t).t).name;
 }
 
 void emit_type_declaration(
@@ -98,14 +107,14 @@ void allocate_var_to_stack(
     GenState& gen_state,
     const std::string& llvm_type,
     const std::string& var_name) {
-    std::string stack_reg = gen_state.reg_gen.new_stack_var();
+    std::string stack_reg = gen_state.reg_label_gen.new_stack_var();
         gen_state.output_file << "%" << stack_reg << " = alloca " 
         << var_name << std::endl;
     gen_state.var_reg_mapping.insert(var_name, stack_reg);
 }
 
 std::string convert_i32_to_i64(GenState& gen_state, const std::string& i32_reg) {
-    std::string size64_reg = gen_state.reg_gen.new_temp_reg();
+    std::string size64_reg = gen_state.reg_label_gen.new_temp_reg();
     // %size64_reg = zext i32 %size_val_reg_rval to i64
     gen_state.output_file << "%" << size64_reg << " = zext i32 " << "%" 
     << i32_reg << " to i64" << std::endl;
@@ -124,7 +133,7 @@ std::string convert_to_rvalue(
         case(ValueCategory::RVALUE):
             return reg_name;
         case(ValueCategory::LVALUE):
-            std::string temp_reg = gen_state.reg_gen.new_temp_reg();
+            std::string temp_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.output_file << temp_reg << " = load " << llvm_type << ", " << llvm_type
             << "* " << reg_name << std::endl;
             return temp_reg;
@@ -161,7 +170,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                 auto [val_expr_reg, val_cat] = emit_valexpr(gen_state, val_expr);
                 std::string val_expr_reg_rval = 
                     convert_to_rvalue(gen_state, llvm_field_type, val_expr_reg, val_cat);
-                std::string temp_reg = gen_state.reg_gen.new_temp_reg();
+                std::string temp_reg = gen_state.reg_label_gen.new_temp_reg();
                 gen_state.output_file << "%" << temp_reg << " = insertvalue " << "%"
                 << llvm_type->llvm_type_name << " " << curr_accum_expr << ", " << llvm_field_type
                 << " " << "%" << temp_reg << ", " << field_no << std::endl;
@@ -205,14 +214,14 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             
             // Getting the number of bytes
             std::string type_size = get_llvm_type_size(gen_state, allocated_obj_type);
-            std::string num_bytes_reg = gen_state.reg_gen.new_temp_reg();
+            std::string num_bytes_reg = gen_state.reg_label_gen.new_temp_reg();
             // %<num_bytes_reg> = mul i64 %<size64_reg>, %<type_size>
             gen_state.output_file << "%" << num_bytes_reg << " mul i64 " << "%" 
             << size64_reg << ", " << "%" << type_size << std::endl;
 
             // Performing the malloc
             // %<pointer_reg> = call ptr @malloc(i64 %<num_bytes_reg>)
-            std::string pointer_reg = gen_state.reg_gen.new_temp_reg();
+            std::string pointer_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.output_file << "%" << pointer_reg << " = call ptr @malloc(i64 " << 
             "%" << num_bytes_reg << ")" << std::endl;
             return make_pair(pointer_reg, ValueCategory::RVALUE);
@@ -221,13 +230,13 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // 1. Allocate space on the heap for the actor struct
             std::string actor_struct = actor_construction.actor_name + ".struct";
             std::string actor_struct_size = get_llvm_type_size(gen_state, actor_struct);
-            std::string actor_struct_ptr = gen_state.reg_gen.new_temp_reg();
+            std::string actor_struct_ptr = gen_state.reg_label_gen.new_temp_reg();
             // %<actor_struct_ptr> = call ptr @malloc(i64 %<actor_struct_size>)
             gen_state.output_file << "%" << actor_struct_ptr << " = call ptr @malloc(i64 "
             << "%" << actor_struct_size << ")" << std::endl;
             
             // 2. Register the actor by calling [handle_actor_creation]
-            std::string actor_id_reg = gen_state.reg_gen.new_temp_reg();
+            std::string actor_id_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.output_file << "%" << actor_id_reg << " = call i64 @handle_actor_creation(ptr "
             << "%" << actor_struct_ptr << ")" << std::endl;
 
@@ -278,7 +287,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                 llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
             
             // 3. Use getelementptr to get the correct pointer
-            std::string deref_lval_reg = gen_state.reg_gen.new_temp_reg();
+            std::string deref_lval_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.output_file << "%" << deref_lval_reg << " = getelementptr " << deref_type
             <<  ", ptr " << "%" << pointer_reg_rval << ", i64 " << "%" << index_i64;
 
@@ -299,7 +308,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             switch(base_val_cat){
                 case(ValueCategory::LVALUE):
                 {    // %field_ptr = getelementptr %struct.T, ptr %base, i32 0, i32 field_ind
-                    std::string field_ptr_reg = gen_state.reg_gen.new_temp_reg();
+                    std::string field_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
                     gen_state.output_file << "%" + field_ptr_reg << " = getelementptr " <<
                     llvm_struct_type_name << ", ptr " << "%" + base_struct_reg << ", i32 0, i32 "
                     << std::to_string(field_ind) << std::endl;
@@ -307,7 +316,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                 }
                 case(ValueCategory::RVALUE):
                 {   // %<field_val_reg> = extractvalue %<struct_type> %<struct_reg>, field_ind
-                    std::string field_val_reg = gen_state.reg_gen.new_temp_reg();
+                    std::string field_val_reg = gen_state.reg_label_gen.new_temp_reg();
                     gen_state.output_file << "%" + field_val_reg << " = extractvalue " << 
                     llvm_struct_type_name << " " << base_struct_reg << ", " 
                     << std::to_string(field_ind);
@@ -325,7 +334,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             std::string rhs_reg_rval = convert_to_rvalue(gen_state, llvm_type, rhs_reg, rhs_val_cat);
             
             // 2. Store the previous value of the output register
-            std::string prev_val = gen_state.reg_gen.new_temp_reg();
+            std::string prev_val = gen_state.reg_label_gen.new_temp_reg();
             // %<prev_val> = load <llvm_type>, ptr %<lhs_reg>
             gen_state.output_file << "%" + prev_val << " = load " << llvm_type << ", ptr " <<
             "%" + lhs_reg << std::endl;
@@ -359,7 +368,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             auto llvm_func_opt = gen_state.func_llvm_name_map.get_value(func_call.func);
             assert(llvm_func_opt != std::nullopt);
             std::string llvm_func = *llvm_func_opt;
-            std::string func_return_reg = gen_state.reg_gen.new_temp_reg();
+            std::string func_return_reg = gen_state.reg_label_gen.new_temp_reg();
             std::string llvm_return_type = 
                 llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
             gen_state.output_file << "%" + func_return_reg << " = " <<
@@ -381,6 +390,8 @@ std::pair<std::string, ValueCategory> emit_valexpr(
     }, val_expr->t);
 }
 
+// CR: Type checker is responsible for inserting all the casts and stuff
+
 std::string emit_valexpr_rvalue(
     GenState& gen_state,
     std::shared_ptr<ValExpr> val_expr) {
@@ -393,10 +404,12 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
     std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
             // We have already allocated memory at the start of the function. Just need to assign it
+            std::string var_type = llvm_type_of_full_type(gen_state, var_decl_with_init.init->expr_type)->llvm_type_name;
             std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_with_init.name);
             std::string init_reg = emit_valexpr_rvalue(gen_state, var_decl_with_init.init);
-            // store %<stack_reg> %<init>
-            gen_state.output_file << "store " << "%" << stack_reg << " " << "%" << init_reg << std::endl;
+            // store <llvm_type> %<init_reg>, ptr %<stack_reg>
+            gen_state.output_file << "store " << var_type << " " << "%" << init_reg << ", ptr " << "%" 
+            << stack_reg << std::endl;
         },
         [&](const Stmt::MemberInitialize& member_init) {
             std::shared_ptr<LLVMStructInfo> curr_actor_mem_info =
@@ -410,12 +423,117 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             std::string init_val_reg = emit_valexpr_rvalue(gen_state, member_init.init);
 
             // %field_ptr = getelementptr %struct.T, ptr %base, i32 0, i32 field_ind
-            std::string field_ptr_reg = gen_state.reg_gen.new_temp_reg();
+            std::string field_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.output_file << "%" + field_ptr_reg << " = getelementptr " <<
             llvm_actor_struct_name << ", ptr " << "%" + actor_struct_pointer_reg << ", i32 0, i32 "
             << std::to_string(field_ind) << std::endl;
         },
-        [&](cosnt )
+        [&](const Stmt::BehaviourCall& be_call) {
+            std::string actor_id_reg = emit_valexpr_rvalue(gen_state, be_call.actor);
+            // Need to package all of these arguments into a struct.
+            // Each behaviour has an associated struct. The info of the struct is everywhere, but it is not really
+            // needed. The last two parameters of the struct are the actor_id and the actor_struct_pointer
+            std::string actor_struct_pointer_reg = gen_state.reg_label_gen.new_temp_reg();
+            // %struct_pointer = call ptr @get_instance_struct(i64 %<actor_id_reg>)
+            gen_state.output_file << "%" + actor_struct_pointer_reg << " = call ptr @get_instance_struct(i64 " 
+            << "%" + actor_id_reg << ")" << std::endl;
+            std::string be_actor_name = actor_name_of_full_type(be_call.actor->expr_type);
+            std::string be_struct_name = llvm_struct_of_be(be_actor_name, be_call.behaviour_name);
+            // Allocating memory for the struct
+            // Getting the size of the struct
+            std::string struct_size = get_llvm_type_size(gen_state, be_struct_name);
+            // %<struct_ptr> = call ptr @malloc(i64 %<struct_size>)
+            std::string struct_ptr = gen_state.reg_label_gen.new_temp_reg();
+            gen_state.output_file << "%" + struct_ptr << " = call ptr @malloc(i64 " << "%" + struct_size <<
+            ")" << std::endl;
+            // Compiling all of the behaviour arguments
+            std::vector<std::pair<std::string, std::string>> compiler_args_info;
+            for(size_t i = 0; i < be_call.args.size(); i++) {
+                std::string arg_reg = emit_valexpr_rvalue(gen_state, be_call.args[i]);
+                std::string arg_llvm_type = llvm_type_of_full_type(gen_state, be_call.args[i]->expr_type)->llvm_type_name;
+                compiler_args_info.push_back({arg_llvm_type, arg_reg});
+            }
+            compiler_args_info.push_back({"i64", actor_id_reg});
+            compiler_args_info.push_back({"ptr", actor_struct_pointer_reg});
+            // Now need to fill out the struct
+            for(size_t i = 0; i < compiler_args_info.size(); i++) {
+                auto &[llvm_type, llvm_reg] = compiler_args_info[i];
+                std::string field_ptr = gen_state.reg_label_gen.new_temp_reg();
+                // %<field_ptr> = getelementptr %<BeStruct>, ptr %<StructObj>, i32 0, i32 i
+                gen_state.output_file << "%" + field_ptr << " = getelementptr " << "%" + be_struct_name << ", ptr "
+                << "%" + struct_ptr << ", i32 0, i32 " << i << std::endl;
+                // store <llvm_type> %<llvm_reg>, ptr %<field_ptr>
+                gen_state.output_file << "store " << llvm_type << " " << "%" + llvm_reg << ", ptr " 
+                << "%" + field_ptr << std::endl;
+            }
+            // Now, pass this struct to [handle_behaviour_call]
+            gen_state.output_file << "call void @handle_behaviour_call(i64 " << "%" + actor_id_reg << ", " 
+            << ", ptr " << "%" + actor_struct_pointer_reg << std::endl;
+        },
+        [&](const Stmt::Expr& expr) {
+            emit_valexpr(gen_state, expr.expr);
+        },
+        [&](const Stmt::If& if_stmt) {
+            // Compiling the condition
+            std::string cond_reg = emit_valexpr_rvalue(gen_state, if_stmt.cond);
+            std::string then_label = gen_state.reg_label_gen.new_label();
+            std::string else_label = gen_state.reg_label_gen.new_label();
+            std::string end_label = gen_state.reg_label_gen.new_label();
+            // br i1 %<cond_reg>, label %<then_label>, label %<else_label>
+            gen_state.output_file << "br i1 " << "%" + cond_reg << ", label " << "%" + then_label << ", "
+            << "label " << "%" + else_label << std::endl;
+            gen_state.output_file << then_label << ":" << std::endl;
+            // Compiling the if-block
+            for(std::shared_ptr<Stmt> then_block_stmt: if_stmt.then_body) {
+                emit_statement_codegen(gen_state, then_block_stmt);
+            }
+            gen_state.output_file << "br label " << "%" + end_label << std::endl;
+            // Compiling the else-block
+            gen_state.output_file << else_label << ":" << std::endl;
+            if(if_stmt.else_body != std::nullopt) {
+                for(std::shared_ptr<Stmt> else_block_stmt: *if_stmt.else_body) {
+                    emit_statement_codegen(gen_state, else_block_stmt);
+                }
+            }
+            gen_state.output_file << end_label << ":" << std::endl;
+        },
+        [&](const Stmt::While& while_stmt) {
+            std::string cond_label = gen_state.reg_label_gen.new_label();
+            std::string body_label = gen_state.reg_label_gen.new_label();
+            std::string end_label = gen_state.reg_label_gen.new_label();
+            gen_state.output_file << cond_label << ":" << std::endl;
+            std::string cond_reg = emit_valexpr_rvalue(gen_state, while_stmt.cond);
+            // br i1 %<cond_reg>, label %<body_label>, label %<end_label>
+            gen_state.output_file << "br i1 " << "%" + cond_reg << ", label " << "%" + body_label << ", label "
+            << "%" + end_label << std::endl;
+            gen_state.output_file << body_label << std::endl;
+            for(std::shared_ptr<Stmt> body_stmt: while_stmt.body) {
+                emit_statement_codegen(gen_state, body_stmt);
+            }
+            gen_state.output_file << end_label << std::endl;
+        },
+        [&](const Stmt::Atomic& atomic_stmt) {
+            std::vector<uint64_t> locks_acquired;
+            locks_acquired.reserve(atomic_stmt.locks_dereferenced.size());
+            for(const std::string& lock: atomic_stmt.locks_dereferenced) {
+                if(gen_state.lock_id_map.find(lock) == gen_state.lock_id_map.end()) {
+                    gen_state.lock_id_map.emplace(lock, gen_state.lock_id_map.size());
+                }
+                uint64_t lock_id = gen_state.lock_id_map.at(lock);
+                locks_acquired.push_back(lock_id);
+            }
+            sort(locks_acquired.begin(), locks_acquired.end());
+            for(uint64_t lock_id: locks_acquired) {
+                // do the entire suspend buissness
+            }
+            for(std::shared_ptr<Stmt> stmt: atomic_stmt.body) {
+                emit_statement_codegen(gen_state, stmt);
+            }
+            for(uint64_t lock_id: locks_acquired) {
+                gen_state.output_file << "call void @handle_unlock(i64 " << lock_id << ")" << std::endl;
+            }
+
+        }
     }, stmt->t);
 }
 
@@ -424,7 +542,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
 void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func_def) {
     // Idea is that after emit_function_codegen is called, [gen_state] will be updated with the
     // function information. This will be done outside [emit_function_codegen]
-    gen_state.reg_gen.refresh_counters();
+    gen_state.reg_label_gen.refresh_counters();
     std::vector<std::pair<std::string, std::string>> func_params;
     for(TopLevelItem::VarDecl &var_decl: func_def->params) {
         func_params.push_back({
@@ -459,9 +577,10 @@ void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Fu
         // But the local variables stored on the stack will have registers pointing to
         // them with different names. So we are storing the function parameter register
         // values in the local register.
+        // store <rhs_type> %<rhs>, ptr %<lhs>
         std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_pair.second);
-        gen_state.output_file << "store " << "%" << stack_reg << " "
-        << "%" << var_decl_pair.second << std::endl;
+        gen_state.output_file << "store " << var_decl_pair.first << " " << "%" + var_decl_pair.second 
+        << ", " << "ptr " << "%" + stack_reg << std::endl;
         gen_state.var_reg_mapping.insert(var_decl_pair.second, stack_reg);
     }
 

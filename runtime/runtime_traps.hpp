@@ -21,6 +21,7 @@ extern "C" {
         void* message,
         void (*behaviour_fn)(void*)
     );
+    void* get_instance_struct(uint64_t instance_id);
     /* 
     It is llvm's responsibility to allocate space for the actor instance. It passes it
     onto the runtime to get an [instance_id] and forgets about the pointer to the 

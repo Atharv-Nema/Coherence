@@ -32,12 +32,12 @@ void call_behaviour_context(boost_ctx::transfer_t t) {
     assert(actor_instance_opt != std::nullopt);
     auto actor_instance = *actor_instance_opt;
     actor_instance->next_continuation = main_ctx;
-    // Need to fill in the actor instance to the message
-    reinterpret_cast<void**>(mailbox_item->message)[0] = actor_instance->llvm_actor_object; 
     mailbox_item->behaviour_fn(mailbox_item->message);
     // Should never reach here
     assert(false);
 }
+
+
 
 void thread_loop() {
     using State = ActorInstanceState::State;

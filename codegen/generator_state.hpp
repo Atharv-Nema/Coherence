@@ -7,14 +7,16 @@
 #include <ostream>
 #include "scoped_store.cpp"
 
-class RegisterGen {
+class RegisterLabelGen {
 private:
     size_t stack_var_reg_ct = 0;
     size_t temp_reg_ct = 0;
+    size_t label_ct = 0;
 public:
     void refresh_counters() {
         stack_var_reg_ct = 0;
         temp_reg_ct = 0;
+        label_ct = 0;
     }
     std::string new_stack_var() {
         stack_var_reg_ct++;
@@ -23,7 +25,11 @@ public:
     std::string new_temp_reg() {
         temp_reg_ct++;
         return "temp." + std::to_string(temp_reg_ct);
-    }  
+    }
+    std::string new_label() {
+        label_ct++;
+        return "label." + std::to_string(label_ct);
+    }
 };
 
 struct LLVMStructInfo {
@@ -50,7 +56,7 @@ struct LLVMTypeInfo {
 
 
 struct GenState {
-    RegisterGen reg_gen;
+    RegisterLabelGen reg_label_gen;
     std::unordered_map<std::string, std::string> var_reg_mapping;
     // A map from the user function name to the generated llvm function name. The associated metadata
     // corresponds to the actor it is in.
