@@ -42,7 +42,6 @@ static int curr_column = 1;
 "while"     return TOK_WHILE;
 
 "int"       return TOK_INT;
-"float"     return TOK_FLOAT;
 "bool"      return TOK_BOOL;
 
 "ref"       return TOK_REF;
@@ -82,7 +81,6 @@ static int curr_column = 1;
 "//".*                                 { /* ignore line comments */ }
 "/*"([^*]|\n|\*+[^*/])*\*+"/"         { /* ignore block comments */ }
 
-"-"?[0-9]+"."[0-9]+   { yylval->float_val = stod(yytext); return TOK_FLOAT_LIT; }
 "-"?[0-9]+            { yylval->int_val   = stoi(yytext); return TOK_INT_LIT; }
 
 [a-zA-Z_][a-zA-Z0-9_']*   { yylval->str_val = new string(yytext); return TOK_IDENT; }

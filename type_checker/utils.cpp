@@ -123,7 +123,6 @@ bool type_is_numeric(TypeContext& type_context, const FullType& type) {
     return std::visit(Overload{
         [&](const BasicType::TUnit&) {return false;},
         [&](const BasicType::TInt&) {return true;},
-        [&](const BasicType::TFloat&) {return true;},
         [&](const BasicType::TBool&) {return false;},
         [&](const BasicType::TNamed& named_type) {
             auto standard_type = standardize_type(type_context, named_type.name);

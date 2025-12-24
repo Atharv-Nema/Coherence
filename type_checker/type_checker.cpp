@@ -20,9 +20,6 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
         [](const ValExpr::VInt&) {
             return std::optional(FullType{ BasicType{ BasicType::TInt{} } });
         },
-        [](const ValExpr::VFloat&) {
-            return std::optional(FullType{ BasicType{ BasicType::TFloat{} } });
-        },
         [](const ValExpr::VBool&) {
             return std::optional(FullType{ BasicType{ BasicType::TBool{} } });
         },
@@ -247,10 +244,6 @@ std::optional<FullType> val_expr_type(TypeEnv& env, std::shared_ptr<ValExpr> val
                         report_error_location(val_expr->source_span);
                         std::cerr << "Type not compatible for arithmetic" << std::endl;
                         return std::nullopt;
-                    }
-                    if(basic_type_equal(env.type_context, lhs_base, BasicType { BasicType::TFloat {}}) ||
-                        basic_type_equal(env.type_context, rhs_base, BasicType { BasicType::TFloat {}})) {
-                        return FullType {BasicType { BasicType::TFloat {}}};
                     }
                     else {
                         return FullType {BasicType {BasicType::TInt {}}};

@@ -73,7 +73,7 @@
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
 %token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
 %token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
-%token TOK_INT TOK_FLOAT TOK_BOOL
+%token TOK_INT TOK_BOOL
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
 %token TOK_TRUE TOK_FALSE
 %token TOK_SEND TOK_ARROW TOK_ASSIGN
@@ -84,7 +84,6 @@
 %token TOK_VAR
 
 %token <int_val>   TOK_INT_LIT
-%token <float_val> TOK_FLOAT_LIT
 %token <str_val>   TOK_IDENT
 
 /* ---------- TYPE DECLARATIONS ---------- */
@@ -664,11 +663,6 @@ primary_expr
             ValExpr{ span_from(@1), FullType(), ValExpr::VInt{ $1 } }
         ));
       }
-    | TOK_FLOAT_LIT {
-        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VFloat{ $1 } }
-        ));
-      }
     | TOK_TRUE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ span_from(@1), FullType(), ValExpr::VBool{ true } }
@@ -753,10 +747,6 @@ basic_type
     | TOK_INT {
         $$ = new BasicType();
         $$->t = BasicType::TInt{};
-      }
-    | TOK_FLOAT {
-        $$ = new BasicType();
-        $$->t = BasicType::TFloat{};
       }
     | TOK_BOOL {
         $$ = new BasicType();

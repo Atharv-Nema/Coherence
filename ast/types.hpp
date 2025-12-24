@@ -17,11 +17,10 @@ struct Cap {
 struct BasicType {
     struct TUnit {};
     struct TInt {};
-    struct TFloat {};
     struct TBool {};
     struct TNamed { std::string name; };
     struct TActor {std::string name;};
-    std::variant<TUnit, TInt, TFloat, TBool, TNamed, TActor> t;
+    std::variant<TUnit, TInt, TBool, TNamed, TActor> t;
 };
 
 // [FullType] represent all types that can be textually present in the type of variables/functions

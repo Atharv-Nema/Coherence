@@ -11,9 +11,6 @@ void print_basic_type(const BasicType& b) {
         [&](const BasicType::TInt&) {
             std::cout << "TInt";
         },
-        [&](const BasicType::TFloat&) {
-            std::cout << "TFloat";
-        },
         [&](const BasicType::TBool&) {
             std::cout << "TBool";
         },
@@ -90,9 +87,6 @@ void print_val_expr(const ValExpr& v) {
         },
         [&](const ValExpr::VInt& x) {
             std::cout << "VInt{v=" << x.v << "}";
-        },
-        [&](const ValExpr::VFloat& x) {
-            std::cout << "VFloat{v=" << x.v << "}";
         },
         [&](const ValExpr::VBool& x) {
             std::cout << "VBool{v=" << (x.v ? "true" : "false") << "}";

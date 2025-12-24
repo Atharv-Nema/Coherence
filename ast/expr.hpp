@@ -22,7 +22,6 @@ struct ValExpr {
     // Simple values
     struct VUnit {};
     struct VInt { int v; };
-    struct VFloat { double v; };
     struct VBool { bool v; };
 
     // Named values (variables)
@@ -66,14 +65,13 @@ struct ValExpr {
         std::string func; 
         std::vector<std::shared_ptr<ValExpr>> args; 
     };
-
     
     // Operations
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
 
     SourceSpan source_span;
     FullType expr_type;
-    std::variant<VUnit, VInt, VFloat, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
+    std::variant<VUnit, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
     PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };
 
