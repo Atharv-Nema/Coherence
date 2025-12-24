@@ -3,7 +3,7 @@
 
 extern RuntimeDS* runtime_ds;
 
-#pragma pack(1)
+#pragma pack(push, 1)
 enum SuspendTagKind: uint32_t {
     RETURN = 0,
     LOCK   = 1

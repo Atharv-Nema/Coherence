@@ -2,6 +2,7 @@
 #include <variant>
 #include <unordered_set>
 #include <vector>
+#include <assert.h>
 #include <optional>
 
 

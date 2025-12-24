@@ -729,6 +729,38 @@ void emit_constructor_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem:
     compile_synchronous_callable(gen_state, constructor_name_llvm, "void", constructor_def->params, constructor_def->body);
 }
 
+void generate_fake_start_actor(GenState& gen_state) {
+    gen_state.reg_label_gen.refresh_counters();
+    // Generates a function that will act as a behaviour to be scheduled (we are going to fool the runtime lessgo)
+    gen_state.output_file << "define void @start.runtime(ptr %dummy_message) {" << std::endl;
+    std::string main_struct =  "%Main.struct";
+    std::string main_struct_size = get_llvm_type_size(gen_state, main_struct);
+    std::string main_instance_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + main_instance_ptr_reg << " = call void @malloc(i64 " << main_struct_size
+    << ")" << std::endl;
+    std::string actor_id_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + actor_id_reg << " = call i64 @handle_actor_creation(ptr "
+    << "%" << main_instance_ptr_reg << ")" << std::endl;
+    // Calling the constructor
+    std::string create_constructor_llvm_name = "create.Main.constr";
+    gen_state.output_file << "call void @" << create_constructor_llvm_name << "(i64 " << actor_id_reg << ", "
+    << "i64 " << actor_id_reg << ")" << std::endl;
+    SuspendTag suspend_tag;
+    suspend_tag.kind = SuspendTagKind::RETURN;
+    generate_suspend_call(gen_state, suspend_tag);
+    gen_state.output_file << "}" << std::endl;
+}
+
+void generate_coherence_initialize(GenState& gen_state) {
+    gen_state.reg_label_gen.refresh_counters();
+    gen_state.output_file << "define void @coherence_initialize() {" << std::endl;
+    std::string instance_id_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + instance_id_reg << " = call i64 @handle_actor_creation(ptr null)" << std::endl;
+    gen_state.output_file << "call void @handle_behaviour_call(i64 " << instance_id_reg << 
+    ", ptr null, ptr @start.runtime)" << std::endl;
+    gen_state.output_file << "}" << std::endl; 
+}
+
 void emit_behaviour_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
     assert(gen_state.curr_actor != nullptr);
     gen_state.reg_label_gen.refresh_counters();
@@ -838,37 +870,5 @@ void emit_declarations(GenState& gen_state, Program& program_ast) {
             }
         }, top_level_item.t);
     }
+    generate_coherence_initialize(gen_state);
 }
-
-void generate_fake_start_actor(GenState& gen_state) {
-    gen_state.reg_label_gen.refresh_counters();
-    // Generates a function that will act as a behaviour to be scheduled (we are going to fool the runtime lessgo)
-    gen_state.output_file << "define void @start.runtime(ptr %dummy_message) {" << std::endl;
-    std::string main_struct =  "%Main.struct";
-    std::string main_struct_size = get_llvm_type_size(gen_state, main_struct);
-    std::string main_instance_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
-    gen_state.output_file << "%" + main_instance_ptr_reg << " = call void @malloc(i64 " << main_struct_size
-    << ")" << std::endl;
-    std::string actor_id_reg = gen_state.reg_label_gen.new_temp_reg();
-    gen_state.output_file << "%" + actor_id_reg << " = call i64 @handle_actor_creation(ptr "
-    << "%" << main_instance_ptr_reg << ")" << std::endl;
-    // Calling the constructor
-    std::string create_constructor_llvm_name = "create.Main.constr";
-    gen_state.output_file << "call void @" << create_constructor_llvm_name << "(i64 " << actor_id_reg << ", "
-    << "i64 " << actor_id_reg << ")" << std::endl;
-    SuspendTag suspend_tag;
-    suspend_tag.kind = SuspendTagKind::RETURN;
-    generate_suspend_call(gen_state, suspend_tag);
-    gen_state.output_file << "}" << std::endl;
-}
-
-void generate_coherence_initialize(GenState& gen_state) {
-    gen_state.reg_label_gen.refresh_counters();
-    gen_state.output_file << "define void @coherence_initialize() {" << std::endl;
-    std::string instance_id_reg = gen_state.reg_label_gen.new_temp_reg();
-    gen_state.output_file << "%" + instance_id_reg << " = call i64 @handle_actor_creation(ptr null)" << std::endl;
-    gen_state.output_file << "call void @handle_behaviour_call(i64 " << instance_id_reg << 
-    ", ptr null, ptr @start.runtime)" << std::endl;
-    gen_state.output_file << "}" << std::endl; 
-}
-
