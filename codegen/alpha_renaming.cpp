@@ -21,8 +21,10 @@ struct RenameInfo {
     }
     void rename_variable(std::string& variable) {
         auto renamed_var = rename_map.get_value(variable);
-        assert(renamed_var != std::nullopt);
-        variable = *renamed_var;
+        // Do not rename if the variable is not registered
+        if(renamed_var != std::nullopt) {
+            variable = *renamed_var;
+        }
     }
     std::string register_fresh_name(const std::string& var, FullType type) {
         std::string new_name = var + std::to_string(scope_identifier);

@@ -10,6 +10,9 @@
 #include <sstream>
 #include <ranges>
 
+static const std::string THIS_ACTOR_ID_REG = "this.id";
+static const std::string SYNCHRONOUS_ACTOR_ID_REG = "lock_instance.id";
+
 
 // Units represented using empty struct named [%unit]
 // Actor instances are represented as simple integers (the runtime has info about the internal
@@ -26,9 +29,6 @@ std::shared_ptr<LLVMTypeInfo> llvm_type_of_basic_type(
         [&](const BasicType::TInt&) {
             return std::make_shared<LLVMTypeInfo>("i32");
         },
-        [&](const BasicType::TFloat&) {
-            return std::make_shared<LLVMTypeInfo>("float");
-        },
         [&](const BasicType::TBool&) {
             return std::make_shared<LLVMTypeInfo>("i1");
         },
@@ -39,6 +39,30 @@ std::shared_ptr<LLVMTypeInfo> llvm_type_of_basic_type(
             return std::make_shared<LLVMTypeInfo>("i64");
         }
     }, basic_type.t);
+}
+
+// std::string llvm_name_of_func(const std::string& func)
+std::string llvm_name_of_constructor(
+    const std::string& constructor_name, 
+    const std::string& actor_name) {
+    return constructor_name + "." + actor_name + ".constr";
+}
+
+std::string llvm_name_of_func(GenState& gen_state, const std::string& func_name) {
+    if(gen_state.curr_actor != nullptr) {
+        return func_name + "." + gen_state.curr_actor->name + ".func";
+    }
+    else {
+        return func_name + ".func";
+    }
+}
+
+std::string llvm_name_of_behaviour(const std::string& be_name, const std::string& actor_name) {
+    return be_name + "." + actor_name + ".be";
+}
+
+std::string llvm_struct_of_behaviour(const std::string& be_name, const std::string& actor_name) {
+    return be_name + "." + actor_name + ".be.struct";
 }
 
 std::shared_ptr<LLVMTypeInfo> llvm_type_of_full_type(
@@ -72,8 +96,8 @@ std::string llvm_struct_of_actor(std::shared_ptr<TopLevelItem::Actor> actor_def)
     return "%" + actor_def->name + ".actor.struct";
 }
 
-std::string llvm_struct_of_be(const std::string& actor_name, const std::string& be_name) {
-    return "%" + be_name + "." + actor_name + "." + "struct";
+std::string llvm_struct_of_be(const std::string& be_name, const std::string& actor_name) {
+    return "%" + be_name + "." + actor_name + ".be.struct";
 }
 
 std::string actor_name_of_full_type(FullType full_type) {
@@ -287,11 +311,10 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             func_args.push_back({"i64", actor_id_reg});
             func_args.push_back({"ptr", actor_struct_ptr});
             // Adding the current passed-in actor to the end for suspension behaviour
-            func_args.push_back({"i64", "this"});
-            std::string llvm_func_of_constructor = 
-                actor_construction.constructor_name + "." + 
-                actor_construction.actor_name + "." + "constructor";
-            gen_state.output_file << "call void @" << llvm_func_of_constructor << "(";
+            func_args.push_back({"i64", SYNCHRONOUS_ACTOR_ID_REG});
+            std::string constr_func_name_llvm = 
+                llvm_name_of_constructor(actor_construction.constructor_name, actor_construction.actor_name);
+            gen_state.output_file << "call void @" << constr_func_name_llvm << "(";
             map_emit_list<std::pair<std::string, std::string>>(
                 gen_state.output_file,
                 func_args,
@@ -391,14 +414,9 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     convert_to_rvalue(gen_state, llvm_type, arg_expr_reg, val_cat);
                 func_args.push_back({llvm_type, arg_expr_rval_reg});
             }
-            // If it is a member function, need to pass in the member struct
-            if(gen_state.func_llvm_name_map.get_scope_ind(func_call.func) == 1) {
-                // Get the actor struct
-                assert(gen_state.curr_actor != nullptr);
-                std::string actor_struct = "%" + gen_state.curr_actor->name + ".struct";
-                func_args.push_back({actor_struct, "this.mem"});
-            }
-            func_args.push_back({"i64", "this"});
+            func_args.push_back({"i64", THIS_ACTOR_ID_REG});
+            func_args.push_back({"i64", SYNCHRONOUS_ACTOR_ID_REG});
+            
             auto llvm_func_opt = gen_state.func_llvm_name_map.get_value(func_call.func);
             assert(llvm_func_opt != std::nullopt);
             std::string llvm_func = *llvm_func_opt;
@@ -419,7 +437,44 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             return func_return_reg;
         },
         [&](const ValExpr::BinOpExpr& bin_op_expr) {
-            // TODO
+            // I am getting rid of floats for now
+            std::string lhs_reg = emit_valexpr_rvalue(gen_state, bin_op_expr.lhs);
+            std::string rhs_reg = emit_valexpr_rvalue(gen_state, bin_op_expr.rhs);
+            std::string result_reg = gen_state.reg_label_gen.new_temp_reg();
+            gen_state.output_file << "%" + result_reg << " = ";
+            switch(bin_op_expr.op) {
+                case BinOp::Add:
+                    gen_state.output_file << " add i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Sub:
+                    gen_state.output_file << " sub i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Mul:
+                    gen_state.output_file << " mul i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Div:
+                    gen_state.output_file << " udiv i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Geq:
+                    gen_state.output_file << " icmp sge i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Leq:
+                    gen_state.output_file << " icmp sle i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Eq:
+                    gen_state.output_file << " icmp eq i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Neq:
+                    gen_state.output_file << " icmp neq i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Gt:
+                    gen_state.output_file << " icmp sgt i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+                case BinOp::Lt:
+                    gen_state.output_file << " icmp slt i32 " << lhs_reg << ", " << rhs_reg << std::endl;
+                    break;
+            }
+            return make_pair(result_reg, ValueCategory::RVALUE);
         }
     }, val_expr->t);
 }
@@ -446,21 +501,12 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             << stack_reg << std::endl;
         },
         [&](const Stmt::MemberInitialize& member_init) {
-            std::shared_ptr<LLVMStructInfo> curr_actor_mem_info =
-                gen_state.type_name_info_map.at(gen_state.curr_actor->name)->struct_info;
-            std::string llvm_actor_struct_name = llvm_struct_of_actor(gen_state.curr_actor);
-            // The actor body is stored in [this.mem] register
-            auto [field_ind, field_type] = curr_actor_mem_info->field_ind_map.at(member_init.member_name);
-            // CR: I think that this is the correct thing to do. Modify the other stuff to comply with this
-            // No need to store this on the stack
-            std::string actor_struct_pointer_reg = "this.mem";
+            // The same as [same as assigning to a variable]
             std::string init_val_reg = emit_valexpr_rvalue(gen_state, member_init.init);
-
-            // %field_ptr = getelementptr %struct.T, ptr %base, i32 0, i32 field_ind
-            std::string field_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
-            gen_state.output_file << "%" + field_ptr_reg << " = getelementptr " <<
-            llvm_actor_struct_name << ", ptr " << "%" + actor_struct_pointer_reg << ", i32 0, i32 "
-            << std::to_string(field_ind) << std::endl;
+            std::string member_reg = gen_state.var_reg_mapping.at(member_init.member_name);
+            std::string init_type = llvm_type_of_full_type(gen_state, member_init.init->expr_type)->llvm_type_name;
+            gen_state.output_file << "store " << init_type << " " << "%" << init_val_reg << ", ptr " 
+            << "%" + init_val_reg << std::endl;
         },
         [&](const Stmt::BehaviourCall& be_call) {
             std::string actor_id_reg = emit_valexpr_rvalue(gen_state, be_call.actor);
@@ -472,7 +518,8 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             gen_state.output_file << "%" + actor_struct_pointer_reg << " = call ptr @get_instance_struct(i64 " 
             << "%" + actor_id_reg << ")" << std::endl;
             std::string be_actor_name = actor_name_of_full_type(be_call.actor->expr_type);
-            std::string be_struct_name = llvm_struct_of_be(be_actor_name, be_call.behaviour_name);
+            std::string be_name_llvm = llvm_name_of_behaviour(be_call.behaviour_name, be_actor_name);
+            std::string be_struct_name = llvm_struct_of_be(be_call.behaviour_name, be_actor_name);
             // Allocating memory for the struct
             // Getting the size of the struct
             std::string struct_size = get_llvm_type_size(gen_state, be_struct_name);
@@ -502,7 +549,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             }
             // Now, pass this struct to [handle_behaviour_call]
             gen_state.output_file << "call void @handle_behaviour_call(i64 " << "%" + actor_id_reg << ", " 
-            << ", ptr " << "%" + actor_struct_pointer_reg << std::endl;
+            << ", ptr " << "%" + actor_struct_pointer_reg << ", @" << be_name_llvm << ")" << std::endl;
         },
         [&](const Stmt::Expr& expr) {
             emit_valexpr(gen_state, expr.expr);
@@ -578,57 +625,31 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
     }, stmt->t);
 }
 
-void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func_def) {
-    // Idea is that after emit_function_codegen is called, [gen_state] will be updated with the
-    // function information. This will be done outside [emit_function_codegen]
-    gen_state.reg_label_gen.refresh_counters();
-    std::vector<std::pair<std::string, std::string>> func_params;
-    for(TopLevelItem::VarDecl &var_decl: func_def->params) {
-        func_params.push_back({
-            llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name,
-            var_decl.name
-        });
-    }
-    // Pairs of {<llvm_type>, <var/reg_name>}
-    // CR: The issue here is that there are two function pointers in a constructor (one for the being-constructed
-    // actor, and one for the calling actor). Need some way of distinguishing these two. Think about this carefully.
-    // Perhaps name them differently. I will call th actor to be locked %lock_instance.runtime
-    func_params.push_back({"i64", "this"});
+void compile_callable_body(
+    GenState &gen_state, 
+    std::vector<std::shared_ptr<Stmt>> callable_body) {
     if(gen_state.curr_actor) {
-        func_params.push_back({llvm_struct_of_actor(gen_state.curr_actor), "this.mem"});
-    }
-    map_emit_llvm_function_sig<std::pair<std::string, std::string>>(
-        gen_state.output_file,
-        func_def->name,
-        llvm_type_of_full_type(gen_state, func_def->return_type)->llvm_type_name,
-        func_params,
-        [&](const std::pair<std::string, std::string>& var_decl_pair) {
-            return var_decl_pair.first + " %" + var_decl_pair.second;
+        // Get the structure corresponding to the body of the current actor and unpack it on the stack
+        std::string curr_actor_llvm_struct = llvm_struct_of_actor(gen_state.curr_actor);
+        // Getting the struct member from the runtime
+        std::string actor_struct_reg = gen_state.reg_label_gen.new_temp_reg();
+        gen_state.output_file << "%" + actor_struct_reg << " = call ptr @get_instance_struct(i64 "
+        << "%" + THIS_ACTOR_ID_REG << ")" << std::endl;
+        std::shared_ptr<LLVMStructInfo> actor_struct_info = 
+            gen_state.type_name_info_map.at(curr_actor_llvm_struct)->struct_info;
+        // Now for each std::unordered_map<std::string, FieldInfo> field_ind_map;
+        for(const auto&[mem_name, mem_info]: actor_struct_info->field_ind_map) {
+            std::string mem_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+            gen_state.output_file << "%" + mem_ptr_reg << " = getelementptr " << curr_actor_llvm_struct << 
+            ", ptr " << "%" + actor_struct_reg << ", i32 0, i32 " << mem_info.field_index << std::endl;
+            assert(gen_state.var_reg_mapping.find(mem_name) == gen_state.var_reg_mapping.end());
+            gen_state.var_reg_mapping.emplace(mem_name, mem_ptr_reg);
         }
-    );
-    gen_state.output_file << " {" << std::endl;
-
-    // Store the parameters on the stack
-    // Generating line like:
-    // %1 = alloca i64
-    // store %1 %this
-    for(auto &var_decl_pair: func_params) {
-        allocate_var_to_stack(gen_state, var_decl_pair.first, var_decl_pair.second);
-        // The below code may be a bit confusing, but the idea is simple.
-        // The function parameters register names are the same as the variable names
-        // But the local variables stored on the stack will have registers pointing to
-        // them with different names. So we are storing the function parameter register
-        // values in the local register.
-        // store <rhs_type> %<rhs>, ptr %<lhs>
-        std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_pair.second);
-        gen_state.output_file << "store " << var_decl_pair.first << " " << "%" + var_decl_pair.second 
-        << ", " << "ptr " << "%" + stack_reg << std::endl;
-        gen_state.var_reg_mapping.insert(var_decl_pair.second, stack_reg);
     }
 
     // Now alpha rename the function body and store all the local variables on the stack
     std::unordered_map<std::string, FullType> local_vars = 
-        alpha_rename_callable_body(func_def->body);
+        alpha_rename_callable_body(callable_body);
     for(const auto& [var, full_type]: local_vars) {
         allocate_var_to_stack(
             gen_state, 
@@ -637,12 +658,127 @@ void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Fu
     }
 
     // Now everything is set up properly. Can proceed with the generation of statements
-    for(std::shared_ptr<Stmt> stmt: func_def->body) {
+    for(std::shared_ptr<Stmt> stmt: callable_body) {
         emit_statement_codegen(gen_state, stmt);
     }
+}
 
-    // Finally, just add the empty brace
-    gen_state.output_file << "}" << std::endl; 
+void compile_synchronous_callable(
+    GenState& gen_state, 
+    const std::string& llvm_func_name,
+    const std::string& llvm_return_type,
+    std::vector<TopLevelItem::VarDecl>& params,
+    std::vector<std::shared_ptr<Stmt>>& callable_body) {
+    // Pairs of {<llvm_type>, <var/reg_name>}
+    std::vector<std::pair<std::string, std::string>> callable_params;
+    for(TopLevelItem::VarDecl &var_decl: params) {
+        callable_params.push_back({
+            llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name,
+            var_decl.name
+        });
+    }
+    callable_params.push_back({"i64", THIS_ACTOR_ID_REG});
+    callable_params.push_back({"i64", SYNCHRONOUS_ACTOR_ID_REG});
+    map_emit_llvm_function_sig<std::pair<std::string, std::string>>(
+        gen_state.output_file,
+        llvm_func_name,
+        llvm_return_type,
+        callable_params,
+        [&](const std::pair<std::string, std::string>& var_decl_pair) {
+            return var_decl_pair.first + " %" + var_decl_pair.second;
+        }
+    );
+    gen_state.output_file << " {" << std::endl;
+
+    // Do not want to copy the hidden parameters on the stack
+    callable_params.pop_back();
+    callable_params.pop_back();
+
+    for(auto &var_decl_pair: std::views::ranges(callable_params)) {
+        allocate_var_to_stack(gen_state, var_decl_pair.first, var_decl_pair.second);
+        // The below code may be a bit confusing, but the idea is simple.
+        // The function parameters register names are the same as the variable names
+        // But the local variables stored on the stack will have registers pointing to
+        // them with different names. So we are storing the function parameter register
+        // values in the local register.
+        // store <rhs_type> %<rhs>, ptr %<lhs>
+        std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_pair.second);
+        // CR: Pretty sure that this is wrong
+        gen_state.output_file << "store " << var_decl_pair.first << " " << "%" + var_decl_pair.second 
+        << ", " << "ptr " << "%" + stack_reg << std::endl;
+        gen_state.var_reg_mapping.emplace(var_decl_pair.second, stack_reg);
+    }
+    compile_callable_body(gen_state, callable_body);
+    gen_state.output_file << "}" << std::endl;
+}
+
+void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func_def) {
+    gen_state.reg_label_gen.refresh_counters();
+    std::string func_name_llvm = llvm_name_of_func(gen_state, func_def->name);
+    std::string func_return_type_llvm = 
+        llvm_type_of_full_type(gen_state, func_def->return_type)->llvm_type_name;
+    compile_synchronous_callable(gen_state, func_name_llvm, func_return_type_llvm, func_def->params, func_def->body);
+    // Add this function to gen_state
+    gen_state.func_llvm_name_map.insert(func_def->name, func_name_llvm);
+}
+
+void emit_constructor_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
+    assert(gen_state.curr_actor != nullptr);
+    gen_state.reg_label_gen.refresh_counters();
+    std::string constructor_name_llvm = llvm_name_of_constructor(constructor_def->name, gen_state.curr_actor->name);
+    compile_synchronous_callable(gen_state, constructor_name_llvm, "void", constructor_def->params, constructor_def->body);
+}
+
+void emit_behaviour_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
+    assert(gen_state.curr_actor != nullptr);
+    gen_state.reg_label_gen.refresh_counters();
+    std::string be_name_llvm = llvm_name_of_behaviour(behaviour_def->name, gen_state.curr_actor->name);
+    std::string be_struct_llvm = llvm_struct_of_behaviour(behaviour_def->name, gen_state.curr_actor->name);
+    // Creating the behaviour struct
+    // Pair of {<field_name>, <llvm_type>}
+    std::vector<std::pair<std::string, std::string>> struct_mem_vec;
+    for(auto &var_decl: behaviour_def->params) {
+        struct_mem_vec.push_back({
+            var_decl.name,
+            llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name
+        });
+    }
+    struct_mem_vec.push_back({THIS_ACTOR_ID_REG, "i64"});
+    map_emit_struct<std::pair<std::string, std::string>>(
+        gen_state.output_file,
+        be_struct_llvm,
+        struct_mem_vec,
+        [&](const std::pair<std::string, std::string>& struct_mem) {
+            return struct_mem.second;
+        }
+    );
+    // Creating the behaviour function signature
+    // Single parameter [ptr %message]
+    map_emit_llvm_function_sig<std::string>(
+        gen_state.output_file,
+        be_name_llvm,
+        "void",
+        std::vector<std::string>{"ptr %message"},
+        [](const std::string& s) {return s;}
+    );
+    gen_state.output_file << " {" << std::endl;
+    // Now simply unpack and store all the stuff on the stack
+    size_t last_ind = struct_mem_vec.size() - 1;
+    // Assigning %this.id to the actor id
+    // %this.id = getelementptr %<BeStruct>, ptr %<message>, i32 0, i32 last_ind
+    gen_state.output_file << "%" + THIS_ACTOR_ID_REG << " = getelementptr " << "%" + be_struct_llvm << ", ptr "
+    << "%message" << ", i32 0, i32 " << last_ind << std::endl;
+    gen_state.output_file << "%" + SYNCHRONOUS_ACTOR_ID_REG << " = " << "%" + THIS_ACTOR_ID_REG << std::endl;
+    struct_mem_vec.pop_back();
+    // Unpacking the message
+    for(size_t i = 0; i < struct_mem_vec.size(); i++) {
+        std::string param_reg = gen_state.reg_label_gen.new_temp_reg();
+        gen_state.output_file << "%" + param_reg << " = getelementptr " << "%" + be_struct_llvm << ", ptr "
+        << "%message" << ", i32 0, i32 " << i << std::endl;
+        gen_state.var_reg_mapping.emplace(struct_mem_vec[i].first, param_reg);
+    }
+    compile_callable_body(gen_state, behaviour_def->body);
+    gen_state.output_file << "}" << std::endl;
 }
 
 void emit_declarations(GenState& gen_state, Program& program_ast) {
@@ -655,10 +791,84 @@ void emit_declarations(GenState& gen_state, Program& program_ast) {
                 emit_function_codegen(gen_state, func_def);
             },
             [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
+                gen_state.curr_actor = actor_def;
                 // Create an associated struct for the actor
+                std::string llvm_actor_struct = llvm_struct_of_actor(actor_def);
+                std::vector<std::pair<std::string, FullType>> struct_mem_vec;
+                for(auto &mem_var: actor_def->member_vars) {
+                    struct_mem_vec.push_back(mem_var);
+                }
+                map_emit_struct<std::pair<std::string, FullType>>(
+                    gen_state.output_file,
+                    llvm_actor_struct,
+                    struct_mem_vec,
+                    [&](const std::pair<std::string, FullType>& struct_mem_var) {
+                        return llvm_type_of_full_type(gen_state, struct_mem_var.second)->llvm_type_name;
+                    }
+                );
+                // Add the struct info to [type_name_info_map]
+                std::shared_ptr<LLVMTypeInfo> struct_type_info = 
+                    std::make_shared<LLVMTypeInfo>(LLVMTypeInfo {llvm_actor_struct, nullptr});
+                struct_type_info->struct_info = std::make_shared<LLVMStructInfo>();
                 
-                return;
+                for(size_t ind = 0; ind < struct_mem_vec.size(); ind++) {
+                    LLVMStructInfo::FieldInfo field_info{
+                        ind, llvm_type_of_full_type(gen_state, struct_mem_vec[ind].second)};
+                    struct_type_info->struct_info->field_ind_map.emplace(struct_mem_vec[ind], field_info);
+                    struct_type_info->struct_info->ind_field_map.emplace_back(field_info);
+                }
+
+                gen_state.type_name_info_map.emplace(actor_def->name, struct_type_info);
+
+                // Now simply compile the rest of the guys
+                for(auto &actor_mem: actor_def->actor_members) {
+                    std::visit(Overload{
+                        [&](std::shared_ptr<TopLevelItem::Func> func_def) {
+                            emit_function_codegen(gen_state, func_def);
+                        },
+                        [&](std::shared_ptr<TopLevelItem::Constructor> constr_def) {
+                            emit_constructor_codegen(gen_state, constr_def);
+                        },
+                        [&](std::shared_ptr<TopLevelItem::Behaviour> be_def) {
+                            emit_behaviour_codegen(gen_state, be_def);
+                        }
+                    }, actor_mem);
+                }
+                gen_state.curr_actor = nullptr;
             }
         }, top_level_item.t);
     }
 }
+
+void generate_fake_start_actor(GenState& gen_state) {
+    gen_state.reg_label_gen.refresh_counters();
+    // Generates a function that will act as a behaviour to be scheduled (we are going to fool the runtime lessgo)
+    gen_state.output_file << "define void @start.runtime(ptr %dummy_message) {" << std::endl;
+    std::string main_struct =  "%Main.struct";
+    std::string main_struct_size = get_llvm_type_size(gen_state, main_struct);
+    std::string main_instance_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + main_instance_ptr_reg << " = call void @malloc(i64 " << main_struct_size
+    << ")" << std::endl;
+    std::string actor_id_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + actor_id_reg << " = call i64 @handle_actor_creation(ptr "
+    << "%" << main_instance_ptr_reg << ")" << std::endl;
+    // Calling the constructor
+    std::string create_constructor_llvm_name = "create.Main.constr";
+    gen_state.output_file << "call void @" << create_constructor_llvm_name << "(i64 " << actor_id_reg << ", "
+    << "i64 " << actor_id_reg << ")" << std::endl;
+    SuspendTag suspend_tag;
+    suspend_tag.kind = SuspendTagKind::RETURN;
+    generate_suspend_call(gen_state, suspend_tag);
+    gen_state.output_file << "}" << std::endl;
+}
+
+void generate_coherence_initialize(GenState& gen_state) {
+    gen_state.reg_label_gen.refresh_counters();
+    gen_state.output_file << "define void @coherence_initialize() {" << std::endl;
+    std::string instance_id_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + instance_id_reg << " = call i64 @handle_actor_creation(ptr null)" << std::endl;
+    gen_state.output_file << "call void @handle_behaviour_call(i64 " << instance_id_reg << 
+    ", ptr null, ptr @start.runtime)" << std::endl;
+    gen_state.output_file << "}" << std::endl; 
+}
+
