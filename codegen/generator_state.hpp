@@ -49,11 +49,6 @@ struct LLVMTypeInfo {
     std::shared_ptr<LLVMStructInfo> struct_info;
 };
 
-// struct LLVMVarInfo {
-//     std::string reg_name;
-//     std::shared_ptr<LLVMTypeInfo> type_info;
-// };
-
 
 struct GenState {
     RegisterLabelGen reg_label_gen;
@@ -62,6 +57,7 @@ struct GenState {
     // corresponds to the actor it is in.
     ScopedStore<std::string, std::string> func_llvm_name_map;
     // Need this to figure out what string needs to be inserted while doing load and other stuff
+    // CR: Slightly suspicious. The only purpose is to map user defined types
     std::unordered_map<std::string, std::shared_ptr<LLVMTypeInfo>> type_name_info_map;
     // To differentiate between different types of callables, I do:
     // 1. For function, append .fun to the name

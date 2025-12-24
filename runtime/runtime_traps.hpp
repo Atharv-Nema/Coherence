@@ -3,7 +3,7 @@
 
 extern RuntimeDS* runtime_ds;
 
-
+#pragma pack(1)
 enum SuspendTagKind: uint32_t {
     RETURN = 0,
     LOCK   = 1
@@ -12,6 +12,7 @@ struct SuspendTag {
     SuspendTagKind kind;
     uint64_t lock_id;
 };
+#pragma pack(pop)
 
 extern "C" {  
     // Non interrupting traps (called directly from LLVM)

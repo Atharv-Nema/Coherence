@@ -4,6 +4,7 @@
 #include "string_utils.hpp"
 #include "scoped_store.cpp"
 #include "alpha_renaming.hpp"
+#include "runtime_traps.hpp"
 #include <assert.h>
 #include <variant>
 #include <sstream>
@@ -142,6 +143,39 @@ std::string convert_to_rvalue(
 
 
 // CR: Fix the %/no % inconsistency
+void generate_suspend_call(
+    GenState& gen_state,
+    SuspendTag suspend_tag) {
+    // struct name is %SuspendTag.runtime
+    // Creating the [SuspendTag] struct on the heap
+    std::string llvm_struct_type_name = "%SuspendTag.runtime";
+    std::string suspend_struct_size = get_llvm_type_size(gen_state, llvm_struct_type_name);
+    std::string suspend_struct_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" << suspend_struct_ptr_reg << " = call ptr @malloc(i64 " << 
+    "%" << suspend_struct_size << ")" << std::endl;
+
+    // Getting the pointer to the kind field
+    std::string kind_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+    gen_state.output_file << "%" + kind_ptr_reg << " = getelementptr " << llvm_struct_type_name <<
+    ", ptr " << "%" + suspend_struct_ptr_reg << ", i32 0, i32 0" << std::endl;
+    // store i32 0, ptr %<kind_ptr_reg>
+    gen_state.output_file << "store i32 " + std::to_string(suspend_tag.kind) << ", ptr " 
+    << "%" + kind_ptr_reg << std::endl;
+    if(suspend_tag.kind == SuspendTagKind::LOCK) {
+        // Getting the pointer to the lock field
+        std::string lock_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
+        gen_state.output_file << "%" + lock_ptr_reg << " = getelementptr " << llvm_struct_type_name <<
+        ", ptr " << "%" + suspend_struct_ptr_reg << ", i32 0, i32 1" << std::endl;
+        // store i32 <lock_id>, ptr %<lock_ptr>
+        gen_state.output_file << "store i32 " << suspend_tag.lock_id << ", ptr " << "%" + lock_ptr_reg 
+        << std::endl;
+    }
+    // Calling the [suspend_instance] trap
+    // The actor instance to be locked is stored in %lock_instance.runtime.
+    gen_state.output_file << "call void @suspend_instance(i64 " << "%lock_instance.runtime" 
+    << ", ptr " << "%" + suspend_struct_ptr_reg << ")" << std::endl;
+}
+
 
 std::pair<std::string, ValueCategory> emit_valexpr(
     GenState& gen_state, 
@@ -524,7 +558,10 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             }
             sort(locks_acquired.begin(), locks_acquired.end());
             for(uint64_t lock_id: locks_acquired) {
-                // do the entire suspend buissness
+                SuspendTag suspend_tag;
+                suspend_tag.kind = SuspendTagKind::LOCK;
+                suspend_tag.lock_id = lock_id;
+                generate_suspend_call(gen_state, suspend_tag);
             }
             for(std::shared_ptr<Stmt> stmt: atomic_stmt.body) {
                 emit_statement_codegen(gen_state, stmt);
@@ -532,12 +569,14 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             for(uint64_t lock_id: locks_acquired) {
                 gen_state.output_file << "call void @handle_unlock(i64 " << lock_id << ")" << std::endl;
             }
-
+        },
+        [&](const Stmt::Return& return_stmt) {
+            std::string return_expr_reg = emit_valexpr_rvalue(gen_state, return_stmt.expr);
+            std::string llvm_return_type = llvm_type_of_full_type(gen_state, return_stmt.expr->expr_type)->llvm_type_name;
+            gen_state.output_file << "ret " << llvm_return_type << " " << "%" + return_expr_reg << std::endl;
         }
     }, stmt->t);
 }
-
-// CR: Do not forget to modify [gen_state.type_name_info_map] when changing actors and stuff.
 
 void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func_def) {
     // Idea is that after emit_function_codegen is called, [gen_state] will be updated with the
@@ -551,6 +590,9 @@ void emit_function_codegen(GenState& gen_state, std::shared_ptr<TopLevelItem::Fu
         });
     }
     // Pairs of {<llvm_type>, <var/reg_name>}
+    // CR: The issue here is that there are two function pointers in a constructor (one for the being-constructed
+    // actor, and one for the calling actor). Need some way of distinguishing these two. Think about this carefully.
+    // Perhaps name them differently. I will call th actor to be locked %lock_instance.runtime
     func_params.push_back({"i64", "this"});
     if(gen_state.curr_actor) {
         func_params.push_back({llvm_struct_of_actor(gen_state.curr_actor), "this.mem"});
