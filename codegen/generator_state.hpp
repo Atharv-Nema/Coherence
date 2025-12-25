@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <memory>
 #include <ostream>
+#include "top_level.hpp"
 #include "scoped_store.cpp"
 
 class RegisterLabelGen {
@@ -31,6 +32,8 @@ public:
         return "label." + std::to_string(label_ct);
     }
 };
+
+struct LLVMTypeInfo;
 
 struct LLVMStructInfo {
     struct FieldInfo {

@@ -22,7 +22,7 @@ void map_emit_struct(
     std::function<std::string(T)> string_gen) {
     output_file << struct_name << " = " << "type { ";
     map_emit_list<T>(
-        gen_state.output_file, 
+        output_file, 
         ele_list, 
         ", ", 
         string_gen

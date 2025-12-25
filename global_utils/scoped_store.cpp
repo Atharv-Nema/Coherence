@@ -1,3 +1,4 @@
+#pragma once
 #include <unordered_map>
 #include <variant>
 #include <unordered_set>
@@ -83,7 +84,7 @@ public:
 };
 
 template <typename K, typename V, typename Metadata>
-struct ScopeGuard {
+class ScopeGuard {
 private:
     ScopedStore<K, V, Metadata>& scoped_context;
 public:

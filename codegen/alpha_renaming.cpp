@@ -124,9 +124,9 @@ void alpha_rename_statement(
             alpha_rename_stmt_list(rename_info, while_stmt.body);
             rename_info.pop_scope();
         },
-        [&](Stmt::Atomic &atomic) {
+        [&](std::shared_ptr<Stmt::Atomic> atomic) {
             rename_info.create_new_scope();
-            alpha_rename_stmt_list(rename_info, atomic.body);
+            alpha_rename_stmt_list(rename_info, atomic->body);
             rename_info.pop_scope();
         },
         [&](Stmt::Return &return_stmt) {
