@@ -101,7 +101,7 @@ struct ActorInstanceState {
     ActorInstanceState(void* llvm_actor_object, const std::uint64_t instance_id)
         : instance_id(instance_id) {
         state = ActorInstanceState::State::EMPTY;
-        llvm_actor_object = llvm_actor_object;
+        this->llvm_actor_object = llvm_actor_object;
         next_continuation = nullptr;
         running_be_sp = nullptr;
     }
@@ -119,7 +119,7 @@ struct RuntimeDS {
     RuntimeDS(): thread_bed(0) {}
 };
 
-bool UserMutex::lock(std::uint64_t instance_id) {
+inline bool UserMutex::lock(std::uint64_t instance_id) {
     // Returns true if acquired immediately, false if suspended.
     bool expected = false;
     // CR: In later stages, may want to experiment with more efficient memory models
@@ -130,7 +130,7 @@ bool UserMutex::lock(std::uint64_t instance_id) {
     return false;
 }
 
-void UserMutex::unlock(RuntimeDS* runtime) {
+inline void UserMutex::unlock(RuntimeDS* runtime) {
     using State = ActorInstanceState::State;
 
     // Try to wake the next waiting actor

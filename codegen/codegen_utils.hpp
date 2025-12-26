@@ -11,7 +11,7 @@ std::string llvm_name_of_constructor(
 
 std::string llvm_name_of_behaviour(const std::string& be_name, const std::string& actor_name);
 std::string llvm_struct_of_behaviour(const std::string& be_name, const std::string& actor_name);
-std::string llvm_struct_of_actor(std::shared_ptr<TopLevelItem::Actor> actor_def);
+std::string llvm_struct_of_actor(const std::string& actor_name);
 std::shared_ptr<LLVMTypeInfo> llvm_type_of_basic_type(
     GenState& gen_state,
     BasicType basic_type);

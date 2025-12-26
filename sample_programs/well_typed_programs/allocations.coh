@@ -1,8 +1,8 @@
 actor Main {
     a: int;
     b: int;
-    func random_func(int a_, int b_) => float {
-        return a_ + b_ + 3.01;
+    func random_func(int a_, int b_) => int {
+       return a_ + b_ + 301;
     }
     be do_stuff(int a_, int b_) {
         a = a_;

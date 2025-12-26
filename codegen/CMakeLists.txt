@@ -1,5 +1,4 @@
 add_library(codegen
-    "string_utils.cpp"
     "alpha_renaming.cpp"
     "codegen_utils.cpp"
     "codegen.cpp"

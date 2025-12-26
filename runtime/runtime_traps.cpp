@@ -1,6 +1,7 @@
 #include "runtime_traps.hpp"
 #include <cassert>
 #include <atomic>
+#include <iostream>
 
 void handle_unlock(std::uint64_t lock_id) {
     assert(runtime_ds->mutex_map.find(lock_id) != runtime_ds->mutex_map.end());
@@ -45,10 +46,12 @@ std::uint64_t handle_actor_creation(void* llvm_actor_object)
     auto state = std::make_shared<ActorInstanceState>(llvm_actor_object, instance_id);
 
     runtime_ds->id_actor_instance_map.insert(instance_id, state);
+    // std::cerr << "returned instance " << instance_id << std::endl;
     return instance_id;
 }
 
 void suspend_instance(uint64_t actor_instance_id, void* suspend_tag) {
+    // std::cerr << "actor_instance_id passed in " << actor_instance_id << " curr actor nums " << runtime_ds->instances_created << std::endl; 
     auto actor_instance_opt = runtime_ds->id_actor_instance_map.get_value(actor_instance_id);
     assert(actor_instance_opt != std::nullopt);
     auto actor_instance = *actor_instance_opt;

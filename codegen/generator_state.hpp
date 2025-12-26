@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <memory>
 #include <ostream>
+#include <iostream>
 #include "top_level.hpp"
 #include "scoped_store.cpp"
 
@@ -72,5 +73,11 @@ struct GenState {
     std::shared_ptr<TopLevelItem::Actor> curr_actor;
     std::unordered_map<std::string, uint64_t> lock_id_map;
     // File to which llvm needs to be written to
-    std::ostream output_file;
+    std::ostream& out_stream;
+    GenState(): out_stream(std::cout) {}
+    GenState(std::ostream& out_stream): out_stream(out_stream) {}
+    void refrest_var_reg_info() {
+        reg_label_gen.refresh_counters();
+        var_reg_mapping.clear();
+    }
 };

@@ -2,8 +2,11 @@
 #include <string>
 #include <filesystem>
 #include <cstdio>
+#include <cstdlib>
 #include "top_level.hpp"
 #include "type_checker.hpp"
+#include "codegen.hpp"
+
 #include "parser.tab.hpp"
 #include "lex.yy.h"
 
@@ -82,8 +85,25 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // --- 3. Future steps ---
-    std::cout << "Compiler not ready yet\n";
+    // 3. LLVM code generation
+    ast_codegen(program_root, "out.ll");
+    std::cout << "Compilation successful\n";
     delete program_root;
+
+    // 4. Compiling to an executable
+    if (std::system("llc out.ll -o out.s") != 0) {
+        std::cerr << "Error: llc failed\n";
+        return 1;
+    }
+
+    // 5) Link assembly + runtime -> executable
+    // NOTE: adjust the path to libruntime.a if needed
+    const char* command_str = "clang++ out.s " COH_RUNTIME_LIB_PATH " -lboost_context -pthread -o out";
+    if (std::system(command_str) != 0) {
+        std::cerr << "Error: link failed\n";
+        return 1;
+    }
+
+    std::cout << "Built executable: ./out\n";
     return 0;
 }

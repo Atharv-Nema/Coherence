@@ -10,8 +10,9 @@
 extern "C" void coherence_initialize();
 extern "C" uint64_t num_locks;
 
-// 256KB stacks
-std::size_t stack_size = 256 * 1024;
+// 256KB stacksco
+static std::size_t stack_size = 256 * 1024;
+RuntimeDS* runtime_ds;
 
 void runtime_initialize() {
     runtime_ds = new RuntimeDS();
@@ -51,18 +52,18 @@ void thread_loop() {
                 for (int i = 0; i < 32; ++i) {
                     runtime_ds->thread_bed.release();
                 }
-                std::terminate();
+                return;
+                // std::terminate();
             }
             else {
                 runtime_ds->thread_bed.acquire();
                 if(runtime_ds->threads_asleep == 32) {
-                    std::terminate();
+                    return;
                 }
                 runtime_ds->threads_asleep--;
                 continue;
             }
         }
-
         uint64_t actor_instance_id = *actor_instance_id_opt;
 
         auto actor_instance_state_opt = 
@@ -87,7 +88,8 @@ void thread_loop() {
         }
         
         bool waiting_on_lock = false;
-        while (true) {
+        bool loop_done = false;
+        while (!loop_done) {
             boost_ctx::transfer_t t = boost_ctx::jump_fcontext(
                 actor_instance_state->next_continuation, &msg);
             SuspendTag* tag = reinterpret_cast<SuspendTag*>(t.data); 
@@ -96,6 +98,7 @@ void thread_loop() {
                     actor_instance_state->next_continuation = nullptr;
                     std::free(actor_instance_state->running_be_sp);
                     actor_instance_state->running_be_sp = nullptr;
+                    loop_done = true;
                     break;
                 case SuspendTagKind::LOCK: {
                     // Need to make sure that when [actor_instance_state] is added, it has the
@@ -114,14 +117,15 @@ void thread_loop() {
                     waiting_on_lock = true;
                     actor_instance_state->state = State::WAITING;
                     actor_instance_state->mailbox.emplace_front(msg);
+                    loop_done = true;
                     break;
                 }
                 default:
                     assert(false);
             }
         }
-
         if(!waiting_on_lock) {
+
             actor_instance_state->state = State::EMPTY;
             if (!actor_instance_state->mailbox.empty()) {
                 actor_instance_state->state = State::RUNNABLE;

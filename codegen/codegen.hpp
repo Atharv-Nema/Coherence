@@ -1,4 +1,4 @@
 #include "top_level.hpp"
-#include "generator_state.hpp"
+#include <string>
 
-void ast_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt);
+void ast_codegen(Program* program_ast, std::string output_file_name);

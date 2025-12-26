@@ -2,7 +2,7 @@ actor Other {
     new create() {}
     be iso_behaviour(int iso x) {}
     be val_behaviour(int val x) {
-        // Modifying a val isnot allowed
+        // Modifying a val is not allowed
         x[0] = 2;
     }
     be ref_behaviour(int ref x) {}
