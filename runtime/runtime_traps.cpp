@@ -3,6 +3,10 @@
 #include <atomic>
 #include <iostream>
 
+void print_int(int i) {
+    std::cout << i << std::endl;
+}
+
 void handle_unlock(std::uint64_t lock_id) {
     assert(runtime_ds->mutex_map.find(lock_id) != runtime_ds->mutex_map.end());
     UserMutex& mutex = (runtime_ds->mutex_map)[lock_id];

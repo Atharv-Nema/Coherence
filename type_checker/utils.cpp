@@ -115,7 +115,7 @@ bool can_appear_in_lhs(TypeEnv& env, std::shared_ptr<ValExpr> expr) {
     }, expr->t);
 }
 
-bool type_is_numeric(TypeContext& type_context, const FullType& type) {
+bool type_is_numeric(TypeContext& type_context, FullType type) {
     auto* basic_type = std::get_if<BasicType>(&type.t);
     if(!basic_type) {
         return false;
@@ -138,7 +138,28 @@ bool type_is_numeric(TypeContext& type_context, const FullType& type) {
     }, basic_type->t);
 }
 
-
+bool type_is_printable(TypeContext &type_context, FullType full_type) {
+    auto* basic_type = std::get_if<BasicType>(&full_type.t);
+    if(!basic_type) {
+        return false;
+    }
+    return std::visit(Overload{
+        [&](const BasicType::TUnit&) {return false;},
+        [&](const BasicType::TInt&) {return true;},
+        [&](const BasicType::TBool&) {return false;},
+        [&](const BasicType::TNamed& named_type) {
+            auto standard_type = standardize_type(type_context, named_type.name);
+            if(standard_type == std::nullopt) {
+                return false;
+            }
+            if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
+                return false;
+            }
+            return type_is_numeric(type_context, FullType {*standard_type});
+        },
+        [&](const BasicType::TActor&) {return false;}
+    }, basic_type->t);
+}
 
 bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const BasicType& type_2) {
     if (type_1.t.index() != type_2.t.index()) 
@@ -513,6 +534,8 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
     }, val_expr->t);
 }
 
+
+
 bool valexpr_calls_actor_function(TypeEnv &env, std::shared_ptr<ValExpr> val_expr) {
     return std::visit(Overload{
         [&](const ValExpr::FuncCall& func_call) {
@@ -587,10 +610,16 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
     // and returns std::nullopt
     std::unordered_set<std::string> new_assigned_var;
     return std::visit(Overload{
-        [&](const Stmt::VarDeclWithInit&) -> std::optional<std::unordered_set<std::string>> {
+        [&](const Stmt::VarDeclWithInit& var_decl_init) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, var_decl_init.init)) {
+                return std::nullopt;
+            }
             return new_assigned_var;
         },
         [&](const Stmt::MemberInitialize& mem_init) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, mem_init.init)) {
+                return std::nullopt;
+            }
             if(unassigned_members.find(mem_init.member_name) != unassigned_members.end()) {
                 new_assigned_var.emplace(mem_init.member_name);
             }
@@ -600,6 +629,12 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
             // return valexpr_list_accesses_vars(vars, be_call.args);
             if(valexpr_accesses_uninitialized(env, unassigned_members, b.actor) 
             || valexpr_list_accesses_uninitialized(env, unassigned_members, b.args)) {
+                return std::nullopt;
+            }
+            return new_assigned_var;
+        },
+        [&](const Stmt::Print& print_stmt) -> std::optional<std::unordered_set<std::string>> {
+            if(valexpr_accesses_uninitialized(env, unassigned_members, print_stmt.print_expr)) {
                 return std::nullopt;
             }
             return new_assigned_var;

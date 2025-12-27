@@ -15,6 +15,9 @@ struct SuspendTag {
 #pragma pack(pop)
 
 extern "C" {  
+    // Utilities
+    void print_int(int);
+    
     // Non interrupting traps (called directly from LLVM)
     void handle_unlock(uint64_t lock_id);
     void handle_behaviour_call(

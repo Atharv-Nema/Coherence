@@ -71,7 +71,7 @@
 
 /* ---------- TOKENS ---------- */
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
-%token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT
+%token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT TOK_OUT
 %token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
 %token TOK_INT TOK_BOOL
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
@@ -378,6 +378,18 @@ stmt
         ));
         delete $1;
       }
+    
+    /* print statement */
+    | TOK_OUT val_expr TOK_SEMI {
+        $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
+            Stmt{
+                span_from(@$),
+                Stmt::Print{ std::move(*$2) }
+            }
+        ));
+        delete $2;
+      }
+
     /* return */
     | TOK_RETURN val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(

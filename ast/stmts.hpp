@@ -23,6 +23,9 @@ struct Stmt {
         std::string behaviour_name;
         std::vector<std::shared_ptr<ValExpr>> args; 
     };
+    struct Print {
+        std::shared_ptr<ValExpr> print_expr;
+    };
     struct Expr { std::shared_ptr<ValExpr> expr; };
     struct If { 
         std::shared_ptr<ValExpr> cond;
@@ -39,5 +42,5 @@ struct Stmt {
     };
     struct Return { std::shared_ptr<ValExpr> expr; };
     SourceSpan source_span;
-    std::variant<VarDeclWithInit, MemberInitialize, BehaviourCall, Expr, If, While, std::shared_ptr<Atomic>, Return> t;
+    std::variant<VarDeclWithInit, MemberInitialize, BehaviourCall, Print, Expr, If, While, std::shared_ptr<Atomic>, Return> t;
 };

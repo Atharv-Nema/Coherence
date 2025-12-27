@@ -78,6 +78,8 @@ static int curr_column = 1;
 "*"         return TOK_STAR;
 "/"         return TOK_SLASH;
 
+"OUT"       return TOK_OUT;
+
 "//".*                                 { /* ignore line comments */ }
 "/*"([^*]|\n|\*+[^*/])*\*+"/"         { /* ignore block comments */ }
 

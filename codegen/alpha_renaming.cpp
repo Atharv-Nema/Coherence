@@ -104,6 +104,9 @@ void alpha_rename_statement(
                 alpha_rename_val_expr(rename_info, val_expr);
             }
         },
+        [&](Stmt::Print &print_stmt) {
+            alpha_rename_val_expr(rename_info, print_stmt.print_expr);
+        },
         [&](Stmt::Expr &expr) {
             alpha_rename_val_expr(rename_info, expr.expr);
         },

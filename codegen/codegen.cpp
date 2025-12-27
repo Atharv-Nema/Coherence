@@ -502,6 +502,20 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             gen_state.out_stream << "call void @handle_behaviour_call(i64 " << "%" + actor_id_reg << ", ptr " 
             << "%" + msg_struct_ptr << ", ptr @" << be_name_llvm << ")" << std::endl;
         },
+        [&](const Stmt::Print& print_expr) {
+            std::string print_int_reg = emit_valexpr_rvalue(gen_state, print_expr.print_expr);
+            std::string print_llvm_type_name = 
+                llvm_type_of_full_type(gen_state, print_expr.print_expr->expr_type)->llvm_type_name;
+            std::string print_func_name;
+            if(print_llvm_type_name == "i32") {
+                print_func_name = "print_int";
+            }
+            else {
+                assert(false);
+            }
+            gen_state.out_stream << "call void @" << print_func_name << "(" << print_llvm_type_name << " " << "%" + print_int_reg
+            << ")" << std::endl;
+        },
         [&](const Stmt::Expr& expr) {
             emit_valexpr(gen_state, expr.expr);
         },
@@ -597,7 +611,7 @@ void compile_callable_body(
         // Now for each std::unordered_map<std::string, FieldInfo> field_ind_map;
         for(const auto&[mem_name, mem_info]: actor_struct_info->field_ind_map) {
             std::string mem_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
-            gen_state.out_stream << "%" + mem_ptr_reg << " = getelementptr " << curr_actor_llvm_struct << 
+            gen_state.out_stream << "%" + mem_ptr_reg << " = getelementptr " << "%" + curr_actor_llvm_struct << 
             ", ptr " << "%" + actor_struct_reg << ", i32 0, i32 " << mem_info.field_index << std::endl;
             assert(gen_state.var_reg_mapping.find(mem_name) == gen_state.var_reg_mapping.end());
             gen_state.var_reg_mapping.emplace(mem_name, mem_ptr_reg);
@@ -795,6 +809,7 @@ void generate_declarations(GenState& gen_state) {
     std::string declarations = R"(
 %SuspendTag.runtime = type <{ i32, i64 }>
 
+declare void @print_int(i32)
 declare ptr @malloc(i64)
 declare void @handle_unlock(i64)
 declare void @handle_behaviour_call(i64, ptr, ptr)

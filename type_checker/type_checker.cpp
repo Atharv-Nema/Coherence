@@ -344,6 +344,15 @@ bool type_check_statement(TypeEnv& env, std::shared_ptr<Stmt> stmt) {
             }
             return true;
         },
+        [&](const Stmt::Print& print_expr) {
+            auto type = val_expr_type(env, print_expr.print_expr);
+            if(!type_is_printable) {
+                report_error_location(print_expr.print_expr->source_span);
+                std::cerr << "Expression is not printable" << std::endl;
+                return false;
+            }
+            return true;
+        },
         [&](const Stmt::Expr& val_expr) {
             auto type = val_expr_type(env, val_expr.expr);
             return type != std::nullopt;
