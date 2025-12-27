@@ -1,0 +1,26 @@
+actor Level2 {
+    new create() {}
+    be msg(int i) {
+        OUT -2;
+        OUT i;
+    }
+}
+
+actor Level1 {
+    lvl2_inst: Level2; 
+    new create() {
+        lvl2_inst := new Level2.create();
+    }
+    be send_msg(int i) {
+        OUT -1;
+        OUT i;
+        lvl2_inst->msg(i + 1);
+    }
+}
+
+actor Main {
+    new create() {
+        var lvl1_inst: Level1 = new Level1.create();
+        lvl1_inst->send_msg(10);
+    }  
+}

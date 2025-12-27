@@ -1,0 +1,2 @@
+Compilation successful
+Built executable: ./out

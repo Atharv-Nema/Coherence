@@ -1,4 +1,5 @@
 build
 SyntaxBrainstorming
 .vscode
+.pytest_cache
 llvm_trial

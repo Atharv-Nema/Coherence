@@ -1,4 +1,0 @@
-1. Functions actor scoping needs to be handled somehow? I think that is fine though and can be handled from the env. Need to 
-   make changes.
-2. So now to get the type of a variable, 2 checks are done. If you are in the actor, then you get it from there.
-3. Need to think carefully about my handling of duplicate function names and stuff like that

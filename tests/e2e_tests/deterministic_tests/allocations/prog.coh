@@ -1,0 +1,8 @@
+actor Main {
+    new create() {
+        var a: int ref = new ref[1 + 2] int(0);
+        a[1] = 2;
+        OUT a[2 + 0];
+        OUT a[1];
+    }
+}
