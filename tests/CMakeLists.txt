@@ -1,1 +1,2 @@
 add_subdirectory(e2e_tests)
+add_subdirectory(frontend_tests)

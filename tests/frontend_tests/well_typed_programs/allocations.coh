@@ -1,0 +1,21 @@
+actor Main {
+    a: int;
+    b: int;
+    func random_func(int a_, int b_) => int {
+       return a_ + b_ + 301;
+    }
+    be do_stuff(int a_, int b_) {
+        a = a_;
+        b = b_;
+    }
+    new create() {
+        a := 4;
+        b := 5;
+        b = 5;
+        a = b + 4;
+        var c: int ref = new ref[1 + 2] int(0);
+        var d: int = 3;
+        random_func(c[3 - 1], d);
+        this->do_stuff(c[2 - 1], d);
+    }
+}

@@ -1,0 +1,10 @@
+
+actor Main {
+    a: int;
+    b: int;
+    func dummy_func() {}
+    new create() {
+        b := 4;
+        dummy_func();
+    }
+}

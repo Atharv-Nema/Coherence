@@ -1,0 +1,10 @@
+
+actor Main {
+    a: int;
+    b: int;
+    be dummy_behaviour() {}
+    new create() {
+        a := 4;
+        this->dummy_behaviour();
+    }
+}

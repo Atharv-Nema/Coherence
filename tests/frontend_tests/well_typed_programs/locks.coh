@@ -1,0 +1,17 @@
+
+actor Other {
+    a: int locked<A>;
+    new create((int locked<A>) lock_int) {
+        a := lock_int;
+    }
+}
+
+actor Main {
+    new create() {
+        var x: int locked<A> = new locked<A>[1] int(0);
+        atomic {
+            x[0];
+        }
+        var other_instance: Other = new Other.create(x);
+    }
+}

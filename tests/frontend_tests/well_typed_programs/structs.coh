@@ -1,0 +1,15 @@
+type t = struct {
+    a: int;
+    b: int;
+    c: int;
+}
+
+actor Main {
+    new create() {
+        var struct_instance: t = {
+            a = 5;
+            b = 4;
+            c = 3;
+        }: t;
+    }
+}

@@ -1,0 +1,22 @@
+actor Main {
+    a: int;
+    b: int;
+    func random_func(int a_, int b_) => int {
+        return a_ + b_ + 301;
+    }
+    be do_stuff(int a_, int b_) {
+        a = a_;
+        b = b_;
+    }
+    new create() {
+        a := 4;
+        b := 5;
+        b = 5;
+        a = b + 4;
+        var c: int = b;
+        var d: int = 3;
+        random_func(c, d);
+        this->do_stuff(c, d);
+    }
+    
+}

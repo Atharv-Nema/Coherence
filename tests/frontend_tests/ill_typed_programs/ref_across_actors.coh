@@ -1,0 +1,13 @@
+actor Other {
+    new create() {}
+    be ref_behaviour(int ref x) {}
+}
+
+actor Main {
+    new create() {
+        var other_instance: Other = new Other.create();
+        var x: int ref = new ref[1] int(0);
+        // sending a ref is not allowed
+        other_instance->ref_behaviour(x);
+    }
+}

@@ -1,0 +1,16 @@
+actor Main {
+    a: int;
+    b: int;
+    new create() {
+        if(1 != 1) {
+            a := 4;
+            b := 3;
+        }
+        else {
+            b := 3;
+        }
+        while(false) {
+            a := 3;
+        }
+    }
+}

@@ -1,0 +1,20 @@
+actor Other {
+    iso_data: int iso;
+    new create() {
+        iso_data := new iso[1] int(0);
+    }
+    be change_iso_data(int iso new_iso_data) {
+        // I have not implemented the functionality for [consume] yet. So this is the makeshift
+        // way to transfer an iso reference
+        iso_data = (new_iso_data = new iso[1] int(0));
+    }
+}
+
+actor Main {
+    new create() {
+        var other_instance: Other = new Other.create();
+        var iso_int: int iso = new iso[1] int(3);
+        other_instance->change_iso_data(iso_int = new iso[1] int(0));
+    }
+}
+

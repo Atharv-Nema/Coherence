@@ -1,0 +1,14 @@
+type t = struct {
+    a: int;
+    b: int;
+}
+
+actor Other {
+    new create() {}
+}
+
+actor Main {
+    new create() {
+        var other_instance: Other = new Other.create();
+    }
+}
