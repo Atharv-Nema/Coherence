@@ -1,0 +1,47 @@
+actor Sink {
+    new create() {}
+    be ping() {
+        OUT -1;
+    }
+    be pong() {
+        OUT 1;
+    }
+}
+
+actor Ping {
+    s_inst: Sink;
+    new create(Sink s) {
+        s_inst := s;
+    }
+    be start() {
+        var i: int = 0;
+        while(i < 10000) {
+            s_inst->ping();
+            i = i + 1;
+        }
+    }
+}
+
+actor Pong {
+    s_inst: Sink;
+    new create(Sink s) {
+        s_inst := s;
+    }
+    be start() {
+        var i: int = 0;
+        while(i < 10000) {
+            s_inst->pong();
+            i = i + 1;
+        }
+    }
+}
+
+actor Main {
+    new create() {
+        var sink_inst: Sink = new Sink.create(); 
+        var ping_inst: Ping = new Ping.create(sink_inst);
+        var pong_inst: Pong = new Pong.create(sink_inst);
+        ping_inst->start();
+        pong_inst->start();
+    }
+}

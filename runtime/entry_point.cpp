@@ -24,8 +24,6 @@ void runtime_initialize() {
     coherence_initialize();
 }
 
-// CR: What is the need for this
-
 void call_behaviour_context(boost_ctx::transfer_t t) {
     boost_ctx::fcontext_t main_ctx = t.fctx;
     MailboxItem* mailbox_item = reinterpret_cast<MailboxItem*>(t.data);
@@ -37,8 +35,6 @@ void call_behaviour_context(boost_ctx::transfer_t t) {
     // Should never reach here
     assert(false);
 }
-
-
 
 void thread_loop() {
     using State = ActorInstanceState::State;
@@ -53,7 +49,6 @@ void thread_loop() {
                     runtime_ds->thread_bed.release();
                 }
                 return;
-                // std::terminate();
             }
             else {
                 runtime_ds->thread_bed.acquire();
@@ -63,6 +58,7 @@ void thread_loop() {
                 runtime_ds->threads_asleep--;
                 continue;
             }
+            assert(false); // No control path reaches here
         }
         uint64_t actor_instance_id = *actor_instance_id_opt;
 
@@ -125,16 +121,17 @@ void thread_loop() {
             }
         }
         if(!waiting_on_lock) {
-
             actor_instance_state->state = State::EMPTY;
             if (!actor_instance_state->mailbox.empty()) {
-                actor_instance_state->state = State::RUNNABLE;
-                runtime_ds->schedule_queue.emplace_back(actor_instance_id);
+                State expected = State::EMPTY;
+                if (actor_instance_state->state.compare_exchange_strong(expected, State::RUNNABLE)) {
+                    runtime_ds->schedule_queue.emplace_back(actor_instance_id);
+                    runtime_ds->thread_bed.release();
+                }
             }
         }
     }
 }
-
 
 int main() {
     runtime_initialize();

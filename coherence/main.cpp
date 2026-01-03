@@ -37,7 +37,6 @@ int main(int argc, char* argv[]) {
     if(vm.count("only-typecheck")) {
         only_typecheck = vm["only-typecheck"].as<bool>();
     }
-
     std::filesystem::path input_file(vm["input-file"].as<std::string>());
 
     if (!std::filesystem::exists(input_file)) {

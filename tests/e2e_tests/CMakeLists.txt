@@ -1,1 +1,2 @@
 add_subdirectory(deterministic_tests)
+add_subdirectory(non_deterministic_tests)

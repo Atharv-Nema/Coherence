@@ -25,7 +25,7 @@ void handle_behaviour_call(
     State expected = State::EMPTY;
     actor_instance->mailbox.emplace_back(MailboxItem { instance_id, message, behaviour_fn });
     if(actor_instance->state.compare_exchange_strong(expected, State::RUNNABLE)) {
-        // We are doing compare_exchange_strong so that only one 
+        // We are doing compare_exchange_strong so that actor_instance is added only once
         runtime_ds->schedule_queue.emplace_back(instance_id);
         runtime_ds->thread_bed.release();
     }
