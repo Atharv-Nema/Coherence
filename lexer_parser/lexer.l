@@ -49,6 +49,8 @@ static int curr_column = 1;
 "val"       return TOK_VAL;
 "locked"    return TOK_LOCKED;
 
+"unalias"   return TOK_CONSUME;
+
 "true"      return TOK_TRUE;
 "false"     return TOK_FALSE;
 "var"       return TOK_VAR;

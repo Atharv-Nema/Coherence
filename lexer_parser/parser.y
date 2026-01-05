@@ -76,7 +76,7 @@
 %token TOK_INT TOK_BOOL
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
 %token TOK_TRUE TOK_FALSE
-%token TOK_SEND TOK_ARROW TOK_ASSIGN
+%token TOK_SEND TOK_ARROW TOK_ASSIGN TOK_CONSUME
 %token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER TOK_EQ TOK_NEQ
 %token TOK_LPAREN TOK_RPAREN TOK_LBRACE TOK_RBRACE TOK_LSQUARE TOK_RSQUARE
 %token TOK_COLON TOK_SEMI TOK_COMMA
@@ -747,6 +747,17 @@ primary_expr
             }
         ));
         delete $1; delete $3;
+      }
+    /* Consume expression */
+    | TOK_CONSUME TOK_LPAREN TOK_IDENT TOK_RPAREN {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{
+                span_from(@$),
+                FullType(),
+                ValExpr::Consume{ *$3 }
+            }
+        ));
+        delete $3;
       }
     ;
 

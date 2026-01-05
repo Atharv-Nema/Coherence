@@ -1,9 +1,9 @@
 #include "codegen.hpp"
+#include "alpha_renaming.hpp"
 #include "codegen_utils.hpp"
 #include "pattern_matching_boilerplate.hpp"
 #include "string_utils.hpp"
 #include "scoped_store.cpp"
-#include "alpha_renaming.hpp"
 #include "runtime_traps.hpp"
 #include <assert.h>
 #include <variant>
@@ -278,6 +278,15 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // 4. Returning the register storing the pointer as an rvalue
             return make_pair(actor_id_reg, ValueCategory::RVALUE);
         },
+        [&](const ValExpr::Consume& consume) {
+            // consume x is basically the same as just the internal variable name
+            // There really is no need to create an RValue, because we can afford to
+            // modify the variable in-place (the variable will not be used until it is
+            // assigned again)
+            return make_pair(
+                gen_state.var_reg_mapping[consume.var_name], 
+                ValueCategory::LVALUE);
+        },
         [&](const ValExpr::PointerAccess& pointer_access) {
             // 1. Compile the value and index
             auto [pointer_reg, pointer_val_cat] =
@@ -461,6 +470,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             << "%" + member_reg << std::endl;
         },
         [&](const Stmt::BehaviourCall& be_call) {
+            // Compiling the actor
             std::string actor_id_reg = emit_valexpr_rvalue(gen_state, be_call.actor);
             // Need to package all of these arguments into a struct.
             // Each behaviour has an associated struct. The info of the struct is everywhere, but it is not really
@@ -619,8 +629,8 @@ void compile_callable_body(
     }
 
     // Now alpha rename the function body and store all the local variables on the stack
-    std::unordered_map<std::string, FullType> local_vars = 
-        alpha_rename_callable_body(callable_body);
+    alpha_rename_callable_body(callable_body);
+    std::unordered_map<std::string, FullType> local_vars = collect_local_variable_types(callable_body);
     for(const auto& [var, full_type]: local_vars) {
         allocate_var_to_stack(
             gen_state, 

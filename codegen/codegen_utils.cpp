@@ -4,6 +4,23 @@
 extern const std::string THIS_ACTOR_ID_REG;
 extern const std::string SYNCHRONOUS_ACTOR_ID_REG;
 
+std::unordered_map<std::string, FullType> collect_local_variable_types(
+        std::vector<std::shared_ptr<Stmt>>& callable_body) {
+    std::unordered_map<std::string, FullType> local_vars;
+    for(auto stmt: callable_body) {
+        std::visit(Overload{
+            [&](const Stmt::VarDeclWithInit &var_decl_init) {
+                assert(local_vars.find(var_decl_init.name) == local_vars.end());
+                local_vars.emplace(var_decl_init.name, var_decl_init.type);
+            },
+            [&](const auto& p){}
+        }, stmt->t);
+        
+    }
+    return local_vars;
+}
+
+
 std::string llvm_name_of_func(GenState& gen_state, const std::string& func_name) {
     if(gen_state.curr_actor != nullptr) {
         return func_name + "." + gen_state.curr_actor->name + ".func";

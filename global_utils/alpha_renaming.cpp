@@ -5,12 +5,10 @@
 #include <variant>
 
 struct RenameInfo {
-    // The renaming is done by appending this [scope_identifier] at the
+    // The renaming is done by appending .<scope_identifier> at the
     // end of the variable name. Every scope has a different scope_identifier
     // and a scope has only one scope_identifier
     size_t scope_identifier = 0;
-    // CR: Does this need to be an unordered_set?
-    std::unordered_map<std::string, FullType> var_type_map;
     ScopedStore<std::string, std::string> rename_map;
     void create_new_scope() {
         scope_identifier++;
@@ -27,10 +25,9 @@ struct RenameInfo {
         }
     }
     std::string register_fresh_name(const std::string& var, FullType type) {
-        std::string new_name = var + std::to_string(scope_identifier);
+        std::string new_name = var + "." + std::to_string(scope_identifier);
         assert(rename_map.num_scopes() > 0);
         rename_map.insert(var, new_name);
-        var_type_map.emplace(new_name, type);
         return new_name;
     }
 };
@@ -56,6 +53,9 @@ void alpha_rename_val_expr(
             for(auto val_expr: actor_construction.args) {
                 alpha_rename_val_expr(rename_info, val_expr);
             }
+        },
+        [&](ValExpr::Consume& consume) {
+            rename_info.rename_variable(consume.var_name);
         },
         [&](ValExpr::PointerAccess& pointer_access) {
             alpha_rename_val_expr(rename_info, pointer_access.index);
@@ -146,10 +146,9 @@ void alpha_rename_stmt_list(
     }
 }
 
-std::unordered_map<std::string, FullType> alpha_rename_callable_body(
+void alpha_rename_callable_body(
     std::vector<std::shared_ptr<Stmt>> body) {
     RenameInfo rename_info;
     rename_info.create_new_scope();
     alpha_rename_stmt_list(rename_info, body);
-    return rename_info.var_type_map;
 }

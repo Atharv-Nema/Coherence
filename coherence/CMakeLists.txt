@@ -7,7 +7,7 @@ add_executable(coherence
 target_link_libraries(coherence PUBLIC
     ast
     lexer_parser
-    type_checker
+    ast_validation
     codegen
 )
 

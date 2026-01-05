@@ -4,6 +4,8 @@
 #include "top_level.hpp"
 #include "runtime_traps.hpp"
 
+std::unordered_map<std::string, FullType> collect_local_variable_types(
+        std::vector<std::shared_ptr<Stmt>>& callable_body);
 std::string llvm_name_of_func(GenState& gen_state, const std::string& func_name);
 std::string llvm_name_of_constructor(
     const std::string& constructor_name, 

@@ -33,12 +33,18 @@ public:
     }
     // creates a copy and stores it in the map
     void insert(const K& key, const V& value) {
-        // Note that insert assumes that [key] is not in the latest scope
         assert(scope_list.size() > 0);
-        assert(scope_list.back().scope_keys.find(key) == scope_list.back().scope_keys.end());
-        scope_list.back().scope_keys.insert(key);
-        size_t scope_ind = scope_list.size() - 1;
-        key_val_map[key].emplace_back(value, scope_ind);
+        if(scope_list.back().scope_keys.find(key) != scope_list.back().scope_keys.end()) {
+            // It is already in the latest scope. Just modify the value in the array
+            assert(key_val_map.at(key).back().scope_ind + 1 == scope_list.size());
+            key_val_map.at(key).back().val = value;
+        }
+        else {
+            scope_list.back().scope_keys.insert(key);
+            size_t scope_ind = scope_list.size() - 1;
+            key_val_map[key].emplace_back(value, scope_ind);
+        }
+        
     }
     size_t num_scopes() { return scope_list.size(); }
     std::optional<V> get_value(const K& key) {
@@ -70,6 +76,20 @@ public:
     Metadata& get_scope_metadata(size_t scope_ind) {
         assert(scope_ind < scope_list.size());
         return scope_list[scope_ind];
+    }
+
+    std::unordered_set<K> get_scope_keys(size_t ind) {
+        assert(ind < scope_list.size());
+        return scope_list[ind].scope_keys;
+    }
+
+    std::unordered_map<K, V> get_latest_scope_updates() {
+        std::unordered_map<K, V> scope_updates;
+        for(const K& k: scope_list.back().scope_keys) {
+            assert(key_val_map.at(k).back().scope_ind + 1 = scope_list.size());
+            scope_updates.emplace_back(k, key_val_map.at(k).back().val);
+        }
+        return scope_updates;
     }
 
     void pop_scope() {

@@ -46,6 +46,11 @@ struct ValExpr {
         std::vector<std::shared_ptr<ValExpr>> args; 
     };
 
+    // Consume
+    struct Consume {
+        std::string var_name;
+    };
+
     // Accesses
     struct PointerAccess {
         std::shared_ptr<ValExpr> index;
@@ -71,7 +76,7 @@ struct ValExpr {
 
     SourceSpan source_span;
     FullType expr_type;
-    std::variant<VUnit, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
+    std::variant<VUnit, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, Consume,
     PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };
 

@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <format>
 #include "top_level.hpp"
-#include "type_checker.hpp"
+#include "ast_validator.hpp"
 #include "codegen.hpp"
 
 #include "parser.tab.hpp"
@@ -74,11 +74,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    TypeEnv env;
-    bool ok = type_check_program(program_root);
+    bool ok = validate_program(program_root);
 
     if (!ok) {
-        std::cerr << "Type checking failed.\n";
+        std::cerr << "Ast validation failed.\n";
         delete program_root;
         return 1;
     }

@@ -135,6 +135,11 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "]}";
         },
 
+        // --- Consume --- 
+        [&](const ValExpr::Consume& c) {
+            std::cout << "Conume{var=" << c.var_name << "}" << std::endl;
+        },
+
         // --- Pointer access ---
         [&](const ValExpr::PointerAccess& p) {
             std::cout << "PointerAccess{value=";
