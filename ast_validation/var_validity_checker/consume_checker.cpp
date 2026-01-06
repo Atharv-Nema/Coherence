@@ -7,7 +7,6 @@
 #include <memory>
 #include <iostream>
 
-// CR: Think about a way to reuse the common part of the traversing logic
 bool update_valexpr_validity_info(
     ScopedStore<std::string, bool>& var_valid,
     std::shared_ptr<ValExpr> val_expr) {
@@ -31,6 +30,7 @@ bool update_valexpr_validity_info(
             }
             if(*var_status == false) {
                 std::cerr << "Consuming a variable twice" << std::endl;
+                return false;
             }
             var_valid.insert(consume.var_name, false);
             return true;
@@ -50,75 +50,21 @@ bool update_valexpr_validity_info(
                 return true;
             }
             else {
-                // Compile the lhs and then the rhs normally
-                if(!update_valexpr_validity_info(var_valid, assignment.lhs)) {
-                    return false;
-                }
-                if(!update_valexpr_validity_info(var_valid, assignment.rhs)) {
-                    return false;
-                }
-                return true;
+                return predicate_valexpr_walker(
+                    val_expr, 
+                    [&](std::shared_ptr<ValExpr> val_expr) {
+                        return update_valexpr_validity_info(var_valid, val_expr);
+                    });
             }
         },
         // Cases where need to propogate recursively downwards
-        [&](ValExpr::VStruct& struct_val) {
-            for(const auto& [_, field_expr]: struct_val.fields) {
-                if(!update_valexpr_validity_info(var_valid, field_expr)) {
-                    return false;
-                }
-            }
-            return true;
-        },
-        [&](ValExpr::NewInstance& new_instance) {
-            // Order of evaluation is default value, size
-            if(!update_valexpr_validity_info(var_valid, new_instance.default_value)) {
-                return false;
-            }
-            if(!update_valexpr_validity_info(var_valid, new_instance.size)) {
-                return false;
-            }
-            return true;
-        },
-        [&](ValExpr::ActorConstruction& actor_construction) {
-            for(auto arg: actor_construction.args) {
-                if(!update_valexpr_validity_info(var_valid, arg)) {
-                    return false;
-                }
-            }
-            return true;
-        },
-        [&](ValExpr::PointerAccess& pointer_access) {
-            // First the pointer then the index
-            if(!update_valexpr_validity_info(var_valid, pointer_access.value)) {
-                return false;
-            }
-            if(!update_valexpr_validity_info(var_valid, pointer_access.index)) {
-                return false;
-            }
-            return true;
-        },
-        [&](const ValExpr::Field& field_access) {
-            return update_valexpr_validity_info(var_valid, field_access.base);
-        },
-        [&](const ValExpr::FuncCall& func_call) {
-            for(auto arg: func_call.args) {
-                if(!update_valexpr_validity_info(var_valid, arg)) {
-                    return false;
-                }
-            }
-            return true;
-        },
-        [&](const ValExpr::BinOpExpr& bin_op_expr) {
-            if(!update_valexpr_validity_info(var_valid, bin_op_expr.lhs)) {
-                return false;
-            }
-            if(!update_valexpr_validity_info(var_valid, bin_op_expr.rhs)) {
-                return false;
-            }
-            return true;
-        },
-        // All other cases do not need to be considered
-        [&](const auto&) {return true;}
+        [&](const auto&) {
+            return predicate_valexpr_walker(
+                val_expr, 
+                [&](std::shared_ptr<ValExpr> val_expr) {
+                    return update_valexpr_validity_info(var_valid, val_expr);
+                });
+        }
     }, val_expr->t);
 }
 

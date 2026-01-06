@@ -556,13 +556,22 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
         // Callables
         [&](const ValExpr::FuncCall& f) -> std::optional<FullType> {
             // Lookup function definition in the type context
-            auto func_def_opt = env.type_env.func_name_map.get_value(f.func);
-            if(!func_def_opt) {
+            std::shared_ptr<TopLevelItem::Func> func_def = nullptr;
+            if(env.type_env.func_name_map.contains(f.func)) {
+                func_def = env.type_env.func_name_map.at(f.func);
+            }
+            if(env.type_env.curr_actor != nullptr) {
+                std::shared_ptr<ActorFrontend> actor_frontend = 
+                    env.type_env.actor_frontend_map.at(env.type_env.curr_actor->name);
+                if(actor_frontend->member_functions.contains(f.func)) {
+                    func_def = actor_frontend->member_functions.at(f.func);
+                }
+            }
+            if(func_def == nullptr) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Function not found" << std::endl;
                 return std::nullopt;
             }
-            auto func_def = *func_def_opt;
 
             if(passed_in_parameters_valid(env, func_def->params, f.args, false)) {
                 return func_def->return_type;

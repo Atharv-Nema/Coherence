@@ -17,7 +17,20 @@ It performs the following:
 
 ---
 
-## 2. Type-Checking Stage
+## 2. Declaration collection
+
+This stage traverses the entire program AST and collects the function and actor declarations.
+
+It performs the following:
+
+1. Collects the definitions of top-level functions and actor and their members.
+2. Reports any duplicate.
+
+It however does not act on top-level type definitions
+
+---
+
+## 3. Type-Checking Stage
 
 This stage involves moving from top to bottom, maintaining information about what has already been seen
 (functions, types, actors, etc.), and then type-checking individual callables.
@@ -37,7 +50,7 @@ This stage involves moving from top to bottom, maintaining information about wha
 
 ---
 
-## 3. Atomic Section Pass
+## 4. Atomic Section Pass
 
 After type checking is complete, run the atomic section pass.
 

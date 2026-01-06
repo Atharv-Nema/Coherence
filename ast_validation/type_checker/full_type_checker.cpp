@@ -9,11 +9,6 @@
 #include <iostream>
 
 bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_def) {
-    if(env.func_name_map.key_in_curr_scope(func_def->name)) {
-        std::cerr << "Function already defined" << std::endl;
-        return false;
-    }
-    env.func_name_map.insert(func_def->name, func_def);
     if(!type_check_callable_body(env, func_def, func_def->params, func_def->body)) {
         return false;
     }
@@ -38,7 +33,9 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
         return false;
     }
     // After this is done, we do a recursive check of the initialization
-    return initialization_check(env.curr_actor, env.func_name_map, constructor_def);
+    assert(env.curr_actor != nullptr);
+    std::shared_ptr<ActorFrontend> actor_frontend = env.actor_frontend_map.at(env.curr_actor->name);
+    return initialization_check(env.curr_actor, actor_frontend, constructor_def);
 }
 
 
@@ -55,18 +52,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
         },
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
-            if(env.actor_frontend_map.find(actor_def->name) != env.actor_frontend_map.end()) {
-                report_error_location(toplevel_item.source_span);
-                std::cerr << "Actor " << actor_def->name << " already defined." << std::endl;
-                return false;
-            }
-            // Create an actor frontend
-            std::shared_ptr<ActorFrontend> actor_frontend = std::make_shared<ActorFrontend>();
-            actor_frontend->actor_name = actor_def->name;
-            env.actor_frontend_map.emplace(actor_def->name, actor_frontend);
-            
-            // Creating a scope for the functions within the actor
-            ScopeGuard actor_func_scope(env.func_name_map);
+            assert(!env.actor_frontend_map.contains(actor_def->name));
             env.curr_actor = actor_def;
             Defer d([&](void){env.curr_actor = nullptr;});
             bool type_checked_successfully = true;
@@ -77,11 +63,9 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
                         return type_check_function(env, mem_func);
                     },
                     [&](std::shared_ptr<TopLevelItem::Behaviour> mem_behaviour) {
-                        actor_frontend->member_behaviours[mem_behaviour->name] = mem_behaviour;
                         return type_check_behaviour(env, mem_behaviour);
                     },
                     [&](std::shared_ptr<TopLevelItem::Constructor> mem_constructor) {
-                        actor_frontend->constructors[mem_constructor->name] = mem_constructor;
                         return type_check_constructor(env, mem_constructor);
                     }
                 }, actor_mem) && type_checked_successfully;
@@ -91,10 +75,14 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     }, toplevel_item.t);
 }
 
-bool type_check_program(Program* root) {
+bool type_check_program(
+    Program *root,
+    std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>> func_name_map,
+    std::unordered_map<std::string, std::shared_ptr<ActorFrontend>> actor_frontend_map) {
     bool program_typechecks = true;
     TypeEnv env;
-    env.func_name_map.create_new_scope();
+    env.func_name_map = std::move(func_name_map);
+    env.actor_frontend_map = std::move(actor_frontend_map);
     for(auto top_level_item: root->top_level_items) {
         program_typechecks = type_check_toplevel_item(env, top_level_item) && program_typechecks;
     }

@@ -1,11 +1,15 @@
 #include "initialization_checker.hpp"
+#include "general_validator_structs.hpp"
+#include "utils.hpp"
 
 struct InitEnv {
     std::shared_ptr<TopLevelItem::Actor> curr_actor;
-    ScopedStore<std::string, std::shared_ptr<TopLevelItem::Func>>& func_name_map;
-    InitEnv(std::shared_ptr<TopLevelItem::Actor> curr_actor, 
-        ScopedStore<std::string, std::shared_ptr<TopLevelItem::Func>>& func_name_map): func_name_map(func_name_map) {
+    std::shared_ptr<ActorFrontend> actor_frontend;
+    InitEnv(
+        std::shared_ptr<TopLevelItem::Actor> curr_actor,
+        std::shared_ptr<ActorFrontend> actor_frontend) {
         this->curr_actor = curr_actor;
+        this->actor_frontend = actor_frontend;
     }
 };
 
@@ -73,16 +77,10 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
 bool valexpr_calls_actor_function(InitEnv &env, std::shared_ptr<ValExpr> val_expr) {
     return std::visit(Overload{
         [&](const ValExpr::FuncCall& func_call) {
-            if(env.curr_actor) {
-                // So we are inside an actor
-                if(env.func_name_map.key_in_curr_scope(func_call.func)) {
-                    // Calling a function of the enclosing actor
-                    return true;
-                }
-            }
-            else {
-                // Should only be called when type checking the contents of an actor
-                assert(false);
+            assert(env.curr_actor);
+            if(env.actor_frontend->member_functions.contains(func_call.func)) {
+                // Calling a function of the enclosing actor
+                return true;
             }
             for(auto arg: func_call.args) {
                 if(valexpr_calls_actor_function(env, arg)) {
@@ -91,7 +89,13 @@ bool valexpr_calls_actor_function(InitEnv &env, std::shared_ptr<ValExpr> val_exp
             }
             return false;
         },
-        [&](const auto&) {return false;}
+        [&](const auto&) {
+            return predicate_valexpr_walker(
+                val_expr, 
+                [&](std::shared_ptr<ValExpr> val_expr) {
+                    return valexpr_calls_actor_function(env, val_expr);
+                });
+        }
     }, val_expr->t);
 }
 
@@ -242,10 +246,10 @@ std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
 
 bool initialization_check(
     std::shared_ptr<TopLevelItem::Actor> curr_actor,
-    ScopedStore<std::string, std::shared_ptr<TopLevelItem::Func>>& func_name_map,
+    std::shared_ptr<ActorFrontend> actor_frontend,
     std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
     assert(curr_actor != nullptr);
-    InitEnv init_env(curr_actor, func_name_map);
+    InitEnv init_env(curr_actor, actor_frontend);
     std::unordered_set<std::string> unassigned_members;
     for(const auto& [k, v]: curr_actor->member_vars) {
         assert(unassigned_members.find(k) == unassigned_members.end());
