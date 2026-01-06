@@ -48,14 +48,13 @@ bool fill_actor_info(
 }
 
 bool fill_declaration_info(
-    std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>>& func_name_map,
-    std::unordered_map<std::string, std::shared_ptr<ActorFrontend>>& actor_frontend_map,
-    Program *root) {
+    Program *root,
+    std::shared_ptr<DeclCollection> decl_collection) {
     for(auto toplevel_item: root->top_level_items) {
         bool result = std::visit(Overload{
             [&](TopLevelItem::TypeDef&){return true;},
             [&](std::shared_ptr<TopLevelItem::Func> func_def) {
-                if(func_name_map.contains(func_def->name)) {
+                if(decl_collection->func_name_map.contains(func_def->name)) {
                     report_error_location(toplevel_item.source_span);
                     std::cerr << "Function " << func_def->name << " already defined" << std::endl;
                     return false;
@@ -63,7 +62,7 @@ bool fill_declaration_info(
                 return true;
             },
             [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
-                return fill_actor_info(actor_frontend_map, actor_def);
+                return fill_actor_info(decl_collection->actor_frontend_map, actor_def);
             }
         }, toplevel_item.t);
         if(!result) {

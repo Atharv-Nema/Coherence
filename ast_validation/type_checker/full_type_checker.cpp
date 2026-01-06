@@ -34,7 +34,7 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
     }
     // After this is done, we do a recursive check of the initialization
     assert(env.curr_actor != nullptr);
-    std::shared_ptr<ActorFrontend> actor_frontend = env.actor_frontend_map.at(env.curr_actor->name);
+    std::shared_ptr<ActorFrontend> actor_frontend = env.decl_collection->actor_frontend_map.at(env.curr_actor->name);
     return initialization_check(env.curr_actor, actor_frontend, constructor_def);
 }
 
@@ -52,7 +52,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
         },
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
-            assert(!env.actor_frontend_map.contains(actor_def->name));
+            assert(!env.decl_collection->actor_frontend_map.contains(actor_def->name));
             env.curr_actor = actor_def;
             Defer d([&](void){env.curr_actor = nullptr;});
             bool type_checked_successfully = true;
@@ -77,12 +77,10 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
 
 bool type_check_program(
     Program *root,
-    std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>> func_name_map,
-    std::unordered_map<std::string, std::shared_ptr<ActorFrontend>> actor_frontend_map) {
+    std::shared_ptr<DeclCollection> decl_collection) {
     bool program_typechecks = true;
     TypeEnv env;
-    env.func_name_map = std::move(func_name_map);
-    env.actor_frontend_map = std::move(actor_frontend_map);
+    env.decl_collection = decl_collection;
     for(auto top_level_item: root->top_level_items) {
         program_typechecks = type_check_toplevel_item(env, top_level_item) && program_typechecks;
     }
@@ -91,8 +89,9 @@ bool type_check_program(
         std::cerr << "Program does not typecheck" << std::endl;
         return false;
     }
+    // CR: Should not be at this stage
     // Checking whether there is an actor with name [Main]
-    if(env.actor_frontend_map.find("Main") == env.actor_frontend_map.end()) {
+    if(!env.decl_collection->actor_frontend_map.contains("Main")) {
         std::cerr << "Error: Actor Main not found" << std::endl;
         return false;
     }

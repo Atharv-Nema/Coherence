@@ -2,7 +2,6 @@ add_library(type_checker
     core_type_checker.cpp
     initialization_checker.cpp
     return_checker.cpp
-    type_utils.cpp
     full_type_checker.cpp
 )
 

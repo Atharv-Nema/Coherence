@@ -439,13 +439,13 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
         },
 
         [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::optional<FullType> {
-            if(env.type_env.actor_frontend_map.contains(actor_constr_expr.actor_name)) {
+            if(env.type_env.decl_collection->actor_frontend_map.contains(actor_constr_expr.actor_name)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Actor " << actor_constr_expr.actor_name << " not found" << std::endl;
                 return std::nullopt;
             }
             auto& actor_constructors = 
-                (env.type_env.actor_frontend_map.at(actor_constr_expr.actor_name))->constructors;
+                (env.type_env.decl_collection->actor_frontend_map.at(actor_constr_expr.actor_name))->constructors;
             if(actor_constructors.find(actor_constr_expr.constructor_name) == actor_constructors.end()) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Actor " << actor_constr_expr.actor_name << " does not have constructor "
@@ -557,12 +557,12 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
         [&](const ValExpr::FuncCall& f) -> std::optional<FullType> {
             // Lookup function definition in the type context
             std::shared_ptr<TopLevelItem::Func> func_def = nullptr;
-            if(env.type_env.func_name_map.contains(f.func)) {
-                func_def = env.type_env.func_name_map.at(f.func);
+            if(env.type_env.decl_collection->func_name_map.contains(f.func)) {
+                func_def = env.type_env.decl_collection->func_name_map.at(f.func);
             }
             if(env.type_env.curr_actor != nullptr) {
                 std::shared_ptr<ActorFrontend> actor_frontend = 
-                    env.type_env.actor_frontend_map.at(env.type_env.curr_actor->name);
+                    env.type_env.decl_collection->actor_frontend_map.at(env.type_env.curr_actor->name);
                 if(actor_frontend->member_functions.contains(f.func)) {
                     func_def = actor_frontend->member_functions.at(f.func);
                 }
@@ -702,8 +702,9 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
                 return false;
             }
 
-            assert(env.type_env.actor_frontend_map.contains(named_actor->name));
-            auto& actor_behaviours = env.type_env.actor_frontend_map.at(named_actor->name)->member_behaviours;
+            assert(env.type_env.decl_collection->actor_frontend_map.contains(named_actor->name));
+            auto& actor_behaviours = 
+                env.type_env.decl_collection->actor_frontend_map.at(named_actor->name)->member_behaviours;
             if(actor_behaviours.find(b.behaviour_name) == actor_behaviours.end()) {
                 report_error_location(stmt->source_span);
                 std::cerr << "Actor " << named_actor->name << " does not have behaviour "

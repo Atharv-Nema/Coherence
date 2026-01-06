@@ -9,11 +9,16 @@ using TypeContext = std::unordered_map<std::string, std::shared_ptr<NameableType
 
 struct ActorFrontend {
     std::string actor_name;
-    
+
     std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Constructor>>
         constructors;
     std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Behaviour>>
         member_behaviours;
     std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>>
         member_functions;
+};
+
+struct DeclCollection {
+    std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>> func_name_map;
+    std::unordered_map<std::string, std::shared_ptr<ActorFrontend>> actor_frontend_map;
 };

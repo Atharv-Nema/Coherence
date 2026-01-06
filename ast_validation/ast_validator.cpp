@@ -8,13 +8,12 @@ bool validate_program(Program* root) {
         return false;
     }
     // 2. Collect the declaration
-    std::unordered_map<std::string, std::shared_ptr<TopLevelItem::Func>> func_name_map;
-    std::unordered_map<std::string, std::shared_ptr<ActorFrontend>> actor_frontend_map;
-    if(!fill_declaration_info(func_name_map, actor_frontend_map, root)) {
+    std::shared_ptr<DeclCollection> decl_collection = std::make_shared<DeclCollection>();
+    if(!fill_declaration_info(root, decl_collection)) {
         return false;
     }
      
-    if(!type_check_program(root, func_name_map, actor_frontend_map)) {
+    if(!type_check_program(root, decl_collection)) {
         return false;
     }
     // TODO: Implement the atomic section stage
