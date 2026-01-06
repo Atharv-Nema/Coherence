@@ -86,8 +86,8 @@ public:
     std::unordered_map<K, V> get_latest_scope_updates() {
         std::unordered_map<K, V> scope_updates;
         for(const K& k: scope_list.back().scope_keys) {
-            assert(key_val_map.at(k).back().scope_ind + 1 = scope_list.size());
-            scope_updates.emplace_back(k, key_val_map.at(k).back().val);
+            assert(key_val_map.at(k).back().scope_ind + 1 == scope_list.size());
+            scope_updates.emplace(k, key_val_map.at(k).back().val);
         }
         return scope_updates;
     }

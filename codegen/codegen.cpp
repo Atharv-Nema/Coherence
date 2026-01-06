@@ -628,8 +628,6 @@ void compile_callable_body(
         }
     }
 
-    // Now alpha rename the function body and store all the local variables on the stack
-    alpha_rename_callable_body(callable_body);
     std::unordered_map<std::string, FullType> local_vars = collect_local_variable_types(callable_body);
     for(const auto& [var, full_type]: local_vars) {
         allocate_var_to_stack(

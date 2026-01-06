@@ -4,6 +4,7 @@
 #include "initialization_checker.hpp"
 #include "pattern_matching_boilerplate.hpp"
 #include "utils.hpp"
+#include "defer.cpp"
 #include <assert.h>
 #include <iostream>
 
@@ -45,7 +46,7 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
 bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
-            assert(!env.type_context.contains(type_def.name));
+            assert(!env.type_context.contains(type_def.type_name));
             env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             return true;
         },

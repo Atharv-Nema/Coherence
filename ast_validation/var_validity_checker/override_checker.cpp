@@ -3,6 +3,7 @@
 #include "pattern_matching_boilerplate.hpp"
 #include "utils.hpp"
 #include <variant>
+#include <iostream>
 #include "override_checker.hpp"
 
 struct OverrideEnv {
@@ -68,7 +69,7 @@ bool override_check_stmt_list(
     OverrideEnv& env,
     std::vector<std::shared_ptr<Stmt>>& stmt_list) {
     for(auto stmt: stmt_list) {
-        if(!var_validity_check_stmt(env, stmt)) {
+        if(!override_check_stmt(env, stmt)) {
             return false;
         }
     }
@@ -94,7 +95,7 @@ bool override_check_callable(
 
     // Now, simply iterate through statements
     for(auto stmt: callable_body) {
-        if(!var_validity_check_stmt(env, stmt)) {
+        if(!override_check_stmt(env, stmt)) {
             return false;
         }
     }

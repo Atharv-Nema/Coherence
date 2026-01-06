@@ -793,8 +793,8 @@ bool type_check_callable_body(
     const std::vector<TopLevelItem::VarDecl>& params,
     const std::vector<std::shared_ptr<Stmt>>& callable_body) {
     CoreEnv core_env(env, curr_func);
-    for(const TopLevelItem::VarDecl& arg: args) {
-        core_env.local_var_context.emplace(arg.name, arg.type);
+    for(const TopLevelItem::VarDecl& param: params) {
+        core_env.local_var_context.emplace(param.name, param.type);
     }
     return type_check_stmt_list(core_env, callable_body);
 }

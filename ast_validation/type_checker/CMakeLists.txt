@@ -3,6 +3,7 @@ add_library(type_checker
     initialization_checker.cpp
     return_checker.cpp
     type_utils.cpp
+    full_type_checker.cpp
 )
 
 target_link_libraries(type_checker PUBLIC 
