@@ -37,7 +37,7 @@ struct Stmt {
         std::vector<std::shared_ptr<Stmt>> body; 
     };
     struct Atomic { 
-        std::unordered_set<std::string> locks_dereferenced;
+        std::shared_ptr<std::unordered_set<std::string>> locks_dereferenced;
         std::vector<std::shared_ptr<Stmt>> body;
     };
     struct Return { std::shared_ptr<ValExpr> expr; };

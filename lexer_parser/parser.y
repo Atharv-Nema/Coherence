@@ -293,7 +293,9 @@ func_def
         (*$$)->return_type = std::move(*$7);
         (*$$)->params = std::move(*$4);
         (*$$)->body = std::move(*$8);
-        (*$$)->locks_dereferenced = std::make_shared<std::unordered_set<std::string>>();
+        // This is different from what is being done in atomic because of easy implementation
+        // of kosaraju's algorithm in the ast validator
+        (*$$)->locks_dereferenced = nullptr;
         delete $2; delete $4; delete $7; delete $8;
       }
     ;
@@ -405,7 +407,9 @@ stmt
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
                 span_from(@$),
-                make_shared<Stmt::Atomic>(std::unordered_set<std::string>(), std::move(*$2))
+                make_shared<Stmt::Atomic>(
+                    std::make_shared<std::unordered_set<std::string>>(), 
+                    std::move(*$2))
             }
         ));
         delete $2;

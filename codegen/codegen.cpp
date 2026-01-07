@@ -573,8 +573,8 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_stmt) {
             std::vector<uint64_t> locks_acquired;
-            locks_acquired.reserve(atomic_stmt->locks_dereferenced.size());
-            for(const std::string& lock: atomic_stmt->locks_dereferenced) {
+            locks_acquired.reserve(atomic_stmt->locks_dereferenced->size());
+            for(const std::string& lock: *(atomic_stmt->locks_dereferenced)) {
                 if(gen_state.lock_id_map.find(lock) == gen_state.lock_id_map.end()) {
                     gen_state.lock_id_map.emplace(lock, gen_state.lock_id_map.size());
                 }

@@ -1,6 +1,7 @@
 #include "var_validity_checker.hpp"
 #include "full_type_checker.hpp"
 #include "declaration_collector.hpp"
+#include "compute_lock_info.hpp"
 
 bool validate_program(Program* root) {
     // 1. Run [var_validity_checker]
@@ -16,7 +17,7 @@ bool validate_program(Program* root) {
     if(!type_check_program(root, decl_collection)) {
         return false;
     }
-    // TODO: Implement the atomic section stage
+    compute_lock_info(root, decl_collection);
     return true;
 }
 
