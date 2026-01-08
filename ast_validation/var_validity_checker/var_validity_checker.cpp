@@ -25,7 +25,7 @@ bool var_validity_check_callable(
     alpha_rename_callable_body(callable_body);
 
     // Now run the consume checker
-    if(!consume_check(callable_body)) {
+    if(!consume_check(params, callable_body)) {
         return false;
     }
     return true;

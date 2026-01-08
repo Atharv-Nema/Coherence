@@ -1,3 +1,4 @@
+#pragma once
 #include "top_level.hpp"
 #include "../global_utils/pattern_matching_boilerplate.hpp"
 #include <iostream>
@@ -187,6 +188,208 @@ void print_val_expr(const ValExpr& v) {
         }
     }, v.t);
 }
+
+void print_stmt(const Stmt& s) {
+    std::visit(Overload{
+
+        [&](const Stmt::VarDeclWithInit& v) {
+            std::cout << "VarDeclWithInit{name=" << v.name << ", type=";
+            print_full_type(v.type);
+            std::cout << ", init=";
+            print_val_expr(*v.init);
+            std::cout << "}\n";
+        },
+
+        [&](const Stmt::MemberInitialize& m) {
+            std::cout << "MemberInitialize{member=" << m.member_name << ", init=";
+            print_val_expr(*m.init);
+            std::cout << "}\n";
+        },
+
+        [&](const Stmt::BehaviourCall& b) {
+            std::cout << "BehaviourCall{actor=";
+            print_val_expr(*b.actor);
+            std::cout << ", behaviour=" << b.behaviour_name << ", args=[";
+            for (size_t i = 0; i < b.args.size(); ++i) {
+                if (i > 0) std::cout << ", ";
+                print_val_expr(*b.args[i]);
+            }
+            std::cout << "]}\n";
+        },
+
+        [&](const Stmt::Print& p) {
+            std::cout << "Print{expr=";
+            print_val_expr(*p.print_expr);
+            std::cout << "}\n";
+        },
+
+        [&](const Stmt::Expr& e) {
+            std::cout << "Expr{";
+            print_val_expr(*e.expr);
+            std::cout << "}\n";
+        },
+
+        [&](const Stmt::If& i) {
+            std::cout << "If{cond=";
+            print_val_expr(*i.cond);
+            std::cout << "}\n";
+
+            std::cout << "Then:\n";
+            for (const auto& stmt : i.then_body) {
+                print_stmt(*stmt);
+            }
+
+            if (i.else_body) {
+                std::cout << "Else:\n";
+                for (const auto& stmt : *i.else_body) {
+                    print_stmt(*stmt);
+                }
+            }
+        },
+
+        [&](const Stmt::While& w) {
+            std::cout << "While{cond=";
+            print_val_expr(*w.cond);
+            std::cout << "}\n";
+
+            std::cout << "Body:\n";
+            for (const auto& stmt : w.body) {
+                print_stmt(*stmt);
+            }
+        },
+
+        [&](const std::shared_ptr<Stmt::Atomic>& a) {
+            std::cout << "Atomic{locks=[";
+            if (a->locks_dereferenced) {
+                bool first = true;
+                for (const auto& l : *a->locks_dereferenced) {
+                    if (!first) std::cout << ", ";
+                    std::cout << l;
+                    first = false;
+                }
+            }
+            std::cout << "]}\n";
+
+            std::cout << "Body:\n";
+            for (const auto& stmt : a->body) {
+                print_stmt(*stmt);
+            }
+        },
+
+        [&](const Stmt::Return& r) {
+            std::cout << "Return{expr=";
+            print_val_expr(*r.expr);
+            std::cout << "}\n";
+        }
+
+    }, s.t);
+}
+
+void print_func(const TopLevelItem::Func& f) {
+    std::cout << "Func{name=" << f.name << ", return_type=";
+    print_full_type(f.return_type);
+    std::cout << "}\n";
+
+    std::cout << "Params:\n";
+    for(const TopLevelItem::VarDecl& var_decl: f.params) {
+        std::cout << "VarDecl{name=" << var_decl.name << ", type=";
+        print_full_type(var_decl.type);
+        std::cout << "}";
+        std::cout << "\n";
+    }
+
+    std::cout << "Body:\n";
+    for(const auto& stmt : f.body) {
+        print_stmt(*stmt);
+    }
+}
+
+void print_constructor(const TopLevelItem::Constructor& c) {
+    std::cout << "Constructor{name=" << c.name << "}\n";
+
+    std::cout << "Params:\n";
+    for(const TopLevelItem::VarDecl& var_decl: c.params) {
+        std::cout << "VarDecl{name=" << var_decl.name << ", type=";
+        print_full_type(var_decl.type);
+        std::cout << "}";
+        std::cout << "\n";
+    }
+
+    std::cout << "Body:\n";
+    for (const auto& stmt : c.body) {
+        print_stmt(*stmt);
+    }
+}
+
+void print_behaviour(const TopLevelItem::Behaviour& b) {
+    std::cout << "Behaviour{name=" << b.name << "}\n";
+
+    std::cout << "Params:\n";
+    for(const TopLevelItem::VarDecl& var_decl: b.params) {
+        std::cout << "VarDecl{name=" << var_decl.name << ", type=";
+        print_full_type(var_decl.type);
+        std::cout << "}";
+        std::cout << "\n";
+    }
+
+    std::cout << "Body:\n";
+    for (const auto& stmt : b.body) {
+        print_stmt(*stmt);
+    }
+}
+
+void print_actor(const TopLevelItem::Actor& a) {
+    std::cout << "Actor{name=" << a.name << "}\n";
+
+    std::cout << "MemberVars:\n";
+    for (const auto& [name, type] : a.member_vars) {
+        std::cout << name << ": ";
+        print_full_type(type);
+        std::cout << "\n";
+    }
+
+    std::cout << "ActorMembers:\n";
+    for (const auto& mem : a.actor_members) {
+        std::visit(Overload{
+            [&](const std::shared_ptr<TopLevelItem::Func>& f) {
+                print_func(*f);
+            },
+            [&](const std::shared_ptr<TopLevelItem::Constructor>& c) {
+                print_constructor(*c);
+            },
+            [&](const std::shared_ptr<TopLevelItem::Behaviour>& b) {
+                print_behaviour(*b);
+            }
+        }, mem);
+    }
+}
+
+void print_typedef(const TopLevelItem::TypeDef& t) {
+    std::cout << "TypeDef{name=" << t.type_name << "}\n";
+}
+
+
+void print_top_level_item(const TopLevelItem& item) {
+    std::visit(Overload{
+        [&](const TopLevelItem::TypeDef& t) {
+            print_typedef(t);
+        },
+        [&](const std::shared_ptr<TopLevelItem::Func>& f) {
+            print_func(*f);
+        },
+        [&](const std::shared_ptr<TopLevelItem::Actor>& a) {
+            print_actor(*a);
+        }
+    }, item.t);
+}
+
+void print_program(const Program& program) {
+    std::cout << "Program\n";
+    for (const auto& item : program.top_level_items) {
+        print_top_level_item(item);
+    }
+}
+
 
 
 

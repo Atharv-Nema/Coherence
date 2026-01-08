@@ -105,7 +105,8 @@ void apply_control_flow_validity_updates(
 
 std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     ScopedStore<std::string, bool>& var_valid,
-    const std::vector<std::shared_ptr<Stmt>>& stmt_list);
+    const std::vector<std::shared_ptr<Stmt>>& stmt_list,
+    bool create_new_scope = true);
 
 bool update_stmt_validity_info(
     ScopedStore<std::string, bool>& var_valid,
@@ -205,8 +206,16 @@ bool update_stmt_validity_info(
 // error and returns std::nullopt
 std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     ScopedStore<std::string, bool>& var_valid,
-    const std::vector<std::shared_ptr<Stmt>>& stmt_list) {
+    const std::vector<std::shared_ptr<Stmt>>& stmt_list,
+    bool create_new_scope
+    // For eg, consume check wants to add some more stuff to the scope, so it creates it itself
+    // This is a bit hacky, but it should not be too bad
+) {
     // Returns the variables that will be consumed from the upper scopes after control exits this scope
+    std::optional<ScopeGuard<std::string, bool, std::monostate>> g = std::nullopt;
+    if(create_new_scope) {
+        g.emplace(var_valid);
+    }
     std::unordered_set<std::string> consumed_vars;
     for(std::shared_ptr<Stmt> stmt: stmt_list) {
         if(!update_stmt_validity_info(var_valid, stmt)) {
@@ -214,7 +223,6 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
         }
     }
     std::unordered_map<std::string, bool> scope_var_availabilities = var_valid.get_latest_scope_updates();
-    var_valid.pop_scope();
     for(auto it = scope_var_availabilities.begin(); it != scope_var_availabilities.end();) {
         if(var_valid.get_value(it->first) == std::nullopt)
             it = scope_var_availabilities.erase(it); // erase returns next iterator 
@@ -224,7 +232,13 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
 }
 
 // Returns true if passes
-bool consume_check(std::vector<std::shared_ptr<Stmt>>& stmt_list) {
+bool consume_check(
+    std::vector<TopLevelItem::VarDecl>& params,
+    std::vector<std::shared_ptr<Stmt>>& stmt_list) {
     ScopedStore<std::string, bool> var_valid;
-    return get_scope_validity_change(var_valid, stmt_list) != std::nullopt;
+    var_valid.create_new_scope();
+    for(auto& var_decl: params) {
+        var_valid.insert(var_decl.name, true);
+    }
+    return get_scope_validity_change(var_valid, stmt_list, false) != std::nullopt;
 }

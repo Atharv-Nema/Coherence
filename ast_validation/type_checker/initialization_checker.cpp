@@ -1,6 +1,7 @@
 #include "initialization_checker.hpp"
 #include "general_validator_structs.hpp"
 #include "utils.hpp"
+#include <iostream>
 
 struct InitEnv {
     std::shared_ptr<TopLevelItem::Actor> curr_actor;
@@ -26,14 +27,18 @@ bool valexpr_list_accesses_vars(
     }
     return false;
 }
-// CR: This is a general comment. Think carefully about the shadowing of the members of an actor
 
 bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::shared_ptr<ValExpr> val_expr) {
     // Returns whether [valexpr] accesses any variable in [vars]
-    // CR: Think carefully about do I want to log error messages here when I get to that
+    // I will be logging errors here (accesses will be treated as errors)
     return std::visit(Overload{
         [&](const ValExpr::VVar& var) {
-            return vars.find(var.name) != vars.end();
+            if(vars.contains(var.name)) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Accesses invalid variable " << var.name << std::endl;
+                return true;
+            }
+            return false;
         },
         [&](const ValExpr::VStruct& struct_instance) {
             // CR: Try using advanced C++ features to do this functionally using [valexpr_list_accesses_vars]
@@ -51,7 +56,12 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
             return valexpr_list_accesses_vars(vars, actor_construction.args);
         },
         [&](const ValExpr::Consume& consume) {
-            return vars.find(consume.var_name) != vars.end();
+            if(vars.contains(consume.var_name)) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Accessing invalid variable via consume " << consume.var_name << std::endl;
+                return true;
+            }
+            return false;
         },
         [&](const ValExpr::PointerAccess& pointer_access) {
             return valexpr_accesses_vars(vars, pointer_access.index) || valexpr_accesses_vars(vars, pointer_access.value);
@@ -75,6 +85,17 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
 
 
 bool valexpr_calls_actor_function(InitEnv &env, std::shared_ptr<ValExpr> val_expr) {
+    // Predicate valexpr walker does an && on all of the predicate results. But we want an || (if anything calls
+    // an actor function, return true). So we just reverse it by defining a function that return true if an actor
+    // is not called, and then do the negation later on.
+    bool subexpr_doesnt_call_actor_func = predicate_valexpr_walker(
+        val_expr,
+        [&](std::shared_ptr<ValExpr> val_expr) {
+            return !valexpr_calls_actor_function(env, val_expr);
+        });
+    if(!subexpr_doesnt_call_actor_func) {
+        return true;
+    }
     return std::visit(Overload{
         [&](const ValExpr::FuncCall& func_call) {
             assert(env.curr_actor);
@@ -82,20 +103,9 @@ bool valexpr_calls_actor_function(InitEnv &env, std::shared_ptr<ValExpr> val_exp
                 // Calling a function of the enclosing actor
                 return true;
             }
-            for(auto arg: func_call.args) {
-                if(valexpr_calls_actor_function(env, arg)) {
-                    return true;
-                }
-            }
             return false;
         },
-        [&](const auto&) {
-            return predicate_valexpr_walker(
-                val_expr, 
-                [&](std::shared_ptr<ValExpr> val_expr) {
-                    return valexpr_calls_actor_function(env, val_expr);
-                });
-        }
+        [&](const auto&) {return false;}
     }, val_expr->t);
 }
 
@@ -115,6 +125,8 @@ bool valexpr_accesses_uninitialized(
     }
     if(unassigned_members.size() != 0) {
         if(valexpr_calls_actor_function(env, val_expr)) {
+            report_error_location(val_expr->source_span);
+            std::cerr << "Actor function accessed without initialization being complete" << std::endl;
             return true;
         }
     }
@@ -262,6 +274,8 @@ bool initialization_check(
     bool all_assigned = true;
     for(const auto& k: unassigned_members) {
         if(assigned_vars->find(k) == assigned_vars->end()) {
+            std::cerr << "Constructor " << constructor_def->name << " of " << actor_frontend->actor_name 
+            << " does not initialize " << k << std::endl;
             all_assigned = false;
         }
     }

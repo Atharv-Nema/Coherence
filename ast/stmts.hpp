@@ -36,6 +36,7 @@ struct Stmt {
         std::shared_ptr<ValExpr> cond;
         std::vector<std::shared_ptr<Stmt>> body; 
     };
+    // CR: I dont think there is a point of the atomic statement being shared
     struct Atomic { 
         std::shared_ptr<std::unordered_set<std::string>> locks_dereferenced;
         std::vector<std::shared_ptr<Stmt>> body;

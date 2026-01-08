@@ -439,7 +439,7 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
         },
 
         [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::optional<FullType> {
-            if(env.type_env.decl_collection->actor_frontend_map.contains(actor_constr_expr.actor_name)) {
+            if(!env.type_env.decl_collection->actor_frontend_map.contains(actor_constr_expr.actor_name)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Actor " << actor_constr_expr.actor_name << " not found" << std::endl;
                 return std::nullopt;

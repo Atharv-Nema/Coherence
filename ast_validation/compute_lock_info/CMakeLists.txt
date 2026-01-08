@@ -1,7 +1,8 @@
 add_library(compute_lock_info
     callable_graph_builder.cpp
     compute_lock_info.cpp
-    fill_lock_info.cpp
+    fill_callable_lock_info.cpp
+    fill_atomic_lock_info.cpp
     sccs_finder.cpp
     stage_utils.cpp
 )

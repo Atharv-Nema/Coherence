@@ -52,7 +52,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
         },
         [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
             // Checking that the fields are unique
-            assert(!env.decl_collection->actor_frontend_map.contains(actor_def->name));
+            assert(env.decl_collection->actor_frontend_map.contains(actor_def->name));
             env.curr_actor = actor_def;
             Defer d([&](void){env.curr_actor = nullptr;});
             bool type_checked_successfully = true;

@@ -51,8 +51,8 @@ public:
         if(key_val_map.find(key) == key_val_map.end()) {
             return std::nullopt;
         }
-        assert(key_val_map[key].size() > 0);
-        return key_val_map[key].back().val;
+        assert(key_val_map.at(key).size() > 0);
+        return key_val_map.at(key).back().val;
     }
 
     std::optional<size_t> get_scope_ind(const K& key) {
@@ -75,7 +75,7 @@ public:
 
     Metadata& get_scope_metadata(size_t scope_ind) {
         assert(scope_ind < scope_list.size());
-        return scope_list[scope_ind];
+        return scope_list[scope_ind].scope_metadata;
     }
 
     std::unordered_set<K> get_scope_keys(size_t ind) {
@@ -84,6 +84,7 @@ public:
     }
 
     std::unordered_map<K, V> get_latest_scope_updates() {
+        assert(scope_list.size() > 0);
         std::unordered_map<K, V> scope_updates;
         for(const K& k: scope_list.back().scope_keys) {
             assert(key_val_map.at(k).back().scope_ind + 1 == scope_list.size());
@@ -98,6 +99,9 @@ public:
             assert(key_val_map.find(k) != key_val_map.end());
             assert(key_val_map[k].size() > 0);
             key_val_map[k].pop_back();
+            if(key_val_map[k].size() == 0) {
+                key_val_map.erase(k);
+            }
         }
         scope_list.pop_back();
     }

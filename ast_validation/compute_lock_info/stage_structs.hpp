@@ -1,5 +1,6 @@
 #pragma once
 #include "top_level.hpp"
+#include "general_validator_structs.hpp"
 
 using CallableVariant = 
     std::variant<
@@ -32,3 +33,9 @@ namespace std {
 
 using CallableGraph = 
     std::unordered_map<SyncCallable, std::unordered_set<SyncCallable>>;
+
+struct LockInfoEnv {
+    std::shared_ptr<std::unordered_set<std::string>> locks_dereferenced;
+    std::shared_ptr<TopLevelItem::Actor> curr_actor;
+    std::shared_ptr<DeclCollection> decl_collection;
+};

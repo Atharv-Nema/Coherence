@@ -4,6 +4,7 @@
 #include "compute_lock_info.hpp"
 
 bool validate_program(Program* root) {
+
     // 1. Run [var_validity_checker]
     if(!var_validity_check_program(root)) {
         return false;
