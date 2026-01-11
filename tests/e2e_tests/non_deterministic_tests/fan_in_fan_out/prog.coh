@@ -1,0 +1,24 @@
+actor Worker {
+    coordinator: Main;
+    value: int;
+
+    new create(Main c, int v) {
+        coord := c;
+        value := v;
+    }
+
+    be compute() {
+        OUT value;
+    }
+}
+
+actor Main {
+    new create() {
+        var worker_arr: Worker ref = new ref[10000] Worker(new Worker.create(this, 0));
+        var i: int = 1;
+        while(i < 10000) {
+            worker_arr[i] = new Worker.create(this, i);
+            worker_arr[i]->compute();
+        }
+    }
+}

@@ -3,3 +3,4 @@ SyntaxBrainstorming
 .vscode
 .pytest_cache
 llvm_trial
+temp*

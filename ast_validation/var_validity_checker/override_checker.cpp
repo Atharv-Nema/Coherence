@@ -40,6 +40,7 @@ bool override_check_stmt(
                 std::cerr << "Variable " << orig_name(var_decl_with_init.name) << " is not overridable" << std::endl;
                 return false;
             }
+            env.var_scope_info.insert(var_decl_with_init.name, std::monostate{});
             return true;
         },
         [&](Stmt::If& if_stmt) {

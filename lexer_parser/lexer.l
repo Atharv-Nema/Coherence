@@ -53,6 +53,7 @@ static int curr_column = 1;
 
 "true"      return TOK_TRUE;
 "false"     return TOK_FALSE;
+"unit"      return TOK_UNIT;
 "var"       return TOK_VAR;
 
 "."         return TOK_DOT;

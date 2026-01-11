@@ -73,7 +73,7 @@
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
 %token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT TOK_OUT
 %token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
-%token TOK_INT TOK_BOOL
+%token TOK_INT TOK_BOOL TOK_UNIT
 %token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
 %token TOK_TRUE TOK_FALSE
 %token TOK_SEND TOK_ARROW TOK_ASSIGN TOK_CONSUME
@@ -767,7 +767,7 @@ primary_expr
 
 /* ---------- TYPES ---------- */
 basic_type
-    : TOK_LPAREN TOK_RPAREN {
+    : TOK_UNIT {
         $$ = new BasicType();
         $$->t = BasicType::TUnit{};
       }

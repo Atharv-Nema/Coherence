@@ -2,6 +2,7 @@
 #include "full_type_checker.hpp"
 #include "declaration_collector.hpp"
 #include "compute_lock_info.hpp"
+#include "debug_printer.cpp"
 
 bool validate_program(Program* root) {
 

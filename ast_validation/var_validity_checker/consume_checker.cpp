@@ -19,7 +19,11 @@ bool update_valexpr_validity_info(
                 // are not the responsibility of this stage)
                 return true;
             }
-            return *var_status;
+            if(*var_status == false) {
+                report_error_location(val_expr->source_span);
+                std::cerr << "Variable " << orig_name(var.name) << " might not be valid here" << std::endl;
+            }
+            return true;
         },
         [&](ValExpr::Consume& consume) {
             auto var_status = var_valid.get_value(consume.var_name);

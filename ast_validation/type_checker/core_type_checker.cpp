@@ -258,6 +258,9 @@ std::optional<FullType> get_actor_member_type(CoreEnv& env, const std::string& v
     if(!env.type_env.curr_actor) {
         return std::nullopt;
     }
+    if(var_name == "this") {
+        return FullType {BasicType{ BasicType::TActor {env.type_env.curr_actor->name}}};
+    }
     if(env.type_env.curr_actor->member_vars.find(var_name) == 
         env.type_env.curr_actor->member_vars.end()) {
         return std::nullopt;
@@ -388,7 +391,7 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
             std::optional<FullType> type = get_variable_type(env, v.name);
             if(!type) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Variable " << v.name << " not defined" << std::endl;
+                std::cerr << "Variable " << orig_name(v.name) << " not defined" << std::endl;
                 return std::nullopt;
             }
             return *type;

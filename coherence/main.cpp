@@ -116,7 +116,8 @@ int main(int argc, char* argv[]) {
     // NOTE: adjust the path to libruntime.a if needed
     std::filesystem::path out_path = output_dir / "out";
     std::string link_cmd = std::format(
-        "clang++ {} " COH_RUNTIME_LIB_PATH " -lboost_context -pthread -o {}", out_s_path.string(), out_path.string());
+        "clang++ {} " COH_RUNTIME_LIB_PATH " -lboost_context -pthread -o {}", 
+        out_s_path.string(), out_path.string());
     if (std::system(link_cmd.c_str()) != 0) {
         std::cerr << "Error: link failed\n";
         return 1;

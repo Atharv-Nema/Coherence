@@ -1,0 +1,69 @@
+// locked<X> are all the same type. It will be nice if some subtyping could be used
+// to make this better
+
+func wait() => unit {
+    var i: int = 0;
+    while(i < 1000) {
+        i = i + 1;
+    }
+}
+
+actor Philosopher {
+    new create() {}
+    be eat1((unit locked<A>) left_fork, (unit locked<B>) right_fork) => unit {
+        atomic {
+            left_fork[0];
+            right_fork[0];
+        }
+        OUT 1;
+    }
+    be eat2((unit locked<B>) left_fork, (unit locked<C>) right_fork) => unit {
+        atomic {
+            left_fork[0];
+            right_fork[0];
+        }
+        OUT 2;
+    }
+    be eat3((unit locked<C>) left_fork, (unit locked<D>) right_fork) => unit {
+        atomic {
+            left_fork[0];
+            right_fork[0];
+        }
+        OUT 3;
+    }
+    be eat4((unit locked<D>) left_fork, (unit locked<E>) right_fork) => unit {
+        atomic {
+            left_fork[0];
+            right_fork[0];
+        }
+        OUT 4;
+    }
+    be eat5((unit locked<E>) left_fork, (unit locked<A>) right_fork) => unit {
+        atomic {
+            left_fork[0];
+            right_fork[0];
+        }
+        OUT 5;
+    }
+}
+
+actor Main {
+    new create() {
+        var philosophers: Philosopher = new ref[5] Philosopher(new Philosopher.create()); 
+        var i: int = 1;
+        while(i < 5) {
+            philosophers[i] = new Philosopher.create();
+            i = i + 1;
+        }
+        var fork_a: unit locked<A> = new locked<A>[1] unit(());
+        var fork_a: unit locked<B> = new locked<B>[1] unit(());
+        var fork_a: unit locked<C> = new locked<C>[1] unit(());
+        var fork_a: unit locked<D> = new locked<D>[1] unit(());
+        var fork_a: unit locked<E> = new locked<E>[1] unit(());
+        philosophers[0]->eat1(fork_a, fork_b);
+        philosophers[1]->eat2(fork_b, fork_c);
+        philosophers[2]->eat3(fork_c, fork_d);
+        philosophers[3]->eat4(fork_d, fork_e);
+        philosophers[4]->eat5(fork_e, fork_a);
+    }
+}

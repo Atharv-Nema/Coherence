@@ -1,0 +1,52 @@
+actor Main {
+    new create() {
+        var a: int = 0;
+        var b: int = 1;
+        var c: int = 2;
+        var cond: bool = true;
+
+        // IF with different consume patterns but fully refreshed
+        if (unalias(cond)) {
+            cond = true;
+
+            // consume + refresh
+            unalias(a);
+            a = 10;
+
+            // plain assignment
+            b = 4;
+        }
+        else {
+            cond = true;
+            // consume + refresh
+            unalias(b);
+            b = 5;
+            if (cond) {
+                c = 6;
+            }
+        }
+
+        // Values should still be valid here
+        var t: bool = cond;
+
+        // Assignment with consume on RHS
+        a = unalias(a);
+
+        // While loop: consume in condition, refreshed in body
+        while (unalias(cond)) {
+            cond = true;
+            a = a + 1;
+        }
+
+        // Atomic block: consume but refresh inside
+        atomic {
+            unalias(b);
+            b = 42;
+        }
+
+        // Final uses
+        OUT a;
+        OUT b;
+        OUT c;
+    }
+}

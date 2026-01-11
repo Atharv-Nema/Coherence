@@ -2,9 +2,10 @@
 #include <cassert>
 #include <atomic>
 #include <iostream>
+#include <syncstream>
 
 void print_int(int i) {
-    std::cout << i << std::endl;
+    std::osyncstream(std::cout) << i << '\n';
 }
 
 void handle_unlock(std::uint64_t lock_id) {
