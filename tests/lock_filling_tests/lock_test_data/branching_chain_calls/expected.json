@@ -1,0 +1,27 @@
+[
+  { 
+    "name": "chain1",
+    "locks": ["A", "B", "C", "D"],
+    "actor": null,
+    "function": true
+  },
+  { 
+    "name": "chain2",
+    "locks": ["B", "C", "D"],
+    "actor": null,
+    "function": true
+  },
+
+  { 
+    "name": "branch_left",
+    "locks": ["C"],
+    "actor": null,
+    "function": true
+  },
+  { 
+    "name": "branch_right",
+    "locks": ["D"],
+    "actor": null,
+    "function": true
+  }
+]

@@ -8,9 +8,7 @@
 #include "top_level.hpp"
 #include "ast_validator.hpp"
 #include "codegen.hpp"
-
-#include "parser.tab.hpp"
-#include "lex.yy.h"
+#include "parse_file.hpp"
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -51,23 +49,7 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Initialize scanner ---
-    yyscan_t scanner;
-    if (yylex_init(&scanner)) {
-        std::cerr << "Error: Could not initialize scanner.\n";
-        fclose(input);
-        return 1;
-    }
-    yyset_in(input, scanner);
-
-    if (yyparse(scanner) != 0) {
-        std::cerr << "Parse failed.\n";
-        yylex_destroy(scanner);
-        fclose(input);
-        return 1;
-    }
-
-    fclose(input);
-    yylex_destroy(scanner);
+    Program* program_root = parse_file(input);
 
     if (!program_root) {
         std::cerr << "Error: No program produced by parser.\n";

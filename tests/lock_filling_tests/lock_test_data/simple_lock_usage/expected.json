@@ -1,0 +1,8 @@
+[
+    {
+        "name": "create",
+        "locks": ["A_LOCK", "B_LOCK"],
+        "actor": "Main",
+        "function": false
+    }
+]

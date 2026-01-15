@@ -1,0 +1,20 @@
+[
+  { 
+    "name": "triangle1",
+    "locks": ["A","B","C"],
+    "actor": null,
+    "function": true
+  },
+  { 
+    "name": "triangle2",
+    "locks": ["A","B","C"],
+    "actor": null,
+    "function": true
+  },
+  { 
+    "name": "triangle3",
+    "locks": ["A","B","C"],
+    "actor": null,
+    "function": true
+  }
+]

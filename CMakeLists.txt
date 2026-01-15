@@ -1,24 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(Coherence LANGUAGES CXX)
 
-# add_compile_options(
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-g>
-# )
-
-# for debugging to remove later on
-# add_compile_options(
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-fsanitize=address,undefined>
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-fno-omit-frame-pointer>
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-g>
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-O0>
-# )
-
-# add_link_options(
-#   $<$<CXX_COMPILER_ID:GNU,Clang>:-fsanitize=address,undefined>
-# )
-
-
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

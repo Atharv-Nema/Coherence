@@ -22,6 +22,7 @@ On Ubuntu, for example:
 sudo apt update
 sudo apt install build-essential cmake flex bison
 sudo apt install libboost-all-dev
+sudo apt-get install nlohmann-json3-dev
 ```
 
 ## Build Instructions

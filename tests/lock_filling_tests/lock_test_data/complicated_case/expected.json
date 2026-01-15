@@ -1,0 +1,59 @@
+[
+  { 
+    "name": "A",    
+    "locks": ["A","B","C","D","E","F"],           
+    "actor": null, 
+    "function": true 
+  },
+  { 
+    "name": "B",    
+    "locks": ["A","B","C","D","E","F"],           
+    "actor": null, 
+    "function": true 
+  },
+  { 
+    "name": "C",    
+    "locks": ["A","B","C","D","E","F"],           
+    "actor": null, 
+    "function": true 
+  },
+  { 
+    "name": "D",    
+    "locks": ["D","E"],
+    "actor": null, 
+    "function": true 
+  },
+  { 
+    "name": "E",    
+    "locks": ["D","E"],                           
+    "actor": null, 
+    "function": true 
+  },
+
+  { 
+    "name": "F",    
+    "locks": ["F"],                               
+    "actor": null, 
+    "function": true 
+  },
+  { 
+    "name": "G",    
+    "locks": ["G"],                               
+    "actor": null, 
+    "function": true 
+  },
+
+  { 
+    "name": "Tail", 
+    "locks": ["A","B","C","D","E","F","G","Tail"], 
+    "actor": null, 
+    "function": true 
+  },
+
+  { 
+    "name": "H",    
+    "locks": ["H"],                               
+    "actor": null, 
+    "function": true 
+  }
+]

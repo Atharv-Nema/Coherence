@@ -1,0 +1,25 @@
+func chain1() => unit {
+    atomic { (new locked<A>[1] int(1))[0]; }
+    return chain2();
+}
+
+func chain2() => unit {
+    atomic { (new locked<B>[1] int(1))[0]; }
+    branch_left();
+    branch_right();
+    return ();
+}
+
+func branch_left() => unit {
+    atomic { (new locked<C>[1] int(1))[0]; }
+    return ();
+}
+
+func branch_right() => unit {
+    atomic { (new locked<D>[1] int(1))[0]; }
+    return ();
+}
+
+actor Main {
+    new create() {}
+}

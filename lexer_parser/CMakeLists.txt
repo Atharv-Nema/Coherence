@@ -31,6 +31,7 @@ ADD_FLEX_BISON_DEPENDENCY(Lexer Parser)
 add_library(lexer_parser
     ${BISON_Parser_OUTPUTS}
     ${FLEX_Lexer_OUTPUTS}
+    parse_file.cpp
 )
 
 # CR: Probably make [ast] a library
