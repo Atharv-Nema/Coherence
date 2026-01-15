@@ -34,10 +34,6 @@ static void print_vec(std::vector<std::string>& vec) {
     std::cerr << "]" << std::endl;
 }
 
-static void print_err_message(Expectation& e, std::vector<std::string>& received_locks) {
-    
-}
-
 static std::string slurp(const fs::path& p) {
     std::ifstream in(p);
     return std::string((std::istreambuf_iterator<char>(in)),

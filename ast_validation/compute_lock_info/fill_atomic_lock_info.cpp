@@ -4,25 +4,13 @@
 #include <cassert>
 #include "defer.cpp"
 #include "utils.hpp"
+#include "stage_utils.hpp"
 
 void fill_stmt_info(
     std::shared_ptr<Stmt> stmt,
     LockInfoEnv& env) {
-    std::function<void(std::shared_ptr<ValExpr>)> valexpr_visitor;
-    valexpr_visitor = [&](std::shared_ptr<ValExpr> val_expr) {
-        visitor_valexpr_walker(val_expr, valexpr_visitor);
-        std::visit(Overload{
-            [&](const ValExpr::PointerAccess& pointer_access) {
-                auto* pointer_type = std::get_if<FullType::Pointer>(&pointer_access.value->expr_type.t);
-                assert(pointer_type != nullptr);
-                auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t);
-                if(locked_cap != nullptr) {
-                    assert(env.locks_dereferenced != nullptr);
-                    env.locks_dereferenced->insert(locked_cap->lock_name);
-                }
-            },
-            [&](const auto&) {}
-        }, val_expr->t);
+    auto valexpr_visitor = [&](std::shared_ptr<ValExpr> val_expr) {
+        add_valexpr_lock_info(val_expr, env);
     };
     // Can do this directly with val_expr
     auto stmt_visitor = [&](std::shared_ptr<Stmt> stmt) {

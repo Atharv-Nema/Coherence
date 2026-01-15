@@ -5,51 +5,13 @@
 #include "string_utils.hpp"
 #include "scoped_store.cpp"
 #include "runtime_traps.hpp"
+#include "generate_llvm_structs.hpp"
+#include "special_reg_names.hpp"
+#include "defer.cpp"
 #include <assert.h>
 #include <variant>
 #include <sstream>
 #include <fstream>
-
-extern const std::string THIS_ACTOR_ID_REG = "this.id";
-extern const std::string SYNCHRONOUS_ACTOR_ID_REG = "sync_actor.id";
-
-void emit_type_definition(
-    GenState& gen_state, 
-    const TopLevelItem::TypeDef& type_def) {
-    std::string type_name = type_def.type_name;
-    std::visit(Overload{
-        [&](const NameableType::Basic& basic_type) {
-            gen_state.type_name_info_map.emplace(
-                type_name, 
-                llvm_type_of_basic_type(gen_state, basic_type.type));
-        },
-        [&](const NameableType::Struct& struct_type) {
-            std::string struct_name = type_name + ".struct";
-            map_emit_struct<std::pair<std::string, BasicType>>(
-                gen_state.out_stream,
-                struct_name,
-                struct_type.members,
-                [&](const std::pair<std::string, BasicType>& struct_mem) {
-                    return llvm_type_of_basic_type(gen_state, struct_mem.second)->llvm_type_name;
-                }
-            );
-            std::shared_ptr<LLVMStructInfo> llvm_struct_info = std::make_shared<LLVMStructInfo>();
-            for(size_t i = 0; i < struct_type.members.size(); i++) {
-                auto &[field_name, basic_type] = struct_type.members[i];
-                std::shared_ptr<LLVMTypeInfo> field_type_info = llvm_type_of_basic_type(gen_state, basic_type);
-                LLVMStructInfo::FieldInfo field_info{i, field_type_info};
-                llvm_struct_info->ind_field_map.emplace_back(field_info);
-                llvm_struct_info->field_ind_map.emplace(field_name, field_info);
-            }
-            std::shared_ptr<LLVMTypeInfo> llvm_type_info = std::make_shared<LLVMTypeInfo>();
-            llvm_type_info->llvm_type_name = "%" + struct_name;
-            llvm_type_info->struct_info = llvm_struct_info;
-            gen_state.type_name_info_map.emplace(
-                type_name,
-                llvm_type_info);
-        }
-    }, type_def.nameable_type->t);
-}
 
 enum class ValueCategory { LVALUE, RVALUE };
 
@@ -73,8 +35,6 @@ std::string convert_to_rvalue(
     }
     assert(false);
 }
-
-// CR: Fix the %/no % inconsistency
 
 std::string emit_valexpr_rvalue(
     GenState& gen_state,
@@ -683,7 +643,6 @@ void compile_synchronous_callable(
         // store <rhs_type> %<rhs>, ptr %<lhs>
         assert(gen_state.var_reg_mapping.find(var_decl_pair.second) != gen_state.var_reg_mapping.end());
         std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_pair.second);
-        // CR: Pretty sure that this is wrong
         gen_state.out_stream << "store " << var_decl_pair.first << " " << "%" + var_decl_pair.second 
         << ", " << "ptr " << "%" + stack_reg << std::endl;
         gen_state.var_reg_mapping.emplace(var_decl_pair.second, stack_reg);
@@ -697,7 +656,7 @@ void compile_synchronous_callable(
 }
 
 void emit_function(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func_def) {
-    gen_state.refrest_var_reg_info();
+    gen_state.refresh_var_reg_info();
     gen_state.var_reg_mapping.clear();
     std::string func_name_llvm = llvm_name_of_func(gen_state, func_def->name);
     std::string func_return_type_llvm = 
@@ -709,13 +668,13 @@ void emit_function(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func
 
 void emit_constructor(GenState& gen_state, std::shared_ptr<TopLevelItem::Constructor> constructor_def) {
     assert(gen_state.curr_actor != nullptr);
-    gen_state.refrest_var_reg_info();
+    gen_state.refresh_var_reg_info();
     std::string constructor_name_llvm = llvm_name_of_constructor(constructor_def->name, gen_state.curr_actor->name);
     compile_synchronous_callable(gen_state, constructor_name_llvm, "void", constructor_def->params, constructor_def->body);
 }
 
 void generate_fake_start_actor(GenState& gen_state) {
-    gen_state.refrest_var_reg_info();
+    gen_state.refresh_var_reg_info();
     // Generates a function that will act as a behaviour to be scheduled (we are going to fool the runtime)
     gen_state.out_stream << "define void @start.runtime(ptr %message) {" << std::endl;
     // Extract [SYNCHRONOUS_ACTOR_ID_REG] from %message
@@ -740,7 +699,7 @@ void generate_fake_start_actor(GenState& gen_state) {
 }
 
 void generate_coherence_initialize(GenState& gen_state) {
-    gen_state.refrest_var_reg_info();
+    gen_state.refresh_var_reg_info();
     gen_state.out_stream << "define void @coherence_initialize() {" << std::endl;
     std::string instance_id_reg = gen_state.reg_label_gen.new_temp_reg();
     gen_state.out_stream << "%" + instance_id_reg << " = call i64 @handle_actor_creation(ptr null)" << std::endl;
@@ -755,12 +714,11 @@ void generate_coherence_initialize(GenState& gen_state) {
 }
 
 void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
+    // CR: [struct_mem_vec] is not needed here. Refactor to remove it.
     assert(gen_state.curr_actor != nullptr);
-    gen_state.refrest_var_reg_info();
+    gen_state.refresh_var_reg_info();
     std::string be_name_llvm = llvm_name_of_behaviour(behaviour_def->name, gen_state.curr_actor->name);
     std::string be_struct_llvm = llvm_struct_of_behaviour(behaviour_def->name, gen_state.curr_actor->name);
-    // Creating the behaviour struct
-    // Pair of {<field_name>, <llvm_type>}
     std::vector<std::pair<std::string, std::string>> struct_mem_vec;
     for(auto &var_decl: behaviour_def->params) {
         struct_mem_vec.push_back({
@@ -768,15 +726,6 @@ void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour
             llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name
         });
     }
-    struct_mem_vec.push_back({THIS_ACTOR_ID_REG, "i64"});
-    map_emit_struct<std::pair<std::string, std::string>>(
-        gen_state.out_stream,
-        be_struct_llvm,
-        struct_mem_vec,
-        [&](const std::pair<std::string, std::string>& struct_mem) {
-            return struct_mem.second;
-        }
-    );
     // Creating the behaviour function signature
     // Single parameter [ptr %message]
     map_emit_llvm_function_sig<std::string>(
@@ -788,7 +737,8 @@ void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour
     );
     gen_state.out_stream << " {" << std::endl;
     // Now simply unpack and store all the stuff on the stack
-    size_t last_ind = struct_mem_vec.size() - 1;
+    size_t be_struct_size = struct_mem_vec.size() + 1; // There is the [this] pointer at the end
+    size_t last_ind = be_struct_size - 1;
     // Assigning %this.id to the actor id
     // %this.id = getelementptr %<BeStruct>, ptr %<message>, i32 0, i32 last_ind
     std::string this_actor_id_ptr_reg = gen_state.reg_label_gen.new_temp_reg();
@@ -796,7 +746,6 @@ void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour
     << "%message" << ", i32 0, i32 " << last_ind << std::endl;
     gen_state.out_stream << "%" + THIS_ACTOR_ID_REG << " = load i64, i64* " << "%" + this_actor_id_ptr_reg << std::endl;
     gen_state.out_stream << "%" + SYNCHRONOUS_ACTOR_ID_REG << " = " << "add i64 " << "%" + THIS_ACTOR_ID_REG << ", 0" << std::endl;
-    struct_mem_vec.pop_back();
     // Unpacking the message
     for(size_t i = 0; i < struct_mem_vec.size(); i++) {
         std::string param_reg = gen_state.reg_label_gen.new_temp_reg();
@@ -814,7 +763,7 @@ void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour
 }
 
 void generate_declarations(GenState& gen_state) {
-    std::string declarations = R"(
+    std::string external_decls = R"(
 %SuspendTag.runtime = type <{ i32, i64 }>
 
 declare void @print_int(i32)
@@ -825,54 +774,51 @@ declare ptr @get_instance_struct(i64)
 declare i64 @handle_actor_creation(ptr)
 declare void @suspend_instance(i64, ptr)
 )";
-    gen_state.out_stream << declarations << std::endl;
+    gen_state.out_stream << external_decls << std::endl;
+    
 }
 
 void ast_codegen(Program* program_ast, std::string output_file_name) {
     std::ofstream out_stream(output_file_name); 
     GenState gen_state(out_stream);
     gen_state.curr_actor = nullptr;
-    gen_state.func_llvm_name_map.create_new_scope();
+    ScopeGuard top_level(gen_state.func_llvm_name_map);
     generate_declarations(gen_state);
+    generate_llvm_structs(gen_state, program_ast);
+    // Collecting all the toplevel functions
     for(const TopLevelItem& top_level_item: program_ast->top_level_items) {
         std::visit(Overload{
-            [&](const TopLevelItem::TypeDef& type_def) {
-                emit_type_definition(gen_state, type_def);
+            [&](const TopLevelItem::TypeDef& type_def) {},
+            [&](std::shared_ptr<TopLevelItem::Func> func_def) {
+                gen_state.func_llvm_name_map.insert(
+                    func_def->name, 
+                    llvm_name_of_func(gen_state, func_def->name));
             },
+            [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {}
+        }, top_level_item.t);
+    }
+    for(const TopLevelItem& top_level_item: program_ast->top_level_items) {
+        std::visit(Overload{
+            [&](const TopLevelItem::TypeDef& type_def) {},
             [&](std::shared_ptr<TopLevelItem::Func> func_def) {
                 emit_function(gen_state, func_def);
             },
             [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {
                 gen_state.curr_actor = actor_def;
-                // Create an associated struct for the actor
-                std::string llvm_actor_struct = llvm_struct_of_actor(actor_def->name);
-                std::vector<std::pair<std::string, FullType>> struct_mem_vec;
-                for(auto &mem_var: actor_def->member_vars) {
-                    struct_mem_vec.push_back(mem_var);
+                Defer d([&](){gen_state.curr_actor = nullptr;});
+                ScopeGuard actor_level(gen_state.func_llvm_name_map);
+                for(auto &actor_mem: actor_def->actor_members) {
+                    std::visit(Overload{
+                        [&](std::shared_ptr<TopLevelItem::Func> func_def) {
+                            gen_state.func_llvm_name_map.insert(
+                                func_def->name, 
+                                llvm_name_of_func(gen_state, func_def->name));
+                        },
+                        [&](const auto&){}
+                    }, actor_mem);
                 }
-                map_emit_struct<std::pair<std::string, FullType>>(
-                    gen_state.out_stream,
-                    llvm_actor_struct,
-                    struct_mem_vec,
-                    [&](const std::pair<std::string, FullType>& struct_mem_var) {
-                        return llvm_type_of_full_type(gen_state, struct_mem_var.second)->llvm_type_name;
-                    }
-                );
-                // Add the struct info to [type_name_info_map]
-                std::shared_ptr<LLVMTypeInfo> struct_type_info = 
-                    std::make_shared<LLVMTypeInfo>(LLVMTypeInfo {"%" + llvm_actor_struct, nullptr});
-                struct_type_info->struct_info = std::make_shared<LLVMStructInfo>();
                 
-                for(size_t ind = 0; ind < struct_mem_vec.size(); ind++) {
-                    LLVMStructInfo::FieldInfo field_info{
-                        ind, llvm_type_of_full_type(gen_state, struct_mem_vec[ind].second)};
-                    struct_type_info->struct_info->field_ind_map.emplace(struct_mem_vec[ind].first, field_info);
-                    struct_type_info->struct_info->ind_field_map.emplace_back(field_info);
-                }
-
-                gen_state.type_name_info_map.emplace(actor_def->name, struct_type_info);
-
-                // Now simply compile the rest of the guys
+                // Compiling the members
                 for(auto &actor_mem: actor_def->actor_members) {
                     std::visit(Overload{
                         [&](std::shared_ptr<TopLevelItem::Func> func_def) {

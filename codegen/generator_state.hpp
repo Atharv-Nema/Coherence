@@ -76,7 +76,7 @@ struct GenState {
     std::ostream& out_stream;
     GenState(): out_stream(std::cout) {}
     GenState(std::ostream& out_stream): out_stream(out_stream) {}
-    void refrest_var_reg_info() {
+    void refresh_var_reg_info() {
         reg_label_gen.refresh_counters();
         var_reg_mapping.clear();
     }

@@ -10,22 +10,8 @@
 void add_stmt_lock_info(
     LockInfoEnv& env,
     std::shared_ptr<Stmt> stmt) {
-    std::function<void(std::shared_ptr<ValExpr>)> valexpr_visitor;
-    valexpr_visitor = [&](std::shared_ptr<ValExpr> val_expr) {
-        visitor_valexpr_walker(val_expr, valexpr_visitor);
-        std::visit(Overload{
-            [&](const ValExpr::FuncCall& func_call) {
-                std::shared_ptr<TopLevelItem::Func> called_func 
-                    = get_func_def(func_call.func, env.curr_actor, env.decl_collection);
-                if(env.locks_dereferenced == called_func->locks_dereferenced) {
-                    return;
-                }
-                for(const std::string& func_lock: *called_func->locks_dereferenced) {
-                    env.locks_dereferenced->insert(func_lock);
-                }
-            },
-            [&](const auto&){}
-        }, val_expr->t);
+    auto valexpr_visitor = [&](std::shared_ptr<ValExpr> val_expr) {
+        add_valexpr_lock_info(val_expr, env);
     };
     valexpr_visitor_stmt_walker(stmt, valexpr_visitor);
 }

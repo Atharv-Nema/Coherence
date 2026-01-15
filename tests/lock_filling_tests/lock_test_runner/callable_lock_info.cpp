@@ -24,7 +24,7 @@ CallableLockInfo::CallableLockInfo(FILE* file) {
         std::visit(Overload{
             [&](std::shared_ptr<TopLevelItem::Func> func) {
                 include_callable(
-                    "",
+                    std::nullopt,
                     CallableType::FUNCTION,
                     func->name,
                     func->locks_dereferenced);

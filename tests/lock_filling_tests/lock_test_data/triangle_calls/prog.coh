@@ -25,5 +25,9 @@ func triangle3() => unit {
     return triangle1();
 }
 
+actor Main {
+    new create() {}
+}
+
 
 

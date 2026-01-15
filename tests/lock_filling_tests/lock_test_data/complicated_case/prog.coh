@@ -48,6 +48,7 @@ func F() => unit {
 
 func G() => unit {
     atomic { (new locked<G>[1] int(1))[0]; }
+    return ();
 }
 
 func Tail() => unit {

@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
 
     // --- Initialize scanner ---
     Program* program_root = parse_file(input);
-
+    fclose(input);
     if (!program_root) {
         std::cerr << "Error: No program produced by parser.\n";
         return 1;

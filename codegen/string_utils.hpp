@@ -49,3 +49,20 @@ void map_emit_llvm_function_sig(
     );
     output_file << ")";
 }
+
+template <typename T>
+void map_emit_llvm_function_decl(
+    std::ostream& output_file,
+    const std::string& function_name,
+    const std::string& llvm_return_type,
+    const std::vector<T>& parameters,
+    std::function<std::string(T)> llvm_param_gen) {
+    output_file << "declare " << llvm_return_type << " " << "@" << function_name << "(";
+    map_emit_list<T>(
+        output_file, 
+        parameters, 
+        ", ", 
+        llvm_param_gen
+    );
+    output_file << ")";
+}

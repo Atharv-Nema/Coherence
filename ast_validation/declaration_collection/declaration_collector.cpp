@@ -59,6 +59,7 @@ bool fill_declaration_info(
                     std::cerr << "Function " << func_def->name << " already defined" << std::endl;
                     return false;
                 }
+                decl_collection->func_name_map.emplace(func_def->name, func_def);
                 return true;
             },
             [&](std::shared_ptr<TopLevelItem::Actor> actor_def) {

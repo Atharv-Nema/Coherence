@@ -1,8 +1,6 @@
 #include "codegen_utils.hpp"
 #include "pattern_matching_boilerplate.hpp"
-
-extern const std::string THIS_ACTOR_ID_REG;
-extern const std::string SYNCHRONOUS_ACTOR_ID_REG;
+#include "special_reg_names.hpp"
 
 std::unordered_map<std::string, FullType> collect_local_variable_types(
         std::vector<std::shared_ptr<Stmt>>& callable_body) {
