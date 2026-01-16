@@ -149,7 +149,7 @@ void generate_suspend_call(
         gen_state.out_stream << "%" + lock_ptr_reg << " = getelementptr " << llvm_struct_type_name <<
         ", ptr " << "%" + suspend_struct_ptr_reg << ", i32 0, i32 1" << std::endl;
         // store i32 <lock_id>, ptr %<lock_ptr>
-        gen_state.out_stream << "store i32 " << suspend_tag.lock_id << ", ptr " << "%" + lock_ptr_reg 
+        gen_state.out_stream << "store i64 " << suspend_tag.lock_id << ", ptr " << "%" + lock_ptr_reg 
         << std::endl;
     }
     // Calling the [suspend_instance] trap
