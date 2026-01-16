@@ -58,16 +58,27 @@ From the root of the repository, follow these steps:
     make
     ```
 
-
-5.  **Run the compiler on a source file:**
-
+5. **Exit the build directory**
     ```sh
-    ./compiler/coherence ../sample_programs/well_typed_programs/simple.coh
-    ```
-    This should not work, as the compiler is not ready yet. <br>
-    To only run the type checker, run it with the <code> --only-typecheck</code> flag
-    ```sh
-    ./compiler/coherence --only-typecheck ../sample_programs/well_typed_programs/simple.coh
+    cd ../
     ```
 
----
+6. **Run the compiler on a source file:**
+
+    ```sh
+    ./build/compiler/coherence --input-file=./sample_programs/well_typed_programs/hello_world_equivalent.coh --output-dir=temp
+    ```
+
+    This runs the full compiler pipeline and emits all generated artifacts into the specified output directory (`temp`).
+
+    You can then execute the generated program:
+
+    ```sh
+    ./temp/out
+    ```
+
+    This should print:
+
+    ```
+    42
+    ```
