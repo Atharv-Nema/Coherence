@@ -82,10 +82,10 @@ class UserMutex {
 private:
     std::atomic<bool> locked = false;
     // Queue of ids of actor instances waiting on this mutex
-    ThreadSafeDeque<std::uint64_t> wait_queue;
+    ThreadSafeDeque<uint64_t> wait_queue;
 
 public:
-    bool lock(std::uint64_t instance_id);
+    bool lock(RuntimeDS* runtime, uint64_t instance_id);
     void unlock(RuntimeDS* runtime);
 };
 
@@ -96,9 +96,9 @@ struct ActorInstanceState {
     // CR: Think carefully about the initialization status to avoid UB
     boost_ctx::fcontext_t next_continuation;
     void* running_be_sp;
-    const std::uint64_t instance_id;
+    const uint64_t instance_id;
     ThreadSafeDeque<MailboxItem> mailbox;
-    ActorInstanceState(void* llvm_actor_object, const std::uint64_t instance_id)
+    ActorInstanceState(void* llvm_actor_object, const uint64_t instance_id)
         : instance_id(instance_id) {
         state = ActorInstanceState::State::EMPTY;
         this->llvm_actor_object = llvm_actor_object;
@@ -111,21 +111,27 @@ struct ActorInstanceState {
 struct RuntimeDS {
     // When the schedule queue is empty, threads can sleep in [thread_bed]
     std::binary_semaphore thread_bed;
-    std::atomic<std::uint8_t> threads_asleep;
-    std::atomic<std::uint64_t> instances_created;
-    ThreadSafeDeque<std::uint64_t> schedule_queue;
-    ThreadSafeMap<std::uint64_t, std::shared_ptr<ActorInstanceState>> id_actor_instance_map;
-    std::unordered_map<std::uint64_t, UserMutex> mutex_map;
+    std::atomic<uint8_t> threads_asleep;
+    std::atomic<uint64_t> instances_created;
+    ThreadSafeDeque<uint64_t> schedule_queue;
+    ThreadSafeMap<uint64_t, std::shared_ptr<ActorInstanceState>> id_actor_instance_map;
+    std::unordered_map<uint64_t, UserMutex> mutex_map;
     RuntimeDS(): thread_bed(0) {}
 };
 
-inline bool UserMutex::lock(std::uint64_t instance_id) {
+inline bool UserMutex::lock(RuntimeDS* runtime_ds, uint64_t instance_id) {
     // Returns true if acquired immediately, false if suspended.
     bool expected = false;
     // CR: In later stages, may want to experiment with more efficient memory models
     if (locked.compare_exchange_strong(expected, true, std::memory_order_seq_cst)) {
         return true;
     }
+    auto actor_instance_state_opt = runtime_ds->id_actor_instance_map.get_value(instance_id);
+    assert(actor_instance_state_opt != std::nullopt);
+    std::shared_ptr<ActorInstanceState> actor_instance_state = actor_instance_state_opt.value();
+    actor_instance_state->state = ActorInstanceState::State::WAITING;
+    MailboxItem dummy_msg{instance_id, nullptr, nullptr};
+    actor_instance_state->mailbox.emplace_front(dummy_msg);
     wait_queue.emplace_back(instance_id);
     return false;
 }
@@ -134,10 +140,10 @@ inline void UserMutex::unlock(RuntimeDS* runtime) {
     using State = ActorInstanceState::State;
 
     // Try to wake the next waiting actor
-    std::optional<std::uint64_t> actor_instance_id_opt = wait_queue.try_pop_front();
+    std::optional<uint64_t> actor_instance_id_opt = wait_queue.try_pop_front();
 
     if (actor_instance_id_opt) {
-        std::uint64_t actor_instance_id = *actor_instance_id_opt;
+        uint64_t actor_instance_id = *actor_instance_id_opt;
 
         // Lookup actor
         auto actor_instance_state_opt = 

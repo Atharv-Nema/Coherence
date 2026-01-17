@@ -10,7 +10,7 @@
 extern "C" void coherence_initialize();
 extern "C" uint64_t num_locks;
 
-// 256KB stacksco
+// 256KB stacks
 static std::size_t stack_size = 256 * 1024;
 RuntimeDS* runtime_ds;
 
@@ -65,10 +65,11 @@ void thread_loop() {
         auto actor_instance_state_opt = 
             runtime_ds->id_actor_instance_map.get_value(actor_instance_id);
         assert(actor_instance_state_opt != std::nullopt);
-        auto actor_instance_state = *actor_instance_state_opt;
+        std::shared_ptr<ActorInstanceState> actor_instance_state = *actor_instance_state_opt;
 
         State expected = State::RUNNABLE;
-        assert(actor_instance_state->state.compare_exchange_strong(expected, State::RUNNING));
+        bool set_running = actor_instance_state->state.compare_exchange_strong(expected, State::RUNNING);
+        assert(set_running);
         auto msg_opt = actor_instance_state->mailbox.try_pop_front();
         assert(msg_opt != std::nullopt);
         MailboxItem msg = *msg_opt;
@@ -83,7 +84,6 @@ void thread_loop() {
             actor_instance_state->running_be_sp = sp;
         }
         
-        bool waiting_on_lock = false;
         bool loop_done = false;
         while (!loop_done) {
             boost_ctx::transfer_t t = boost_ctx::jump_fcontext(
@@ -95,6 +95,14 @@ void thread_loop() {
                     std::free(actor_instance_state->running_be_sp);
                     actor_instance_state->running_be_sp = nullptr;
                     loop_done = true;
+                    actor_instance_state->state = State::EMPTY;
+                    if (!actor_instance_state->mailbox.empty()) {
+                        State expected = State::EMPTY;
+                        if (actor_instance_state->state.compare_exchange_strong(expected, State::RUNNABLE)) {
+                            runtime_ds->schedule_queue.emplace_back(actor_instance_id);
+                            runtime_ds->thread_bed.release();
+                        }
+                    }
                     break;
                 case SuspendTagKind::LOCK: {
                     // Need to make sure that when [actor_instance_state] is added, it has the
@@ -102,32 +110,15 @@ void thread_loop() {
                     actor_instance_state->next_continuation = t.fctx;
                     assert(runtime_ds->mutex_map.find(tag->lock_id) != runtime_ds->mutex_map.end());
                     UserMutex& mtx = runtime_ds->mutex_map[tag->lock_id];
-                    bool acquired_lock = mtx.lock(actor_instance_id);
+                    bool acquired_lock = mtx.lock(runtime_ds, actor_instance_id);
                     if(acquired_lock) {
                         continue;
                     }
-                    // Why do we need [waiting_on_lock]? We need this so that correct concurrency
-                    // is implemented. Note that when an actor_instance is waiting on a queue, it is
-                    // the responsibility of the [UserMutex] to add it back to the schedule queue.
-                    // We do not want to add it twice, hence we need the [waiting_on_lock] flag.
-                    waiting_on_lock = true;
-                    actor_instance_state->state = State::WAITING;
-                    actor_instance_state->mailbox.emplace_front(msg);
                     loop_done = true;
                     break;
                 }
                 default:
                     assert(false);
-            }
-        }
-        if(!waiting_on_lock) {
-            actor_instance_state->state = State::EMPTY;
-            if (!actor_instance_state->mailbox.empty()) {
-                State expected = State::EMPTY;
-                if (actor_instance_state->state.compare_exchange_strong(expected, State::RUNNABLE)) {
-                    runtime_ds->schedule_queue.emplace_back(actor_instance_id);
-                    runtime_ds->thread_bed.release();
-                }
             }
         }
     }

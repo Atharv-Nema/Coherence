@@ -1,14 +1,6 @@
 // locked<X> are all the same type. It will be nice if some subtyping could be used
 // to make this better
 
-func wait() => unit {
-    var i: int = 0;
-    while(i < 1000) {
-        i = i + 1;
-    }
-    return ();
-}
-
 actor Philosopher {
     new create() {}
     be eat1((unit locked<A>) left_fork, (unit locked<B>) right_fork) {

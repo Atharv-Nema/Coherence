@@ -1,0 +1,30 @@
+// This is technically deterministic. But it is great at catching heisenbugs in the runtime
+actor Other {
+    a: int locked<A>;
+    new create((int locked<A>) lock_int) {
+        a := lock_int;
+    }
+    be increment() {
+        atomic {
+            OUT a[0];
+            a[0] = a[0] + 1;
+        }
+    }
+}
+
+actor Main {
+    new create() {
+        var lock_var: int locked<A> = new locked<A>[1] int(0);
+        var other_arr: Other ref = new ref[100000] Other(new Other.create(lock_var));
+        var ind: int = 1;
+        while(ind < 100000) {
+            other_arr[ind] = new Other.create(lock_var);
+            ind = ind + 1;
+        }
+        ind = 0;
+        while(ind < 100000) {
+            other_arr[ind]->increment();
+            ind = ind + 1;
+        }
+    }
+}
