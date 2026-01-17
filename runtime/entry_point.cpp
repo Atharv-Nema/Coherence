@@ -48,6 +48,7 @@ void thread_loop() {
                 for (int i = 0; i < 32; ++i) {
                     runtime_ds->thread_bed.release();
                 }
+                // std::cout << "num actor instances" << runtime_ds->instances_created << std::endl;
                 return;
             }
             else {

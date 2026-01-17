@@ -5,7 +5,7 @@
 #include <syncstream>
 
 void print_int(int i) {
-    std::osyncstream(std::cout) << i << '\n';
+    std::osyncstream(std::cout) << i << "\n";
 }
 
 void handle_unlock(std::uint64_t lock_id) {

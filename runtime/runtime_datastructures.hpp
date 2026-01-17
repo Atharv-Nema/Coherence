@@ -159,6 +159,7 @@ inline void UserMutex::unlock(RuntimeDS* runtime) {
         // conditions should not occur.
         assert(successful_exchange);
         runtime->schedule_queue.emplace_back(actor_instance_id);
+        runtime->thread_bed.release();
         return;
     }
     locked = false;
