@@ -11,11 +11,11 @@ struct TopLevelItem {
     };
     struct VarDecl {
         std::string name;
-        FullType type;
+        std::shared_ptr<Type> type;
     };
     struct Func {
         std::string name;
-        FullType return_type;
+        std::shared_ptr<Type> return_type;
         std::vector<VarDecl> params;
         std::vector<std::shared_ptr<Stmt>> body;
         std::shared_ptr<std::unordered_set<std::string>> locks_dereferenced;
@@ -34,7 +34,7 @@ struct TopLevelItem {
     struct Actor {
         std::string name;
         // CR: In the parser, are repeats handled properly?
-        std::unordered_map<std::string, FullType> member_vars;
+        std::unordered_map<std::string, std::shared_ptr<Type>> member_vars;
         std::vector<std::variant<
             std::shared_ptr<Func>,
             std::shared_ptr<Constructor>,

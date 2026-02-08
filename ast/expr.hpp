@@ -35,9 +35,8 @@ struct ValExpr {
     
     // Allocations
     struct NewInstance {
-        BasicType type;
+        std::shared_ptr<Type> type;
         Cap cap;
-        std::shared_ptr<ValExpr> default_value;
         std::shared_ptr<ValExpr> size;
     };
     struct ActorConstruction {
@@ -75,7 +74,7 @@ struct ValExpr {
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
 
     SourceSpan source_span;
-    FullType expr_type;
+    std::shared_ptr<Type> expr_type;
     std::variant<VUnit, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, Consume,
     PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };

@@ -13,27 +13,25 @@ struct Cap {
     std::variant<Ref, Val, Iso, Iso_cap, Locked> t;
 };
 
-// [BasicType] represents types that can be present textually as members of a struct
-struct BasicType {
+
+struct Type {
     struct TUnit {};
     struct TInt {};
     struct TBool {};
     struct TNamed { std::string name; };
     struct TActor {std::string name;};
-    std::variant<TUnit, TInt, TBool, TNamed, TActor> t;
-};
-
-// [FullType] represent all types that can be textually present in the type of variables/functions
-struct FullType {
-    // CR: Additional safety by distinguishing between pointers and arrays?
-    struct Pointer { BasicType base; Cap cap; };
-    std::variant<BasicType, Pointer> t;
+    struct Pointer {
+        std::shared_ptr<Type> base_type;
+        Cap cap;
+    };
+    std::variant<TUnit, TInt, TBool, TNamed, TActor, Pointer> t;
+    std::optional<Cap> viewpoint;
 };
 
 // [NameableType] represents all types that can occur on the RHS of a type assignment
 struct NameableType {
-    // CR: Fix this to just use [BasicType] directly
-    struct Basic { BasicType type; };
-    struct Struct { std::vector<std::pair<std::string, BasicType>> members; };
-    std::variant<Basic, Struct> t;
+    struct Struct { 
+        std::vector<std::pair<std::string, std::shared_ptr<Type>>> members; 
+    };
+    std::variant<Type, Struct> t;
 };
