@@ -44,6 +44,7 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
             assert(!env.type_context.contains(type_def.type_name));
+            // CR: Enforce an invariant that cannot point directly to a nameable type
             env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             return true;
         },

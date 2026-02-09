@@ -12,51 +12,15 @@
 struct CoreEnv {
     TypeEnv& type_env;
     std::shared_ptr<TopLevelItem::Func> curr_func;
-    std::unordered_map<std::string, FullType> local_var_context;
+    std::unordered_map<std::string, std::shared_ptr<const Type>> local_var_context;
     int atomic_nest_level = 0;
     CoreEnv(
-        TypeEnv& type_env, 
+        TypeEnv& type_env,
         std::shared_ptr<TopLevelItem::Func> curr_func): type_env(type_env) {
         this->curr_func = curr_func;
     }
 };
 
-BasicType extract_basic_type(const FullType& full_type) {
-    return std::visit(Overload{
-        [](const BasicType& basic_type) {return basic_type;},
-        [](const FullType::Pointer& ptr) {return ptr.base;}
-    }, full_type.t);
-}
-
-
-
-std::optional<BasicType> standardize_type(TypeContext& type_context, const std::string& type_name) {
-    if(type_context.find(type_name) == type_context.end()) {
-        return std::nullopt;
-    }
-    auto nameable_type = type_context.find(type_name)->second;
-    if(auto* basic_type = std::get_if<NameableType::Basic>(&nameable_type->t)) {
-        if(auto* named_type = std::get_if<BasicType::TNamed>(&basic_type->type.t)) {
-            auto res = standardize_type(type_context, named_type->name);
-            if(res == std::nullopt) {
-                type_context.erase(type_name);
-            }
-            else {
-                std::shared_ptr<NameableType> nameable_type_ptr = 
-                    std::make_shared<NameableType>(NameableType::Basic {*res});
-                type_context.emplace(type_name, nameable_type_ptr);
-            }
-            return res;
-        }
-        else {
-            return basic_type->type;
-        }
-    }
-    else {
-        return BasicType {BasicType::TNamed {type_name}};
-    }
-    return std::nullopt;
-}
 
 bool ref_cap_equal(Cap c1, Cap c2) {
     if (c1.t.index() != c2.t.index()) 
@@ -69,46 +33,103 @@ bool ref_cap_equal(Cap c1, Cap c2) {
     return true;
 }
 
-bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const BasicType& type_2) {
-    if (type_1.t.index() != type_2.t.index()) 
-        return false;
-    if (auto* named_type_1 = std::get_if<BasicType::TNamed>(&type_1.t)) {
-        auto* named_type_2 = std::get_if<BasicType::TNamed>(&type_1.t);
-        assert(named_type_2 != nullptr);
-        auto standard_type_1 = standardize_type(type_context, named_type_1->name);
-        auto standard_type_2 = standardize_type(type_context, named_type_1->name);
-        if(!(standard_type_1 && standard_type_2)) {
-            return false;
-        }
-        if(named_type_1->name == named_type_2->name) {
-            return true;
-        }
-        return basic_type_equal(type_context, *standard_type_1, *standard_type_2);
-    }
-    return true;
-}
+// bool basic_type_equal(TypeContext& type_context, const BasicType& type_1, const BasicType& type_2) {
+//     if (type_1.t.index() != type_2.t.index()) 
+//         return false;
+//     if (auto* named_type_1 = std::get_if<BasicType::TNamed>(&type_1.t)) {
+//         auto* named_type_2 = std::get_if<BasicType::TNamed>(&type_1.t);
+//         assert(named_type_2 != nullptr);
+//         auto standard_type_1 = standardize_type(type_context, named_type_1->name);
+//         auto standard_type_2 = standardize_type(type_context, named_type_1->name);
+//         if(!(standard_type_1 && standard_type_2)) {
+//             return false;
+//         }
+//         if(named_type_1->name == named_type_2->name) {
+//             return true;
+//         }
+//         return basic_type_equal(type_context, *standard_type_1, *standard_type_2);
+//     }
+//     return true;
+// }
 
-bool full_type_equal(TypeContext& type_context, const FullType& type_1, const FullType& type_2) {
-    // Matching on type_1
-    return std::visit(Overload {
-        [&](const FullType::Pointer& type_1_ptr) {
-            if(auto* type_2_ptr = std::get_if<FullType::Pointer>(&type_2.t)) {
-                return ref_cap_equal(type_1_ptr.cap, type_2_ptr->cap) && 
-                    basic_type_equal(type_context, type_1_ptr.base, type_2_ptr->base);
-            }
-            else {
-                return false;
-            }
-        },
-        [&](const BasicType& type_1_basic) {
-            if(auto type_2_basic = std::get_if<BasicType>(&type_2.t)) {
-                return basic_type_equal(type_context, type_1_basic, *type_2_basic);
-            }
-            else {
-                return false;
-            }
-        }
-    }, type_1.t);
+// bool full_type_equal(TypeContext& type_context, const FullType& type_1, const FullType& type_2) {
+//     // Matching on type_1
+//     return std::visit(Overload {
+//         [&](const FullType::Pointer& type_1_ptr) {
+//             if(auto* type_2_ptr = std::get_if<FullType::Pointer>(&type_2.t)) {
+//                 return ref_cap_equal(type_1_ptr.cap, type_2_ptr->cap) && 
+//                     basic_type_equal(type_context, type_1_ptr.base, type_2_ptr->base);
+//             }
+//             else {
+//                 return false;
+//             }
+//         },
+//         [&](const BasicType& type_1_basic) {
+//             if(auto type_2_basic = std::get_if<BasicType>(&type_2.t)) {
+//                 return basic_type_equal(type_context, type_1_basic, *type_2_basic);
+//             }
+//             else {
+//                 return false;
+//             }
+//         }
+//     }, type_1.t);
+// }
+
+std::optional<Cap> accumulate_viewpoints(std::optional<Cap> outer_view, std::optional<Cap> inner_view) {
+    if(outer_view == std::nullopt) {
+        return inner_view;
+    }
+    if(inner_view == std::nullopt) {
+        return outer_view;
+    }
+    return std::visit(Overload{
+        // Nonsensical case: Viewing an iso_cap
+        [](const auto&, const Cap::Iso_cap&) { assert(false); return Cap{Cap::Tag{}};},
+        
+        // Tag
+        [](const Cap::Tag&, const auto&) { return Cap{Cap::Tag{}}; },
+
+        // Viewing through ref
+        [](const Cap::Ref&, const Cap::Tag&) { return Cap{Cap::Tag{}}; },
+        [](const Cap::Ref&, const Cap::Ref&) { return Cap{Cap::Ref{}}; },
+        [](const Cap::Ref&, const Cap::Val&) { return Cap{Cap::Val{}}; },
+        [](const Cap::Ref&, const Cap::Iso&) { return Cap{Cap::Tag{}}; },
+        [](const Cap::Ref&, const Cap::Locked& locked_cap)  { return locked_cap; },
+
+        // Viewing through val
+        [](const Cap::Val&, const Cap::Tag&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Val&, const Cap::Ref&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Val&, const Cap::Val&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Val&, const Cap::Iso&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Val&, const Cap::Locked&)  { return Cap{Cap::Val{}}; },
+
+        // --- Origin: ISO (Isolated) ---
+        // Rule: Must prevent creating mutable aliases to internal fields.
+        [](const Cap::Iso&, const Cap::Tag&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Iso&, const Cap::Ref&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Iso&, const Cap::Val&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Iso&, const Cap::Iso&)     { return Cap{Cap::Iso{}}; },
+        [](const Cap::Iso&, const Cap::Locked&)  { return Cap{Cap::Tag{}}; },
+
+        // --- Origin: ISO_CAP (Unaliased Isolated) ---
+        // Rule: Like Iso, but preserves the "unaliased" status for Iso_cap fields.
+        [](const Cap::Iso_cap&, const Cap::Tag&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Iso_cap&, const Cap::Ref&)     { return Cap{Cap::Ref{}}; },
+        [](const Cap::Iso_cap&, const Cap::Val&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Iso_cap&, const Cap::Iso&)     { return Cap{Cap::Iso{}}; },
+        [](const Cap::Iso_cap&, const Cap::Locked& locked_cap)  { return locked_cap; },
+
+        // --- Origin: LOCKED (Synchronized) ---
+        // Rule: Maintains the "Locked" status when traversing mutable references.
+        [](const Cap::Locked&, const Cap::Tag&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Locked& locked_cap, const Cap::Ref&)     { return locked_cap; },
+        [](const Cap::Locked&, const Cap::Val&)     { return Cap{Cap::Val{}}; },
+        [](const Cap::Locked&, const Cap::Iso&)     { return Cap{Cap::Tag{}}; },
+        [](const Cap::Locked&, const Cap::Iso_cap&) { return Cap{Cap::Tag{}}; },
+        [](const Cap::Locked&, const Cap::Locked& locked_cap)  { return locked_cap; }
+    }, outer_view.value(), inner_view.value());
+
+    
 }
 
 bool capabilities_assignable(Cap c1, Cap c2) {
@@ -123,32 +144,51 @@ bool capabilities_assignable(Cap c1, Cap c2) {
             return l1.lock_name == l2.lock_name;
         },
         [](const Cap::Locked&, const Cap::Iso_cap&) {return true;},
+        [](const Cap::Tag&, const auto&) {return true;},
         [](const auto&, const auto&) { return false; }
     }, c1.t, c2.t);
 }
 
-bool capabilities_sendable(Cap c1, Cap c2) {
+bool capability_shareable(Cap cap) {
     return std::visit(Overload{
-        [](const Cap::Ref&, const Cap::Iso_cap&) { return true; },
-        [](const Cap::Val&, const Cap::Val&) { return true; },
-        [](const Cap::Val&, const Cap::Iso_cap&) { return true; },
-        [](const Cap::Iso&, const Cap::Iso_cap&) { return true; },
-        [](const Cap::Locked& l1, const Cap::Locked l2) {
-            return l1.lock_name == l2.lock_name;
-        },
-        [](const Cap::Locked&, const Cap::Iso_cap&) {return true;},
-        [](const auto&, const auto&) { return false; }
-    }, c1.t, c2.t);
+        [](const Cap::Tag&) {return true;}
+        [](const Cap::Ref&) {return false;},
+        [](const Cap::Val&) {return true;},
+        [](const Cap::Iso&) {return true;},
+        [](const Cap::Iso_cap&) {assert(false); return false;},
+        [](const Cap::Locked&) {return true;}
+    }, cap.t);
 }
 
 bool capability_mutable(Cap c) {
     return std::visit(Overload{
+        [](const Cap::Tag&) {return false;},
         [](const Cap::Val&) {return false;},
         [](const auto&) {return true;}
     }, c.t);
 }
 
-std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val_expr);
+// Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of it
+// Otherwise, returns [nullptr] 
+std::shared_ptr<const Type> get_dereferenced_type(std::shared_ptr<const Type> type) {
+    // It should not modify Type basically
+    auto* ptr_type = std::get_if<Type::Pointer>(&type->t);
+    if(ptr_type == nullptr) {
+        return nullptr;
+    }
+    std::optional<Cap> deref_view = accumulate_viewpoints(
+        accumulate_viewpoints(type->viewpoint, ptr_type->cap), ptr_type->base_type->viewpoint);
+    return std::make_shared<const Type>(Type{
+        ptr_type->base_type->t, deref_view});
+}
+
+std::shared_ptr<const Type> apply_viewpoint_to_type(std::optional<Cap> viewpoint, std::shared_ptr<const Type> type) {
+    std::optional<Cap> adapted_viewpoint = accumulate_viewpoints(viewpoint, type->viewpoint);
+    return std::make_shared<const Type>(Type{
+        type->t, adapted_viewpoint});
+}
+
+std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val_expr);
 
 bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
     // This assumes that expr is well-typed
@@ -158,8 +198,10 @@ bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
             // First, need to check whether the internal pointer of array_access is of an assignable type
             auto arr_type = val_expr_type(env, pointer_access.value);
             assert(arr_type);
-            auto* ptr_type = std::get_if<FullType::Pointer>(&arr_type->t);
-            if(!capability_mutable(ptr_type->cap)) {
+            auto* ptr_type = std::get_if<Type::Pointer>(&arr_type->t);
+            assert(ptr_type != nullptr);
+            Cap effective_ptr_cap = accumulate_viewpoints(arr_type->viewpoint, ptr_type->cap).value();
+            if(!capability_mutable(effective_ptr_cap)) {
                 return false;
             }
             return can_appear_in_lhs(env, pointer_access.value);
@@ -171,104 +213,193 @@ bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
     }, expr->t);
 }
 
-
-bool type_is_numeric(TypeContext& type_context, FullType type) {
-    auto* basic_type = std::get_if<BasicType>(&type.t);
-    if(!basic_type) {
-        return false;
-    }
+bool type_is_printable(TypeContext &type_context, std::shared_ptr<const Type> type) {
     return std::visit(Overload{
-        [&](const BasicType::TInt&) {return true;},
-        [&](const BasicType::TNamed& named_type) {
-            auto standard_type = standardize_type(type_context, named_type.name);
-            if(standard_type == std::nullopt) {
+        [&](const Type::TInt&) {return true;},
+        [&](const Type::TNamed& named_type) {
+            auto standard_type = get_standardized_type(type_context, type->viewpoint, named_type.name);
+            if(standard_type == nullptr) {
                 return false;
             }
-            if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
-                return false;
-            }
-            return type_is_numeric(type_context, FullType {*standard_type});
+            return std::holds_alternative<Type::TInt>(standard_type->t);
         },
         [&](const auto&) {return false;}
-    }, basic_type->t);
+    }, type->t);
 }
 
-bool type_is_printable(TypeContext &type_context, FullType full_type) {
-    auto* basic_type = std::get_if<BasicType>(&full_type.t);
-    if(!basic_type) {
-        return false;
-    }
-    return std::visit(Overload{
-        [&](const BasicType::TUnit&) {return false;},
-        [&](const BasicType::TInt&) {return true;},
-        [&](const BasicType::TBool&) {return false;},
-        [&](const BasicType::TNamed& named_type) {
-            auto standard_type = standardize_type(type_context, named_type.name);
-            if(standard_type == std::nullopt) {
-                return false;
-            }
-            if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
-                return false;
-            }
-            return type_is_numeric(type_context, FullType {*standard_type});
-        },
-        [&](const BasicType::TActor&) {return false;}
-    }, basic_type->t);
+std::shared_ptr<const Type> get_type_of_nameable(std::shared_ptr<NameableType> nameable_type) {
+    assert(nameable_type != nullptr);
+    assert(std::holds_alternative<std::shared_ptr<const Type>>(nameable_type->t));
+    return std::get<std::shared_ptr<const Type>>(nameable_type->t);
 }
 
-
-bool type_assignable(TypeContext& type_context, const FullType& lhs, const FullType& rhs) {
-    if(type_is_numeric(type_context, lhs) && type_is_numeric(type_context, rhs)) {
-        return true;
+// Returns nullptr if the type name has not been defined yet
+std::shared_ptr<const Type> get_standardized_type(
+    TypeContext& type_context, 
+    std::optional<Cap> viewpoint, 
+    const std::string& type_name) {
+    if(type_context.find(type_name) == type_context.end()) {
+        return nullptr;
     }
-    if(!basic_type_equal(type_context, extract_basic_type(lhs), extract_basic_type(rhs))) {
-        return false;
+    std::shared_ptr<NameableType> nameable_type = type_context.at(type_name);
+    std::shared_ptr<const Type> aliased_type = get_type_of_nameable(nameable_type);
+    if(aliased_type == nullptr) {
+        return std::make_shared<const Type>(Type{Type::TNamed{type_name}, viewpoint});
     }
-    auto lhs_ptr = std::get_if<FullType::Pointer>(&lhs.t);
-    if(lhs_ptr == nullptr) {
-        // As the types are raw and equal and hence assignable
-        return true;
+    else {
+        if(auto* named_type = std::get_if<Type::TNamed>(&aliased_type->t)) {
+            std::optional<Cap> new_viewpoint = accumulate_viewpoints(viewpoint, aliased_type->viewpoint);
+            return get_standardized_type(type_context, new_viewpoint, named_type->name);
+        }
+        else {
+            return apply_viewpoint_to_type(viewpoint, aliased_type); 
+        }
     }
-    // Now need to look at the assignability matrix
-    auto rhs_ptr = std::get_if<FullType::Pointer>(&rhs.t);
-    assert(rhs_ptr);
-    return capabilities_assignable(lhs_ptr->cap, rhs_ptr->cap);
 }
 
-bool type_sendable(TypeContext& type_context, const FullType& lhs, const FullType& rhs) {
-    // CR figure out how to reduce code duplication
-    if(type_is_numeric(type_context, lhs) && type_is_numeric(type_context, rhs)) {
-        return true;
-    }
-    if(!basic_type_equal(type_context, extract_basic_type(lhs), extract_basic_type(rhs))) {
-        return false;
-    }
-    auto lhs_ptr = std::get_if<FullType::Pointer>(&lhs.t);
-    if(lhs_ptr == nullptr) {
-        // As the types are raw and equal and hence sendable
-        return true;
-    }
-    // Now need to look at the assignability matrix
-    auto rhs_ptr = std::get_if<FullType::Pointer>(&rhs.t);
-    assert(rhs_ptr);
-    return capabilities_sendable(lhs_ptr->cap, rhs_ptr->cap);
-}
-
-std::optional<FullType> get_actor_member_type(CoreEnv& env, const std::string& var_name) {
-    if(!env.type_env.curr_actor) {
+// CR: Think carefully about the copying going on
+std::optional<NameableType::Struct> get_struct_type(TypeContext& type_context, const std::string& struct_type_name) {
+    std::shared_ptr<const Type> standard_struct_type = 
+        get_standardized_type(type_context, std::nullopt, struct_type_name);
+    if(standard_struct_type == nullptr) {
         return std::nullopt;
+    }
+    auto named_type = std::get_if<Type::TNamed>(&standard_struct_type->t);
+    if(!named_type) {
+        return std::nullopt;
+    }
+    const std::string& standardized_type_name = named_type->name;
+    auto struct_type = type_context.at(standardized_type_name);
+    const auto& struct_contents = std::get<NameableType::Struct>(struct_type->t);
+    return struct_contents;
+}
+
+bool type_assignable(
+    TypeContext& type_context, 
+    std::shared_ptr<const Type> lhs, 
+    std::shared_ptr<const Type> rhs) {
+    return std::visit(Overload{
+        [&](const Type::TUnit&, const Type::TUnit&) {
+            return true;
+        },
+        [&](const Type::TInt&, const Type::TInt&) {
+            return true;
+        },
+        [&](const Type::TBool&, const Type::TBool&) {
+            return true;
+        },
+        [&](const Type::TActor& actor_lhs, const Type::TActor& actor_rhs) {
+            return actor_lhs.name == actor_rhs.name;
+        },
+        [&](const Type::TNamed& named_lhs, const Type::TNamed& named_rhs) {
+            std::shared_ptr<const Type> standard_lhs = 
+                get_standardized_type(type_context, lhs->viewpoint, named_lhs.name);
+            std::shared_ptr<const Type> standard_rhs = 
+                get_standardized_type(type_context, rhs->viewpoint, named_rhs.name);
+            return std::visit(Overload{
+                [&](Type::TNamed& named_lhs, Type::TNamed& named_rhs) {
+                    if(named_lhs.name != named_rhs.name) {
+                        return false;
+                    }
+                    NameableType::Struct struct_type = get_struct_type(type_context, named_lhs.name).value();
+                    for(size_t i = 0; i < struct_type.members.size(); i++) {
+                        auto& [mem_name, mem_type] = struct_type.members[i];
+                        std::shared_ptr<const Type> viewed_lhs_type = 
+                            apply_viewpoint_to_type(lhs->viewpoint, mem_type);
+                        std::shared_ptr<const Type> viewed_rhs_type =
+                            apply_viewpoint_to_type(rhs->viewpoint, mem_type);
+                        if(!type_assignable(type_context, viewed_lhs_type, viewed_rhs_type)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                [&](Type::TNamed&, const auto&) {return false;},
+                [&](const auto&, Type::TNamed&) {return false;},
+                [&](const auto&, const auto&) {
+                    return type_assignable(type_context, standard_lhs, standard_rhs);
+                }
+            }, standard_lhs->t, standard_rhs->t);
+        },
+        [&](const Type::TNamed& named_lhs, const auto&) {
+            std::shared_ptr<const Type> standard_lhs = 
+                get_standardized_type(type_context, lhs->viewpoint, named_lhs.name);
+            if(std::holds_alternative<Type::TNamed>(standard_lhs->t)) {
+                return false;
+            }
+            return type_assignable(type_context, standard_lhs, rhs);
+        },
+        [&](const auto&, const Type::TNamed& named_rhs) {
+            std::shared_ptr<const Type> standard_rhs = 
+                get_standardized_type(type_context, rhs->viewpoint, named_rhs.name);
+            if(std::holds_alternative<Type::TNamed>(standard_rhs->t)) {
+                return false;
+            }
+            return type_assignable(type_context, lhs, standard_rhs);
+        },
+        [&](const Type::Pointer& ptr_lhs, const Type::Pointer& ptr_rhs) {
+            // 1. Need to check that the dereferenced type are assignable
+            auto lhs_deref_type = get_dereferenced_type(lhs);
+            auto rhs_deref_type = get_dereferenced_type(rhs);
+            assert(lhs_deref_type != nullptr);
+            assert(rhs_deref_type != nullptr);
+            if(!type_assignable(type_context, lhs_deref_type, rhs_deref_type)) {
+                // std::cerr << "The base types of the pointers do not match" << std::endl;
+                return false;
+            }
+            auto lhs_cap = accumulate_viewpoints(lhs->viewpoint, ptr_lhs.cap);
+            auto rhs_cap = accumulate_viewpoints(rhs->viewpoint, ptr_rhs.cap);
+            assert(lhs_cap != std::nullopt);
+            assert(rhs_cap != std::nullopt);
+            if(!capabilities_assignable(lhs_cap.value(), rhs_cap.value())) {
+                return false;
+            }
+            return true;
+        }
+    }, lhs->t, rhs->t);
+}
+
+bool type_shareable(TypeContext& type_context, std::shared_ptr<const Type> type) {
+    return std::visit(Overload{
+        [&](const Type::TNamed& t_named){
+            std::shared_ptr<const Type> standard_type = 
+                get_standardized_type(type_context, type->viewpoint, t_named.name);
+            if(!std::holds_alternative<Type::TNamed>(standard_type->t)) {
+                return type_shareable(type_context, standard_type);
+            }
+            std::string struct_name = std::get<Type::TNamed>(standard_type->t).name;
+            NameableType::Struct struct_type = get_struct_type(type_context, struct_name).value();
+            for(auto& [mem_name, mem_type]: struct_type.members) {
+                std::shared_ptr<const Type> viewed_type = 
+                    apply_viewpoint_to_type(standard_type->viewpoint, mem_type);
+                if(!type_shareable(type_context, viewed_type)) {
+                    return false;
+                }
+            }
+            return true;
+        },
+        [&](const Type::Pointer& pointer) {
+            return capability_shareable(accumulate_viewpoints(type->viewpoint, pointer.cap).value());
+        },
+        [](const auto&) {return true;}
+    }, type->t);
+}
+
+std::shared_ptr<const Type> get_actor_member_type(CoreEnv& env, const std::string& var_name) {
+    if(!env.type_env.curr_actor) {
+        return nullptr;
     }
     if(var_name == "this") {
-        return FullType {BasicType{ BasicType::TActor {env.type_env.curr_actor->name}}};
+        return std::make_shared<Type>(Type{Type::TActor{env.type_env.curr_actor->name}, std::nullopt});
     }
-    if(env.type_env.curr_actor->member_vars.find(var_name) == 
+    if(env.type_env.curr_actor->member_vars.find(var_name) ==
         env.type_env.curr_actor->member_vars.end()) {
-        return std::nullopt;
+        return nullptr;
     }
     return env.type_env.curr_actor->member_vars[var_name];
 }
 
-std::optional<FullType> get_variable_type(CoreEnv& env, const std::string& var_name) {
+std::shared_ptr<const Type> get_variable_type(CoreEnv& env, const std::string& var_name) {
     if(env.local_var_context.find(var_name) != env.local_var_context.end()) {
         return env.local_var_context.at(var_name);
     }
@@ -276,25 +407,21 @@ std::optional<FullType> get_variable_type(CoreEnv& env, const std::string& var_n
 }
 
 
-bool check_type_expr_list_valid(
-    CoreEnv& env, 
-    const std::vector<FullType>& expected_types, 
-    const std::vector<std::shared_ptr<ValExpr>>& val_expr_list, 
-    std::function<bool(
-        TypeContext& type_context, 
-        const FullType& expected_type, 
-        const FullType& arg_type)> arg_type_valid ) {
+bool check_type_expr_list_assignable(
+    CoreEnv& env,
+    const std::vector<std::shared_ptr<const Type>>& expected_types,
+    const std::vector<std::shared_ptr<ValExpr>>& val_expr_list) {
     if (expected_types.size() != val_expr_list.size()) {
         return false;
     }
     for(size_t i = 0; i < expected_types.size(); i++) {
-        std::optional<FullType> arg_type = val_expr_type(env, val_expr_list[i]);
+        std::shared_ptr<const Type> arg_type = val_expr_type(env, val_expr_list[i]);
         if(!arg_type) {
             return false;
         }
-        const FullType& expected_type = expected_types[i];
+        const std::shared_ptr<const Type>& expected_type = expected_types[i];
 
-        if (!arg_type_valid(env.type_env.type_context, expected_type, *arg_type)) {
+        if (!type_assignable(env.type_env.type_context, expected_type, arg_type)) {
             return false;
         }
     }
@@ -303,30 +430,30 @@ bool check_type_expr_list_valid(
 
 // CR: Need to improve the API here. A boolean flag is pretty bad code
 bool passed_in_parameters_valid(
-    CoreEnv& env, 
-    const std::vector<TopLevelItem::VarDecl>& signature, 
-    const std::vector<std::shared_ptr<ValExpr>>& arguments, 
+    CoreEnv& env,
+    const std::vector<TopLevelItem::VarDecl>& signature,
+    const std::vector<std::shared_ptr<ValExpr>>& arguments,
     bool parameters_being_sent) {
-    std::vector<FullType> expected_types;
+    std::vector<std::shared_ptr<const Type>> expected_types;
     expected_types.reserve(signature.size());
     for(const auto& var_decl: signature) {
         expected_types.push_back(var_decl.type);
     }
-    return check_type_expr_list_valid(env, expected_types, arguments, (parameters_being_sent) ? type_sendable: type_assignable);
+    return check_type_expr_list_assignable(env, expected_types, arguments);
 }
 
 
 
 bool struct_valid(CoreEnv &env, NameableType::Struct& struct_contents, ValExpr::VStruct& struct_expr) {
     // Does not perform logging
-    std::sort(struct_contents.members.begin(), struct_contents.members.end(), 
+    std::sort(struct_contents.members.begin(), struct_contents.members.end(),
     [](const auto& a, const auto& b) { return a.first < b.first; });
     std::sort(struct_expr.fields.begin(), struct_expr.fields.end(),
     [](const auto& a, const auto& b) { return a.first < b.first; });
     if (struct_contents.members.size() != struct_expr.fields.size()) {
         return false;
     }
-    std::vector<FullType> expected_types;
+    std::vector<std::shared_ptr<const Type>> expected_types;
     std::vector<std::shared_ptr<ValExpr>> struct_members;
     size_t size = struct_contents.members.size();
     expected_types.reserve(size);
@@ -335,117 +462,95 @@ bool struct_valid(CoreEnv &env, NameableType::Struct& struct_contents, ValExpr::
         if(struct_contents.members[i].first != struct_expr.fields[i].first) {
             return false;
         }
-        expected_types.emplace_back(FullType { struct_contents.members[i].second});
+        expected_types.emplace_back(struct_contents.members[i].second);
         struct_members.emplace_back(struct_expr.fields[i].second);
     }
-    return check_type_expr_list_valid(env, expected_types, struct_members, full_type_equal);
-}
-// CR: Think carefully about the copying going on
-
-std::optional<NameableType::Struct> get_struct_type(CoreEnv& env, const std::string& struct_type_name) {
-    std::optional<BasicType> basic_type = standardize_type(env.type_env.type_context, struct_type_name);
-    if(!basic_type) {
-        return std::nullopt;
-    }
-    auto named_type = std::get_if<BasicType::TNamed>(&basic_type->t);
-    if(!named_type) {
-        return std::nullopt;
-    }
-    const std::string& standardized_type_name = named_type->name;
-    assert(env.type_env.type_context.find(standardized_type_name) != env.type_env.type_context.end());
-    auto struct_type = env.type_env.type_context[standardized_type_name];
-    assert(std::holds_alternative<NameableType::Struct>(struct_type->t));
-    const auto& struct_contents = std::get<NameableType::Struct>(struct_type->t);
-    return struct_contents;
-
+    return check_type_expr_list_assignable(env, expected_types, struct_members);
 }
 
-FullType unaliased_type(const FullType& full_type) {
-    auto* pointer = std::get_if<FullType::Pointer>(&full_type.t);
-    if(!pointer) {
-        return full_type;
+
+std::shared_ptr<const Type> unaliased_type(std::shared_ptr<const Type> type) {
+    if(!std::holds_alternative<Type::Pointer>(type->t)) {
+        return type;
     }
-    if(!std::holds_alternative<Cap::Iso>(pointer->cap.t)) {
-        return full_type;
+    Type::Pointer pointer = std::get<Type::Pointer>(type->t);
+    Cap effective_cap = accumulate_viewpoints(type->viewpoint, pointer.cap).value();
+    if(!std::holds_alternative<Cap::Iso>(effective_cap.t)) {
+        return type;
     }
     else {
-        return FullType {FullType::Pointer {pointer->base, Cap::Iso_cap{}}};
+        return std::make_shared<const Type>(
+            Type {Type::Pointer {pointer.base_type, Cap::Iso_cap{}}, std::nullopt});
     }
 }
 
-std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val_expr) {
-    std::optional<FullType> full_type = std::visit(Overload{
+std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val_expr) {
+    std::shared_ptr<const Type> full_type = std::visit(Overload{
         // Literal values
         [&](const ValExpr::VUnit&) {
-            return std::optional(FullType{ BasicType{ BasicType::TUnit{} } });
+            return std::make_shared<Type>(Type{Type::TUnit{}, std::nullopt});
         },
         [](const ValExpr::VInt&) {
-            return std::optional(FullType{ BasicType{ BasicType::TInt{} } });
+            return std::make_shared<Type>(Type{Type::TInt{}, std::nullopt});
         },
         [](const ValExpr::VBool&) {
-            return std::optional(FullType{ BasicType{ BasicType::TBool{} } });
+            return std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
         },
 
         // Variable lookup
-        [&](const ValExpr::VVar& v) -> std::optional<FullType> {
-            std::optional<FullType> type = get_variable_type(env, v.name);
+        [&](const ValExpr::VVar& v) -> std::shared_ptr<const Type> {
+            std::shared_ptr<const Type> type = get_variable_type(env, v.name);
             if(!type) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Variable " << orig_name(v.name) << " not defined" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
-            return *type;
+            return type;
         },
         // I am not taking in a const as I would want to mutate this
-        [&](ValExpr::VStruct& struct_expr) -> std::optional<FullType> {
-            std::optional<NameableType::Struct> struct_contents = get_struct_type(env, struct_expr.type_name);
+        [&](ValExpr::VStruct& struct_expr) -> std::shared_ptr<const Type> {
+            std::optional<NameableType::Struct> struct_contents = 
+                get_struct_type(env.type_env.type_context, struct_expr.type_name);
             if(!struct_contents) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Internal type of " << struct_expr.type_name << " is not a struct" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             if(struct_valid(env, *struct_contents, struct_expr)) {
-                std::optional<BasicType> basic_type = standardize_type(env.type_env.type_context, struct_expr.type_name);
-                assert(basic_type);
-                return (FullType { *basic_type });
+                std::shared_ptr<const Type> standard_struct_type = 
+                    get_standardized_type(env.type_env.type_context, std::nullopt, struct_expr.type_name);
+                assert(standard_struct_type);
+                return standard_struct_type;
             }
             else {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Field types do not match the type of the struct" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
         },
         
         // Allocations
-        [&](const ValExpr::NewInstance& new_instance) -> std::optional<FullType> {
+        [&](const ValExpr::NewInstance& new_instance) -> std::shared_ptr<const Type> {
             auto size_type = val_expr_type(env, new_instance.size);
             if(!size_type) {
                 // No need to log as the previous [val_expr_type] call would have performed the logging
-                return std::nullopt;
+                return nullptr;
             }
-            auto default_type = val_expr_type(env, new_instance.default_value);
-            if(default_type == std::nullopt) {
-                return std::nullopt;
-            }
-            auto basic_type = std::get_if<BasicType>(&default_type->t);
-            if(!basic_type) {
+            auto int_type = std::make_shared<Type>(Type{Type::TInt{}, std::nullopt});
+            if(!type_assignable(env.type_env.type_context, int_type, size_type)) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Default value expr does not match the intended type" << std::endl;
-                return std::nullopt;
+                std::cerr << "Size expression must be of type int" << std::endl;
+                return nullptr;
             }
-            if(basic_type_equal(env.type_env.type_context, *basic_type, new_instance.type)) {
-                return unaliased_type(FullType {FullType::Pointer {new_instance.type, new_instance.cap}});
-            }
-            report_error_location(val_expr->source_span);
-            std::cerr << "Default value expr does not match the intended type" << std::endl;
-            return std::nullopt;
+            return unaliased_type(
+                std::make_shared<Type>(Type{Type::Pointer{new_instance.type, new_instance.cap}, std::nullopt}));
         },
 
-        [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::optional<FullType> {
+        [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::shared_ptr<const Type> {
             if(!env.type_env.decl_collection->actor_frontend_map.contains(actor_constr_expr.actor_name)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Actor " << actor_constr_expr.actor_name << " not found" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             auto& actor_constructors = 
                 (env.type_env.decl_collection->actor_frontend_map.at(actor_constr_expr.actor_name))->constructors;
@@ -453,118 +558,118 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
                 report_error_location(val_expr->source_span);
                 std::cerr << "Actor " << actor_constr_expr.actor_name << " does not have constructor "
                     << actor_constr_expr.constructor_name << std::endl;
-                return std::nullopt; 
+                return nullptr;
             }
-            std::shared_ptr<TopLevelItem::Constructor> constructor = 
+            std::shared_ptr<TopLevelItem::Constructor> constructor =
                 actor_constructors.at(actor_constr_expr.constructor_name);
             if(!passed_in_parameters_valid(env, constructor->params, actor_constr_expr.args, false)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Parameters passed into the constructor are not valid" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
-            return FullType {BasicType {BasicType::TActor {actor_constr_expr.actor_name}}};
+            return std::make_shared<Type>(Type{Type::TActor{actor_constr_expr.actor_name}, std::nullopt});
         },
 
         // Consume
-        [&](const ValExpr::Consume& consume) -> std::optional<FullType> {
+        [&](const ValExpr::Consume& consume) -> std::shared_ptr<const Type> {
             if(!env.local_var_context.contains(consume.var_name)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Consumed variable is not a local variable" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             return unaliased_type(env.local_var_context.at(consume.var_name));
         },
 
         // Accesses
-        [&](const ValExpr::PointerAccess& pointer_access) -> std::optional<FullType> {
+        [&](const ValExpr::PointerAccess& pointer_access) -> std::shared_ptr<const Type> {
             auto index_type = val_expr_type(env, pointer_access.index);
             if(!index_type) {
-                return std::nullopt;
+                return nullptr;
             }
-            if(!full_type_equal(env.type_env.type_context, *index_type, FullType { BasicType {BasicType::TInt {}}})) {
+            auto int_type = std::make_shared<Type>(Type{Type::TInt{}, std::nullopt});
+            if(!type_assignable(env.type_env.type_context, int_type, index_type)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Index type is not int" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             auto internal_type = val_expr_type(env, pointer_access.value);
             if(!internal_type) {
-                return std::nullopt;
+                return nullptr;
             }
-            auto* pointer_type = std::get_if<FullType::Pointer>(&internal_type->t);
+            auto* pointer_type = std::get_if<Type::Pointer>(&internal_type->t);
             if(pointer_type == nullptr) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Dereferenced object is not a pointer" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             if(auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t)) {
                 if(env.atomic_nest_level == 0) {
                     report_error_location(val_expr->source_span);
                     std::cerr << "Dereferencing an object protected by a lock outside an atomic section" << std::endl;
-                    return std::nullopt;
+                    return nullptr;
                 }
             }
-            return FullType {pointer_type->base};
+            return pointer_type->base_type;
         },
 
-        [&](const ValExpr::Field& field_access) -> std::optional<FullType> {
-            std::optional<FullType> struct_type = val_expr_type(env, field_access.base); 
+        [&](const ValExpr::Field& field_access) -> std::shared_ptr<const Type> {
+            std::shared_ptr<const Type> struct_type = val_expr_type(env, field_access.base);
             if(!struct_type) {
-                return std::nullopt;
+                return nullptr;
             }
-            auto* basic_type = std::get_if<BasicType>(&struct_type->t);
-            if(!basic_type) {
+            auto* named_type = std::get_if<Type::TNamed>(&struct_type->t);
+            if(!named_type) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Field access on an expression which is not of a struct type" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
-            auto* named_type = std::get_if<BasicType::TNamed>(&basic_type->t);
             auto struct_contents = get_struct_type(env, named_type->name);
             if(!struct_contents) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Field access on an expression which is not of a struct type" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
-            for(const auto& [field_name, field_basic_type]: struct_contents->members) {
+            for(const auto& [field_name, field_type]: struct_contents->members) {
                 if(field_name == field_access.field) {
-                    return FullType {field_basic_type};
+                    return field_type;
                 }
             }
             report_error_location(val_expr->source_span);
             std::cerr << "Field " << field_access.field << " is not part of the struct" << std::endl;
-            return std::nullopt;
+            return nullptr;
         },
 
         // Assignments
-        [&](const ValExpr::Assignment& assignment) -> std::optional<FullType> {
+        [&](const ValExpr::Assignment& assignment) -> std::shared_ptr<const Type> {
             auto lhs_type = val_expr_type(env, assignment.lhs);
-            if(!lhs_type) { return std::nullopt; }
+            if(!lhs_type) { return nullptr; }
             auto rhs_type = val_expr_type(env, assignment.rhs);
-            if(!rhs_type) { return std::nullopt; }
-            if(!type_assignable(env.type_env.type_context, *lhs_type, *rhs_type)) {
+            if(!rhs_type) { return nullptr; }
+            if(!type_assignable(env.type_env.type_context, lhs_type, rhs_type)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "These types are not compatible in an assignment" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
             // Now just need to check whether the thingy is actually assignable scene
             if(can_appear_in_lhs(env, assignment.lhs)) {
-                return unaliased_type(*lhs_type);
+                return unaliased_type(lhs_type);
             }
             else {
                 report_error_location(val_expr->source_span);
                 std::cerr << "This expression cannot appear in the lhs of an assignment" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
         },
 
         // Callables
-        [&](const ValExpr::FuncCall& f) -> std::optional<FullType> {
+        [&](const ValExpr::FuncCall& f) -> std::shared_ptr<const Type> {
             // Lookup function definition in the type context
-            std::shared_ptr<TopLevelItem::Func> func_def = 
+            std::shared_ptr<TopLevelItem::Func> func_def =
                 get_func_def(f.func, env.type_env.curr_actor, env.type_env.decl_collection);
             if(func_def == nullptr) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Function not found" << std::endl;
-                return std::nullopt;
+                return nullptr;
             }
 
             if(passed_in_parameters_valid(env, func_def->params, f.args, false)) {
@@ -572,72 +677,70 @@ std::optional<FullType> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val
             }
             report_error_location(val_expr->source_span);
             std::cerr << "Passed in parameters are not valid" << std::endl;
-            return std::nullopt;
+            return nullptr;
         },
 
         // Binary operation
-        [&](const ValExpr::BinOpExpr& e) -> std::optional<FullType> {
-            std::optional<FullType> lhs_t = val_expr_type(env, e.lhs);
-            std::optional<FullType> rhs_t = val_expr_type(env, e.rhs);
-            BasicType lhs_base = extract_basic_type(*lhs_t);
-            BasicType rhs_base = extract_basic_type(*rhs_t);
+        [&](const ValExpr::BinOpExpr& e) -> std::shared_ptr<const Type> {
+            std::shared_ptr<const Type> lhs_t = val_expr_type(env, e.lhs);
+            std::shared_ptr<const Type> rhs_t = val_expr_type(env, e.rhs);
             if(!(lhs_t && rhs_t)) {
-                return std::nullopt;
+                return nullptr;
             }
             switch(e.op) {
                 case BinOp::Eq:
                 case BinOp::Neq:
-                    if(type_is_numeric(env.type_env.type_context, *lhs_t) && type_is_numeric(env.type_env.type_context, *rhs_t)) {
-                        return FullType {BasicType { BasicType::TBool {}}};
+                    if(type_is_numeric(env.type_env.type_context, lhs_t) && type_is_numeric(env.type_env.type_context, rhs_t)) {
+                        return std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
                     }
-                    
-                    if(!basic_type_equal(env.type_env.type_context, lhs_base, rhs_base)) {
+
+                    if(!basic_type_equal(env.type_env.type_context, *lhs_t, *rhs_t)) {
                         report_error_location(val_expr->source_span);
                         std::cerr << "Types not compatible for equality checking" << std::endl;
-                        return std::nullopt;
+                        return nullptr;
                     }
-                    if(auto* named_type = std::get_if<BasicType::TNamed>(&lhs_base.t)) {
+                    if(auto* named_type = std::get_if<Type::TNamed>(&lhs_t->t)) {
                         auto standard_type = standardize_type(env.type_env.type_context, named_type->name);
                         assert(standard_type);
                         if(std::get_if<BasicType::TNamed>(&standard_type->t)) {
                             report_error_location(val_expr->source_span);
                             std::cerr << "Type cannot be equality compared" << std::endl;
-                            return std::nullopt;
+                            return nullptr;
                         }
                     }
-                    return FullType {BasicType {BasicType::TBool {}}};
+                    return std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
                 case BinOp::Add:
                 case BinOp::Sub:
                 case BinOp::Mul:
                 case BinOp::Div:
-                    if(!(type_is_numeric(env.type_env.type_context, *lhs_t) && type_is_numeric(env.type_env.type_context, *rhs_t))) {
+                    if(!(type_is_numeric(env.type_env.type_context, lhs_t) && type_is_numeric(env.type_env.type_context, rhs_t))) {
                         report_error_location(val_expr->source_span);
                         std::cerr << "Type not compatible for arithmetic" << std::endl;
-                        return std::nullopt;
+                        return nullptr;
                     }
                     else {
-                        return FullType {BasicType {BasicType::TInt {}}};
+                        return std::make_shared<Type>(Type{Type::TInt{}, std::nullopt});
                     }
                 case BinOp::Geq:
                 case BinOp::Leq:
                 case BinOp::Gt:
                 case BinOp::Lt:
-                    if(type_is_numeric(env.type_env.type_context, *lhs_t) && type_is_numeric(env.type_env.type_context, *rhs_t)) {
-                        return FullType {BasicType {BasicType::TBool {}}};
+                    if(type_is_numeric(env.type_env.type_context, lhs_t) && type_is_numeric(env.type_env.type_context, rhs_t)) {
+                        return std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
                     }
                     else {
                         report_error_location(val_expr->source_span);
                         std::cerr << "Type not compatible for comparisons" << std::endl;
-                        return std::nullopt;
+                        return nullptr;
                     }
             }
             assert(false);
-            return std::nullopt;
+            return nullptr;
         }
 
     }, val_expr->t);
-    if(full_type != std::nullopt) {
-        val_expr->expr_type = *full_type;
+    if(full_type != nullptr) {
+        val_expr->expr_type = full_type;
     }
     return full_type;
 }
@@ -652,9 +755,9 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
                 return false;
             }
             auto expected_type = var_decl_with_init.type;
-            if(!type_assignable(env.type_env.type_context, expected_type, *init_expr_type)) {
+            if(!type_assignable(env.type_env.type_context, expected_type, init_expr_type)) {
                 report_error_location(stmt->source_span);
-                std::cerr <<  "Assigned expression type is not compatible with the declaration type" 
+                std::cerr <<  "Assigned expression type is not compatible with the declaration type"
                 << std::endl;
                 return false;
             }
@@ -670,7 +773,7 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
             auto expected_type = get_actor_member_type(env, member_init.member_name);
             if(!expected_type) {
                 report_error_location(stmt->source_span);
-                std::cerr << "Actor member " << member_init.member_name << 
+                std::cerr << "Actor member " << member_init.member_name <<
                 " does not exist" << std::endl;
                 return false;
             }
@@ -678,18 +781,12 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
             if(!present_type) {
                 return false;
             }
-            return type_assignable(env.type_env.type_context, *expected_type, *present_type);
+            return type_assignable(env.type_env.type_context, expected_type, present_type);
         },
         [&](const Stmt::BehaviourCall& b) {
             auto actor_type = val_expr_type(env, b.actor);
             if(!actor_type) { return false; }
-            auto basic_type = std::get_if<BasicType>(&actor_type->t);
-            if(!basic_type) {
-                report_error_location(stmt->source_span);
-                std::cerr << "Type of the expression is not of an actor" << std::endl;
-                return false;
-            }
-            BasicType::TActor* named_actor = std::get_if<BasicType::TActor>(&basic_type->t);
+            Type::TActor* named_actor = std::get_if<Type::TActor>(&actor_type->t);
             if(!named_actor) {
                 report_error_location(stmt->source_span);
                 std::cerr << "Type of the expression is not of an actor" << std::endl;
@@ -725,14 +822,15 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
         },
         [&](const Stmt::Expr& val_expr) {
             auto type = val_expr_type(env, val_expr.expr);
-            return type != std::nullopt;
+            return type != nullptr;
         },
         [&](const Stmt::If& if_expr) {
             auto cond_type = val_expr_type(env, if_expr.cond);
             if(!cond_type) {
                 return false;
             }
-            if(!full_type_equal(env.type_env.type_context, FullType {BasicType {BasicType::TBool{}}}, *cond_type)) {
+            auto bool_type = std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
+            if(!full_type_equal(env.type_env.type_context, bool_type, cond_type)) {
                 return false;
             }
             // Creating a scope for the if block
@@ -746,7 +844,8 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
             if(!cond_type) {
                 return false;
             }
-            if(!full_type_equal(env.type_env.type_context, FullType {BasicType {BasicType::TBool{}}}, *cond_type)) {
+            auto bool_type = std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
+            if(!full_type_equal(env.type_env.type_context, bool_type, cond_type)) {
                 return false;
             }
             // Creating a scope for the body
@@ -770,7 +869,7 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
                 return false;
             }
             auto expected_return_type = env.curr_func->return_type;
-            if (!full_type_equal(env.type_env.type_context, *return_expr_type, expected_return_type)) {
+            if (!full_type_equal(env.type_env.type_context, return_expr_type, expected_return_type)) {
                 report_error_location(stmt->source_span);
                 std::cerr << "Return type does not match with the expected return type of the function" << std::endl;
                 return false;

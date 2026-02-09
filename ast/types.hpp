@@ -3,14 +3,16 @@
 #include <vector>
 #include <variant>
 #include <optional>
+#include <memory>
 
 struct Cap {
+    struct Tag {};
     struct Ref {};
     struct Val {};
     struct Iso {};
     struct Iso_cap {};
     struct Locked {std::string lock_name; };
-    std::variant<Ref, Val, Iso, Iso_cap, Locked> t;
+    std::variant<Tag, Ref, Val, Iso, Iso_cap, Locked> t;
 };
 
 
@@ -21,7 +23,7 @@ struct Type {
     struct TNamed { std::string name; };
     struct TActor {std::string name;};
     struct Pointer {
-        std::shared_ptr<Type> base_type;
+        std::shared_ptr<const Type> base_type;
         Cap cap;
     };
     std::variant<TUnit, TInt, TBool, TNamed, TActor, Pointer> t;
@@ -31,7 +33,7 @@ struct Type {
 // [NameableType] represents all types that can occur on the RHS of a type assignment
 struct NameableType {
     struct Struct { 
-        std::vector<std::pair<std::string, std::shared_ptr<Type>>> members; 
+        std::vector<std::pair<std::string, std::shared_ptr<const Type>>> members; 
     };
-    std::variant<Type, Struct> t;
+    std::variant<std::shared_ptr<const Type>, Struct> t;
 };
