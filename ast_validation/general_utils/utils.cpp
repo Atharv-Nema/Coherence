@@ -49,7 +49,7 @@ bool predicate_valexpr_walker(
             return true;
         },
         [&](ValExpr::NewInstance& new_instance) {
-            return predicate(new_instance.default_value) && predicate(new_instance.size);
+            return predicate(new_instance.init_expr) && predicate(new_instance.size);
         },
         [&](ValExpr::ActorConstruction& actor_construction) {
             for(auto arg: actor_construction.args) {

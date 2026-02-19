@@ -41,7 +41,7 @@ void add_valexpr_lock_info(std::shared_ptr<ValExpr> val_expr, LockInfoEnv& env) 
             }
         },
         [&](const ValExpr::PointerAccess& pointer_access) {
-            auto* pointer_type = std::get_if<FullType::Pointer>(&pointer_access.value->expr_type.t);
+            auto* pointer_type = std::get_if<Type::Pointer>(&pointer_access.value->expr_type->t);
             assert(pointer_type != nullptr);
             auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t);
             if(locked_cap != nullptr) {

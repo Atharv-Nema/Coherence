@@ -18,6 +18,7 @@ struct Cap {
 
 struct Type {
     struct TUnit {};
+    struct TNullptr {};
     struct TInt {};
     struct TBool {};
     struct TNamed { std::string name; };
@@ -26,7 +27,7 @@ struct Type {
         std::shared_ptr<const Type> base_type;
         Cap cap;
     };
-    std::variant<TUnit, TInt, TBool, TNamed, TActor, Pointer> t;
+    std::variant<TUnit, TNullptr, TInt, TBool, TNamed, TActor, Pointer> t;
     std::optional<Cap> viewpoint;
 };
 

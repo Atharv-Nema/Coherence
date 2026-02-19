@@ -6,6 +6,9 @@
 // Types
 void print_cap(const Cap& c) {
     std::visit(Overload{
+        [&](const Cap::Tag&) {
+            std::cout << "Tag";
+        },
         [&](const Cap::Ref&) {
             std::cout << "Ref";
         },
@@ -24,16 +27,19 @@ void print_cap(const Cap& c) {
     }, c.t);
 }
 
-void print_type(const Type& type) {
+void print_type(std::shared_ptr<const Type> type) {
     // Print viewpoint if present
-    if (type.viewpoint) {
-        print_cap(*type.viewpoint);
+    if (type->viewpoint) {
+        print_cap(*type->viewpoint);
         std::cout << " ";
     }
 
     std::visit(Overload{
         [&](const Type::TUnit&) {
             std::cout << "TUnit";
+        },
+        [&](const Type::TNullptr&) {
+            std::cout << "TNullptr";
         },
         [&](const Type::TInt&) {
             std::cout << "TInt";
@@ -49,12 +55,12 @@ void print_type(const Type& type) {
         },
         [&](const Type::Pointer& p) {
             std::cout << "Ptr(";
-            print_type(*p.base_type);
+            print_type(p.base_type);
             std::cout << ", ";
             print_cap(p.cap);
             std::cout << ")";
         }
-    }, type.t);
+    }, type->t);
 }
 
 
@@ -82,6 +88,9 @@ void print_val_expr(const ValExpr& v) {
         [&](const ValExpr::VUnit&) {
             std::cout << "VUnit{}";
         },
+        [&](const ValExpr::VNullptr&) {
+            std::cout << "VNullptr{}";
+        },
         [&](const ValExpr::VInt& x) {
             std::cout << "VInt{v=" << x.v << "}";
         },
@@ -96,7 +105,10 @@ void print_val_expr(const ValExpr& v) {
 
         // --- Struct literal ---
         [&](const ValExpr::VStruct& s) {
-            std::cout << "VStruct{type=" << s.type_name << ", fields=[";
+            std::cout << "VStruct{type=";
+            std::cout << "VStruct{type=";
+            print_type(s.struct_type);
+            std::cout << ", fields=[";
             bool first = true;
             for (const auto& [name, val] : s.fields) {
                 if (!first) std::cout << ", ";
@@ -110,9 +122,9 @@ void print_val_expr(const ValExpr& v) {
         // --- Allocation ---
         [&](const ValExpr::NewInstance& n) {
             std::cout << "NewInstance{type=";
-            print_type(*n.type);
-            std::cout << ", cap=";
-            print_cap(n.cap);
+            print_type(n.type);
+            std::cout << ", init_expr=";
+            print_val_expr(*n.init_expr);
             std::cout << ", size=";
             print_val_expr(*n.size);
             std::cout << "}";
@@ -188,7 +200,7 @@ void print_stmt(const Stmt& s) {
 
         [&](const Stmt::VarDeclWithInit& v) {
             std::cout << "VarDeclWithInit{name=" << v.name << ", type=";
-            print_type(*v.type);
+            print_type(v.type);
             std::cout << ", init=";
             print_val_expr(*v.init);
             std::cout << "}\n";
@@ -281,13 +293,13 @@ void print_stmt(const Stmt& s) {
 
 void print_func(const TopLevelItem::Func& f) {
     std::cout << "Func{name=" << f.name << ", return_type=";
-    print_type(*f.return_type);
+    print_type(f.return_type);
     std::cout << "}\n";
 
     std::cout << "Params:\n";
     for(const TopLevelItem::VarDecl& var_decl: f.params) {
         std::cout << "VarDecl{name=" << var_decl.name << ", type=";
-        print_type(*var_decl.type);
+        print_type(var_decl.type);
         std::cout << "}";
         std::cout << "\n";
     }
@@ -304,7 +316,7 @@ void print_constructor(const TopLevelItem::Constructor& c) {
     std::cout << "Params:\n";
     for(const TopLevelItem::VarDecl& var_decl: c.params) {
         std::cout << "VarDecl{name=" << var_decl.name << ", type=";
-        print_type(*var_decl.type);
+        print_type(var_decl.type);
         std::cout << "}";
         std::cout << "\n";
     }
@@ -321,7 +333,7 @@ void print_behaviour(const TopLevelItem::Behaviour& b) {
     std::cout << "Params:\n";
     for(const TopLevelItem::VarDecl& var_decl: b.params) {
         std::cout << "VarDecl{name=" << var_decl.name << ", type=";
-        print_type(*var_decl.type);
+        print_type(var_decl.type);
         std::cout << "}";
         std::cout << "\n";
     }
@@ -338,7 +350,7 @@ void print_actor(const TopLevelItem::Actor& a) {
     std::cout << "MemberVars:\n";
     for (const auto& [name, type] : a.member_vars) {
         std::cout << name << ": ";
-        print_type(*type);
+        print_type(type);
         std::cout << "\n";
     }
 

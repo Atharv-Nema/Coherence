@@ -24,7 +24,7 @@ struct RenameInfo {
             variable = *renamed_var;
         }
     }
-    std::string register_fresh_name(const std::string& var, FullType type) {
+    std::string register_fresh_name(const std::string& var) {
         std::string new_name = var + "." + std::to_string(scope_identifier);
         assert(rename_map.num_scopes() > 0);
         rename_map.insert(var, new_name);
@@ -46,7 +46,7 @@ void alpha_rename_val_expr(
             }
         },
         [&](ValExpr::NewInstance& new_instance) {
-            alpha_rename_val_expr(rename_info, new_instance.default_value);
+            alpha_rename_val_expr(rename_info, new_instance.init_expr);
             alpha_rename_val_expr(rename_info, new_instance.size);
         },
         [&](ValExpr::ActorConstruction& actor_construction) {
@@ -93,7 +93,7 @@ void alpha_rename_statement(
         [&](Stmt::VarDeclWithInit &var_decl_init) {
             alpha_rename_val_expr(rename_info, var_decl_init.init);
             var_decl_init.name = 
-                rename_info.register_fresh_name(var_decl_init.name, var_decl_init.type);
+                rename_info.register_fresh_name(var_decl_init.name);
         },
         [&](Stmt::MemberInitialize &member_initialize) {
             alpha_rename_val_expr(rename_info, member_initialize.init);

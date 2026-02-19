@@ -50,7 +50,7 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
             return false;
         },
         [&](const ValExpr::NewInstance& new_instance) {
-            return valexpr_accesses_vars(vars, new_instance.default_value) || valexpr_accesses_vars(vars, new_instance.size);
+            return valexpr_accesses_vars(vars, new_instance.init_expr) || valexpr_accesses_vars(vars, new_instance.size);
         },
         [&](const ValExpr::ActorConstruction& actor_construction) {
             return valexpr_list_accesses_vars(vars, actor_construction.args);

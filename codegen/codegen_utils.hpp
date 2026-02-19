@@ -4,7 +4,7 @@
 #include "top_level.hpp"
 #include "runtime_traps.hpp"
 
-std::unordered_map<std::string, FullType> collect_local_variable_types(
+std::unordered_map<std::string, std::shared_ptr<const Type>> collect_local_variable_types(
         std::vector<std::shared_ptr<Stmt>>& callable_body);
 std::string llvm_name_of_func(GenState& gen_state, const std::string& func_name);
 std::string llvm_name_of_constructor(
@@ -14,13 +14,10 @@ std::string llvm_name_of_constructor(
 std::string llvm_name_of_behaviour(const std::string& be_name, const std::string& actor_name);
 std::string llvm_struct_of_behaviour(const std::string& be_name, const std::string& actor_name);
 std::string llvm_struct_of_actor(const std::string& actor_name);
-std::shared_ptr<LLVMTypeInfo> llvm_type_of_basic_type(
+std::shared_ptr<LLVMTypeInfo> llvm_type_of_coh_type(
     GenState& gen_state,
-    BasicType basic_type);
-std::shared_ptr<LLVMTypeInfo> llvm_type_of_full_type(
-    GenState& gen_state,
-    FullType full_type);
-std::string actor_name_of_full_type(FullType full_type);
+    std::shared_ptr<const Type> type);
+std::string actor_name_of_coh_type(std::shared_ptr<const Type> type);
 std::string get_llvm_type_size(GenState &gen_state, const std::string& llvm_type_name);
 void allocate_var_to_stack(
     GenState& gen_state,

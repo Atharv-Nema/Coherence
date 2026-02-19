@@ -52,6 +52,14 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                 ValueCategory::RVALUE
             );
         },
+        [&](ValExpr::VNullptr) {
+            std::string null_reg = gen_state.reg_label_gen.new_temp_reg();
+            gen_state.out_stream << "%" + null_reg << " = null" << std::endl;
+            return make_pair(
+                null_reg,
+                ValueCategory::RVALUE
+            );
+        },
         [&](ValExpr::VBool v_bool) {
             std::string bool_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.out_stream << "%" + bool_reg << " = add i1 0, " << v_bool.v << std::endl;
@@ -83,9 +91,9 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // %s0 = insertvalue %Struct undef, i32 %a, 0
             // %s1 = insertvalue %Struct %s0, i8 %b, 1
             // ... (these are functional structs)
-            FullType struct_type = val_expr->expr_type;  
+            std::shared_ptr<const Type> struct_type = val_expr->expr_type;  
             std::shared_ptr<LLVMTypeInfo> llvm_type = 
-                llvm_type_of_full_type(gen_state, struct_type);
+                llvm_type_of_coh_type(gen_state, struct_type);
             std::shared_ptr<LLVMStructInfo> llvm_struct_info = llvm_type->struct_info;
             assert(llvm_struct_info != nullptr);
             std::string curr_accum_expr = "undef";
@@ -107,11 +115,11 @@ std::pair<std::string, ValueCategory> emit_valexpr(
         [&](const ValExpr::NewInstance& new_instance) {
             // Compiling the default value
             std::string llvm_type_of_default = 
-                llvm_type_of_full_type(
+                llvm_type_of_coh_type(
                     gen_state, 
-                    new_instance.default_value->expr_type)->llvm_type_name; 
+                    new_instance.init_expr->expr_type)->llvm_type_name; 
             auto [default_val_reg, default_expr_cat] = 
-                emit_valexpr(gen_state, new_instance.default_value);
+                emit_valexpr(gen_state, new_instance.init_expr);
             std::string default_val_reg_rval = 
                 convert_to_rvalue(
                     gen_state, 
@@ -133,7 +141,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
 
             // Getting the llvm type of the internal object
             std::string allocated_obj_type = 
-                llvm_type_of_basic_type(gen_state, new_instance.type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, new_instance.type)->llvm_type_name;
             
             // Getting the number of bytes
             std::string type_size = get_llvm_type_size(gen_state, allocated_obj_type);
@@ -214,7 +222,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             std::vector<std::pair<std::string, std::string>> func_args;
             for(std::shared_ptr<ValExpr> arg_expr: actor_construction.args) {
                 std::string llvm_type = 
-                    llvm_type_of_full_type(gen_state, arg_expr->expr_type)->llvm_type_name;
+                    llvm_type_of_coh_type(gen_state, arg_expr->expr_type)->llvm_type_name;
                 auto [arg_expr_reg, val_cat] = emit_valexpr(gen_state, arg_expr);
                 std::string arg_expr_rval_reg = 
                     convert_to_rvalue(gen_state, llvm_type, arg_expr_reg, val_cat);
@@ -261,7 +269,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             
             // 2. Get the llvm type of the internal element
             std::string deref_type = 
-                llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, val_expr->expr_type)->llvm_type_name;
             
             // 3. Use getelementptr to get the correct pointer
             std::string deref_lval_reg = gen_state.reg_label_gen.new_temp_reg();
@@ -274,9 +282,9 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // 1. Compile [field_access.base]
             auto [base_struct_reg, base_val_cat] = emit_valexpr(gen_state, field_access.base);
             std::shared_ptr<LLVMStructInfo> llvm_struct_info = 
-                llvm_type_of_full_type(gen_state, field_access.base->expr_type)->struct_info;
+                llvm_type_of_coh_type(gen_state, field_access.base->expr_type)->struct_info;
             std::string llvm_struct_type_name = 
-                llvm_type_of_full_type(gen_state, field_access.base->expr_type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, field_access.base->expr_type)->llvm_type_name;
             assert(llvm_struct_info != nullptr);
             auto [field_ind, field_type] = llvm_struct_info->field_ind_map.at(field_access.field);
 
@@ -305,7 +313,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
         [&](const ValExpr::Assignment& assignment) {
             // 1. Compile lhs and rhs and convert rhs to an rvalue
             std::string llvm_type = 
-                llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, val_expr->expr_type)->llvm_type_name;
             auto [lhs_reg, lhs_val_cat] = emit_valexpr(gen_state, assignment.lhs);
             assert(lhs_val_cat == ValueCategory::LVALUE);
             auto [rhs_reg, rhs_val_cat] = emit_valexpr(gen_state, assignment.rhs);
@@ -329,7 +337,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // CR: Separate this common code to another function
             for(std::shared_ptr<ValExpr> arg_expr: func_call.args) {
                 std::string llvm_type = 
-                    llvm_type_of_full_type(gen_state, arg_expr->expr_type)->llvm_type_name;
+                    llvm_type_of_coh_type(gen_state, arg_expr->expr_type)->llvm_type_name;
                 auto [arg_expr_reg, val_cat] = emit_valexpr(gen_state, arg_expr);
                 std::string arg_expr_rval_reg = 
                     convert_to_rvalue(gen_state, llvm_type, arg_expr_reg, val_cat);
@@ -343,7 +351,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             std::string llvm_func = *llvm_func_opt;
             std::string func_return_reg = gen_state.reg_label_gen.new_temp_reg();
             std::string llvm_return_type = 
-                llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, val_expr->expr_type)->llvm_type_name;
             gen_state.out_stream << "%" + func_return_reg << " = " <<
             "call " + llvm_return_type + " @" << llvm_func << "(";
             map_emit_list<std::pair<std::string, std::string>>(
@@ -359,13 +367,16 @@ std::pair<std::string, ValueCategory> emit_valexpr(
         },
         [&](const ValExpr::BinOpExpr& bin_op_expr) {
             // I am getting rid of floats for now
+            std::string llvm_cmp_type = 
+                llvm_type_of_coh_type(gen_state, bin_op_expr.lhs->expr_type)->llvm_type_name;
             std::string lhs_reg = emit_valexpr_rvalue(gen_state, bin_op_expr.lhs);
             std::string rhs_reg = emit_valexpr_rvalue(gen_state, bin_op_expr.rhs);
             std::string result_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.out_stream << "%" + result_reg << " = ";
             switch(bin_op_expr.op) {
                 case BinOp::Add:
-                    gen_state.out_stream << " add i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream 
+                    << " add " << llvm_cmp_type  << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Sub:
                     gen_state.out_stream << " sub i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
@@ -386,7 +397,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     gen_state.out_stream << " icmp eq i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Neq:
-                    gen_state.out_stream << " icmp neq i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp ne i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Gt:
                     gen_state.out_stream << " icmp sgt i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
@@ -404,7 +415,7 @@ std::string emit_valexpr_rvalue(
     GenState& gen_state,
     std::shared_ptr<ValExpr> val_expr) {
     auto [expr_reg, val_cat] = emit_valexpr(gen_state, val_expr);
-    std::string llvm_type = llvm_type_of_full_type(gen_state, val_expr->expr_type)->llvm_type_name;
+    std::string llvm_type = llvm_type_of_coh_type(gen_state, val_expr->expr_type)->llvm_type_name;
     return convert_to_rvalue(gen_state, llvm_type, expr_reg, val_cat);
 }
 
@@ -412,7 +423,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
     std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
             // We have already allocated memory at the start of the function. Just need to assign it
-            std::string var_type = llvm_type_of_full_type(gen_state, var_decl_with_init.init->expr_type)->llvm_type_name;
+            std::string var_type = llvm_type_of_coh_type(gen_state, var_decl_with_init.init->expr_type)->llvm_type_name;
             assert(gen_state.var_reg_mapping.find(var_decl_with_init.name) != gen_state.var_reg_mapping.end());
             std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_with_init.name);
             std::string init_reg = emit_valexpr_rvalue(gen_state, var_decl_with_init.init);
@@ -425,7 +436,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             std::string init_val_reg = emit_valexpr_rvalue(gen_state, member_init.init);
             assert(gen_state.var_reg_mapping.find(member_init.member_name) != gen_state.var_reg_mapping.end());
             std::string member_reg = gen_state.var_reg_mapping.at(member_init.member_name);
-            std::string init_type = llvm_type_of_full_type(gen_state, member_init.init->expr_type)->llvm_type_name;
+            std::string init_type = llvm_type_of_coh_type(gen_state, member_init.init->expr_type)->llvm_type_name;
             gen_state.out_stream << "store " << init_type << " " << "%" << init_val_reg << ", ptr " 
             << "%" + member_reg << std::endl;
         },
@@ -439,7 +450,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             // // %struct_pointer = call ptr @get_instance_struct(i64 %<actor_id_reg>)
             // gen_state.out_stream << "%" + actor_struct_pointer_reg << " = call ptr @get_instance_struct(i64 " 
             // << "%" + actor_id_reg << ")" << std::endl;
-            std::string be_actor_name = actor_name_of_full_type(be_call.actor->expr_type);
+            std::string be_actor_name = actor_name_of_coh_type(be_call.actor->expr_type);
             std::string be_name_llvm = llvm_name_of_behaviour(be_call.behaviour_name, be_actor_name);
             std::string be_struct_name = llvm_struct_of_behaviour(be_call.behaviour_name, be_actor_name);
             // Allocating memory for the struct
@@ -453,7 +464,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             std::vector<std::pair<std::string, std::string>> compiler_args_info;
             for(size_t i = 0; i < be_call.args.size(); i++) {
                 std::string arg_reg = emit_valexpr_rvalue(gen_state, be_call.args[i]);
-                std::string arg_llvm_type = llvm_type_of_full_type(gen_state, be_call.args[i]->expr_type)->llvm_type_name;
+                std::string arg_llvm_type = llvm_type_of_coh_type(gen_state, be_call.args[i]->expr_type)->llvm_type_name;
                 compiler_args_info.push_back({arg_llvm_type, arg_reg});
             }
             compiler_args_info.push_back({"i64", actor_id_reg});
@@ -475,7 +486,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
         [&](const Stmt::Print& print_expr) {
             std::string print_int_reg = emit_valexpr_rvalue(gen_state, print_expr.print_expr);
             std::string print_llvm_type_name = 
-                llvm_type_of_full_type(gen_state, print_expr.print_expr->expr_type)->llvm_type_name;
+                llvm_type_of_coh_type(gen_state, print_expr.print_expr->expr_type)->llvm_type_name;
             std::string print_func_name;
             if(print_llvm_type_name == "i32") {
                 print_func_name = "print_int";
@@ -558,7 +569,7 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
         },
         [&](const Stmt::Return& return_stmt) {
             std::string return_expr_reg = emit_valexpr_rvalue(gen_state, return_stmt.expr);
-            std::string llvm_return_type = llvm_type_of_full_type(gen_state, return_stmt.expr->expr_type)->llvm_type_name;
+            std::string llvm_return_type = llvm_type_of_coh_type(gen_state, return_stmt.expr->expr_type)->llvm_type_name;
             gen_state.out_stream << "ret " << llvm_return_type << " " << "%" + return_expr_reg << std::endl;
         }
     }, stmt->t);
@@ -588,11 +599,12 @@ void compile_callable_body(
         }
     }
 
-    std::unordered_map<std::string, FullType> local_vars = collect_local_variable_types(callable_body);
+    std::unordered_map<std::string, std::shared_ptr<const Type>> local_vars = 
+        collect_local_variable_types(callable_body);
     for(const auto& [var, full_type]: local_vars) {
         allocate_var_to_stack(
             gen_state, 
-            llvm_type_of_full_type(gen_state, full_type)->llvm_type_name,
+            llvm_type_of_coh_type(gen_state, full_type)->llvm_type_name,
             var);
     }
 
@@ -612,7 +624,7 @@ void compile_synchronous_callable(
     std::vector<std::pair<std::string, std::string>> callable_params;
     for(TopLevelItem::VarDecl &var_decl: params) {
         callable_params.push_back({
-            llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name,
+            llvm_type_of_coh_type(gen_state, var_decl.type)->llvm_type_name,
             var_decl.name
         });
     }
@@ -660,7 +672,7 @@ void emit_function(GenState& gen_state, std::shared_ptr<TopLevelItem::Func> func
     gen_state.var_reg_mapping.clear();
     std::string func_name_llvm = llvm_name_of_func(gen_state, func_def->name);
     std::string func_return_type_llvm = 
-        llvm_type_of_full_type(gen_state, func_def->return_type)->llvm_type_name;
+        llvm_type_of_coh_type(gen_state, func_def->return_type)->llvm_type_name;
     compile_synchronous_callable(gen_state, func_name_llvm, func_return_type_llvm, func_def->params, func_def->body);
     // Add this function to gen_state
     gen_state.func_llvm_name_map.insert(func_def->name, func_name_llvm);
@@ -723,7 +735,7 @@ void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour
     for(auto &var_decl: behaviour_def->params) {
         struct_mem_vec.push_back({
             var_decl.name,
-            llvm_type_of_full_type(gen_state, var_decl.type)->llvm_type_name
+            llvm_type_of_coh_type(gen_state, var_decl.type)->llvm_type_name
         });
     }
     // Creating the behaviour function signature

@@ -52,8 +52,7 @@
     vector<shared_ptr<ValExpr>>* val_expr_list;
     shared_ptr<Stmt>* stmt;
     vector<shared_ptr<Stmt>>* stmt_list;
-    BasicType* basic_type;
-    FullType* full_type;
+    std::shared_ptr<const Type>* type;
     Cap* cap;
     NameableType::Struct* struct_fields;
     ValExpr::VStruct* struct_instance;
@@ -62,7 +61,7 @@
     vector<TopLevelItem::VarDecl>* var_list;
     std::shared_ptr<TopLevelItem::Func>* func;
     std::shared_ptr<TopLevelItem::Actor>* actor;
-    std::unordered_map<std::string, FullType>* actor_fields;
+    std::unordered_map<std::string, std::shared_ptr<const Type>>* actor_fields;
     std::shared_ptr<TopLevelItem::Constructor>* actor_constructor;
     std::shared_ptr<TopLevelItem::Behaviour>* actor_behaviour;
     Program* program;
@@ -70,11 +69,11 @@
 }
 
 /* ---------- TOKENS ---------- */
-%token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN
+%token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN 
 %token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT TOK_OUT
 %token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
-%token TOK_INT TOK_BOOL TOK_UNIT
-%token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED
+%token TOK_INT TOK_BOOL TOK_UNIT TOK_NULLPTR
+%token TOK_REF TOK_ISO TOK_VAL TOK_LOCKED TOK_TAG
 %token TOK_TRUE TOK_FALSE
 %token TOK_SEND TOK_ARROW TOK_ASSIGN TOK_CONSUME
 %token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER TOK_EQ TOK_NEQ
@@ -95,8 +94,7 @@
 %type <val_expr>        val_expr
 %type <val_expr>        assignment_expr comparison_expr additive_expr multiplicative_expr postfix_expr primary_expr
 %type <val_expr_list>   val_expr_list nonempty_val_expr_list
-%type <basic_type>      basic_type
-%type <full_type>       full_type
+%type <type>            full_type normal_type atomic_type
 %type <cap>             cap
 %type <struct_fields>   struct_fields
 %type <struct_instance> struct_instance
@@ -180,7 +178,7 @@ type_def
         );
         delete $2; delete $6;
       }
-    | TOK_TYPE TOK_IDENT TOK_ASSIGN basic_type {
+    | TOK_TYPE TOK_IDENT TOK_ASSIGN full_type {
         const std::string& name = *$2;
         if (std::isupper(name[0])) {
             yyerror(&@2, yyscanner,
@@ -189,7 +187,7 @@ type_def
         }
         $$ = new TopLevelItem::TypeDef(
             std::move(*$2),
-            make_shared<NameableType>(NameableType::Basic{ std::move(*$4) })
+            make_shared<NameableType>(std::move(*$4))
         );
         delete $2; delete $4;
       }
@@ -197,7 +195,7 @@ type_def
 
 struct_fields
     : %empty { $$ = new NameableType::Struct(); }
-    | struct_fields TOK_IDENT TOK_COLON basic_type TOK_SEMI {
+    | struct_fields TOK_IDENT TOK_COLON full_type TOK_SEMI {
         $$ = $1;
         $$->members.emplace_back(std::move(*$2), std::move(*$4));
         delete $2; delete $4;
@@ -231,7 +229,7 @@ actor_def
 
 /* ---------- ACTOR FIELDS ---------- */
 actor_fields
-    : %empty { $$ = new unordered_map<std::string, FullType>(); }
+    : %empty { $$ = new unordered_map<std::string, std::shared_ptr<const Type>>(); }
     | actor_fields TOK_IDENT TOK_COLON full_type TOK_SEMI {
         $$ = $1;
         $$->emplace(std::move(*$2), std::move(*$4));
@@ -493,7 +491,7 @@ assignment_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::Assignment{
                     std::move(*$1),
                     std::move(*$3)
@@ -511,7 +509,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Lt, std::move(*$3) }
             }
         ));
@@ -521,7 +519,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Leq, std::move(*$3) }
             }
         ));
@@ -531,7 +529,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Gt, std::move(*$3) }
             }
         ));
@@ -541,7 +539,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Geq, std::move(*$3) }
             }
         ));
@@ -551,7 +549,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Eq, std::move(*$3) }
             }
         ));
@@ -561,7 +559,7 @@ comparison_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{ 
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{ std::move(*$1), BinOp::Neq, std::move(*$3) }
             }
         ));
@@ -576,7 +574,7 @@ additive_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Add,
@@ -590,7 +588,7 @@ additive_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Sub,
@@ -609,7 +607,7 @@ multiplicative_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Mul,
@@ -623,7 +621,7 @@ multiplicative_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Div,
@@ -642,7 +640,7 @@ postfix_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::PointerAccess{
                     std::move(*$3),
                     std::move(*$1)
@@ -655,7 +653,7 @@ postfix_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::Field{
                     std::move(*$1),
                     std::move(*$3)
@@ -671,64 +669,68 @@ primary_expr
     : TOK_LPAREN val_expr TOK_RPAREN { $$ = $2; }
     | TOK_LPAREN TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VUnit{} }
+            ValExpr{ span_from(@1), nullptr, ValExpr::VUnit{} }
         ));
       }
     | TOK_INT_LIT {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VInt{ $1 } }
+            ValExpr{ span_from(@1), nullptr, ValExpr::VInt{ $1 } }
         ));
       }
     | TOK_TRUE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VBool{ true } }
+            ValExpr{ span_from(@1), nullptr, ValExpr::VBool{ true } }
         ));
       }
     | TOK_FALSE {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VBool{ false } }
+            ValExpr{ span_from(@1), nullptr, ValExpr::VBool{ false } }
+        ));
+      }
+    | TOK_NULLPTR {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{ span_from(@1), nullptr, ValExpr::VNullptr{} }
         ));
       }
     | TOK_IDENT {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
-            ValExpr{ span_from(@1), FullType(), ValExpr::VVar{ *$1 } }
+            ValExpr{ span_from(@1), nullptr, ValExpr::VVar{ *$1 } }
         ));
         delete $1;
       }
     /* Struct instance: { ... } : TypeName */
-    | TOK_LBRACE struct_instance TOK_RBRACE TOK_COLON TOK_IDENT {
-        $2->type_name = std::move(*$5);
+    | TOK_LBRACE struct_instance TOK_RBRACE TOK_COLON full_type {
+        $2->struct_type = std::move(*$5);
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 std::move(*$2)
             }
         ));
         delete $2; delete $5;
       }
     /* Allocation: new <cap>[size] <type>(default_value) */
-    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE basic_type TOK_LPAREN val_expr TOK_RPAREN {
+    | TOK_NEW TOK_LSQUARE val_expr TOK_RSQUARE full_type TOK_LPAREN val_expr TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::NewInstance{
-                    std::move(*$6),  // BasicType
-                    std::move(*$2),  // Cap
-                    std::move(*$8),  // default_value
-                    std::move(*$4)   // size
+                    std::move(*$5),  // Type
+                    std::move(*$7),  // default_value
+                    std::move(*$3)   // size
                 }
             }
         ));
-        delete $2; delete $4; delete $6; delete $8;
+        delete $3; delete $5; delete $7;
       }
     /* Actor construction: new Actor.ctor(args...) */
     | TOK_NEW TOK_IDENT TOK_DOT TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::ActorConstruction{
                     std::move(*$2),  // actor_name
                     std::move(*$4),  // constructor_name
@@ -743,7 +745,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::FuncCall{
                     std::move(*$1),
                     std::move(*$3)
@@ -757,7 +759,7 @@ primary_expr
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
-                FullType(),
+                nullptr,
                 ValExpr::Consume{ *$3 }
             }
         ));
@@ -766,48 +768,59 @@ primary_expr
     ;
 
 /* ---------- TYPES ---------- */
-basic_type
-    : TOK_UNIT {
-        $$ = new BasicType();
-        $$->t = BasicType::TUnit{};
+// Type with potential viewpoint
+full_type
+    : normal_type {
+        $$ = $1;
       }
-    | TOK_INT {
-        $$ = new BasicType();
-        $$->t = BasicType::TInt{};
-      }
-    | TOK_BOOL {
-        $$ = new BasicType();
-        $$->t = BasicType::TBool{};
-      }
-    | TOK_IDENT {
-        $$ = new BasicType();
-        std::string &name = *$1;
-        assert(name.size() > 0);
-        if (std::isupper(name[0])) {
-            // Actor type
-            $$->t = BasicType::TActor{ std::move(*$1) };
-        } else {
-            // Regular named type
-            $$->t = BasicType::TNamed{ std::move(*$1) };
-        }
-
+    | cap TOK_GREATER TOK_LPAREN normal_type TOK_RPAREN {  // Handles "ref> (int ref) val"
+        auto type = std::make_shared<Type>(Type{(*$4)->t, *$1});
+        $$ = new std::shared_ptr<const Type>(type);
         delete $1;
+        delete $4;
       }
     ;
 
-full_type
-    : TOK_LPAREN full_type TOK_RPAREN {
-        $$ = $2;
+normal_type
+    : atomic_type {
+        $$ = $1;
       }
-    | basic_type {
-        $$ = new FullType();
-        $$->t = *$1;
+    | atomic_type cap {
+        auto type = std::make_shared<const Type>(Type{Type::Pointer{*$1, *$2}, std::nullopt});
+        $$ = new std::shared_ptr<const Type>(type);
+        delete $1;
+        delete $2;
+      }
+    ;
+
+// This handles base units and mandatory grouping
+atomic_type
+    : TOK_UNIT {
+        auto type = std::make_shared<const Type>(Type{Type::TUnit{}, std::nullopt});
+        $$ = new std::shared_ptr<const Type>(type);
+      }
+    | TOK_INT {
+        auto type = std::make_shared<const Type>(Type{Type::TInt{}, std::nullopt});
+        $$ = new std::shared_ptr<const Type>(type);
+      }
+    | TOK_BOOL {
+        auto type = std::make_shared<const Type>(Type{Type::TBool{}, std::nullopt});
+        $$ = new std::shared_ptr<const Type>(type);
+      }
+    | TOK_IDENT {
+        auto type = std::make_shared<Type>();
+        std::string &name = *$1;
+        assert(name.size() > 0);
+        if(std::isupper(name[0])) {
+            type->t = Type::TActor{ std::move(*$1) };
+        } else {
+            type->t = Type::TNamed{ std::move(*$1) };
+        }
+        $$ = new std::shared_ptr<const Type>(type);
         delete $1;
       }
-    | basic_type cap {
-        $$ = new FullType();
-        $$->t = FullType::Pointer{ *$1, *$2 };
-        delete $1; delete $2;
+    | TOK_LPAREN normal_type TOK_RPAREN {
+        $$ = $2;
       }
     ;
 
@@ -815,6 +828,10 @@ cap
     : TOK_REF {
         $$ = new Cap();
         $$->t = Cap::Ref{};
+      }
+    | TOK_TAG {
+        $$ = new Cap();
+        $$->t = Cap::Tag{};
       }
     | TOK_VAL {
         $$ = new Cap();

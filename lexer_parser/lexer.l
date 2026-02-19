@@ -40,11 +40,13 @@ static int curr_column = 1;
 "if"        return TOK_IF;
 "else"      return TOK_ELSE;
 "while"     return TOK_WHILE;
+"nullptr"   return TOK_NULLPTR;
 
 "int"       return TOK_INT;
 "bool"      return TOK_BOOL;
 
 "ref"       return TOK_REF;
+"tag"       return TOK_TAG;
 "iso"       return TOK_ISO;
 "val"       return TOK_VAL;
 "locked"    return TOK_LOCKED;

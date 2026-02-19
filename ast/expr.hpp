@@ -21,6 +21,7 @@ enum class BinOp { Add, Sub, Mul, Div, Geq, Leq, Eq, Neq, Gt, Lt };
 struct ValExpr {
     // Simple values
     struct VUnit {};
+    struct VNullptr {};
     struct VInt { int v; };
     struct VBool { bool v; };
 
@@ -30,13 +31,13 @@ struct ValExpr {
     // Structs
     struct VStruct { 
         std::vector<std::pair<std::string, std::shared_ptr<ValExpr>>> fields;
-        std::string type_name;
+        std::shared_ptr<const Type> struct_type;
     };
     
     // Allocations
     struct NewInstance {
-        std::shared_ptr<Type> type;
-        Cap cap;
+        std::shared_ptr<const Type> type;
+        std::shared_ptr<ValExpr> init_expr;
         std::shared_ptr<ValExpr> size;
     };
     struct ActorConstruction {
@@ -74,9 +75,9 @@ struct ValExpr {
     struct BinOpExpr { std::shared_ptr<ValExpr> lhs; BinOp op; std::shared_ptr<ValExpr> rhs; };
 
     SourceSpan source_span;
-    std::shared_ptr<Type> expr_type;
-    std::variant<VUnit, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, Consume,
-    PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
+    std::shared_ptr<const Type> expr_type;
+    std::variant<VUnit, VNullptr, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
+    Consume, PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };
 
 

@@ -2,9 +2,9 @@
 #include "pattern_matching_boilerplate.hpp"
 #include "special_reg_names.hpp"
 
-std::unordered_map<std::string, FullType> collect_local_variable_types(
+std::unordered_map<std::string, std::shared_ptr<const Type>> collect_local_variable_types(
         std::vector<std::shared_ptr<Stmt>>& callable_body) {
-    std::unordered_map<std::string, FullType> local_vars;
+    std::unordered_map<std::string, std::shared_ptr<const Type>> local_vars;
     for(auto stmt: callable_body) {
         std::visit(Overload{
             [&](const Stmt::VarDeclWithInit &var_decl_init) {
@@ -46,49 +46,42 @@ std::string llvm_struct_of_actor(const std::string& actor_name) {
     return actor_name + ".struct";
 }
 
-std::shared_ptr<LLVMTypeInfo> llvm_type_of_basic_type(
+std::shared_ptr<LLVMTypeInfo> llvm_type_of_coh_type(
     GenState& gen_state,
-    BasicType basic_type) {
+    std::shared_ptr<const Type> type) {
     return std::visit(Overload{
-        [&](const BasicType::TUnit&) {
+        [&](const Type::TUnit&) {
             // Using the fact that [] on unordered_maps automatically calls the
             // default constructor on the value type if the key is not present
             return std::make_shared<LLVMTypeInfo>("i1");
         },
-        [&](const BasicType::TInt&) {
+        [&](const Type::TNullptr&) {
+            return std::make_shared<LLVMTypeInfo>("ptr"); 
+        },
+        [&](const Type::TInt&) {
             return std::make_shared<LLVMTypeInfo>("i32");
         },
-        [&](const BasicType::TBool&) {
+        [&](const Type::TBool&) {
             return std::make_shared<LLVMTypeInfo>("i1");
         },
-        [&](const BasicType::TNamed& t_named) {
+        [&](const Type::TNamed& t_named) {
             // std::cerr << t_named.name << std::endl;
             assert(gen_state.type_name_info_map.find(t_named.name) != gen_state.type_name_info_map.end());
             return gen_state.type_name_info_map.at(t_named.name);
         },
-        [&](const BasicType::TActor&) {
+        [&](const Type::TActor&) {
             return std::make_shared<LLVMTypeInfo>("i64");
-        }
-    }, basic_type.t);
-}
-
-std::shared_ptr<LLVMTypeInfo> llvm_type_of_full_type(
-    GenState& gen_state,
-    FullType full_type) {
-    return std::visit(Overload{
-        [&](BasicType basic_type) {
-            // Using the fact that [] on unordered_maps automatically calls the
-            // default constructor on the value type if the key is not present
-            return llvm_type_of_basic_type(gen_state, basic_type);
         },
-        [&](FullType::Pointer) {
+        [&](const Type::Pointer&) {
             return std::make_shared<LLVMTypeInfo>("ptr");
         }
-    }, full_type.t);
+    }, type->t);
 }
 
-std::string actor_name_of_full_type(FullType full_type) {
-    return std::get<BasicType::TActor>(std::get<BasicType>(full_type.t).t).name;
+
+
+std::string actor_name_of_coh_type(std::shared_ptr<const Type> type) {
+    return std::get<Type::TActor>(type->t).name;
 }
 
 std::string get_llvm_type_size(GenState &gen_state, const std::string& llvm_type_name) {
