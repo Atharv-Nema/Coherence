@@ -14,8 +14,8 @@ actor Other {
 
 actor Main {
     new create() {
-        var lock_var: int locked<A> = new locked<A>[1] int(0);
-        var other_arr: Other ref = new ref[100000] Other(new Other.create(lock_var));
+        var lock_var: int locked<A> = new[1] int(0);
+        var other_arr: Other ref = new[100000] Other(new Other.create(lock_var));
         var ind: int = 1;
         while(ind < 100000) {
             other_arr[ind] = new Other.create(lock_var);

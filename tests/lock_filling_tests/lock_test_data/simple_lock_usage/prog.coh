@@ -1,11 +1,11 @@
 actor Main {
     mem_a: int locked<A_LOCK>;
     new create() {
-        var b: int locked<B_LOCK> = new locked<B_LOCK>[1] int(1);
+        var b: int locked<B_LOCK> = new[1] int(1);
         atomic {
             b[0];
         }
-        mem_a := new locked<A_LOCK>[1] int(1);
+        mem_a := new[1] int(1);
         atomic {
             mem_a[0];
         }

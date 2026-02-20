@@ -11,9 +11,9 @@ actor Other {
 actor Main {
     new create() {
         var other_instance: Other = new Other.create();
-        var x1: int iso = new iso[1] int(0);
-        var x2: int val = new val[1] int(0);
-        var x3: int ref = new ref[1] int(0);
+        var x1: int iso = new[1] int(0);
+        var x2: int val = new[1] int(0);
+        var x3: int ref = new[1] int(0);
         // this will create an alias to an iso which is not allowed
         other_instance->iso_behaviour(x1);
         // sending a ref is not allowed

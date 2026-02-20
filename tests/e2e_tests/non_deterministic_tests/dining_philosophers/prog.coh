@@ -42,17 +42,17 @@ actor Philosopher {
 
 actor Main {
     new create() {
-        var philosophers: Philosopher ref = new ref[5] Philosopher(new Philosopher.create()); 
+        var philosophers: Philosopher ref = new[5] Philosopher(new Philosopher.create()); 
         var i: int = 1;
         while(i < 5) {
             philosophers[i] = new Philosopher.create();
             i = i + 1;
         }
-        var fork_a: unit locked<A> = new locked<A>[1] unit(());
-        var fork_b: unit locked<B> = new locked<B>[1] unit(());
-        var fork_c: unit locked<C> = new locked<C>[1] unit(());
-        var fork_d: unit locked<D> = new locked<D>[1] unit(());
-        var fork_e: unit locked<E> = new locked<E>[1] unit(());
+        var fork_a: unit locked<A> = new[1] unit(());
+        var fork_c: unit locked<C> = new[1] unit(());
+        var fork_b: unit locked<B> = new[1] unit(());
+        var fork_d: unit locked<D> = new[1] unit(());
+        var fork_e: unit locked<E> = new[1] unit(());
         philosophers[0]->eat1(fork_a, fork_b);
         philosophers[1]->eat2(fork_b, fork_c);
         philosophers[2]->eat3(fork_c, fork_d);

@@ -235,7 +235,9 @@ bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
 
 std::shared_ptr<const Type> get_type_of_nameable(std::shared_ptr<NameableType> nameable_type) {
     assert(nameable_type != nullptr);
-    assert(std::holds_alternative<std::shared_ptr<const Type>>(nameable_type->t));
+    if(!std::holds_alternative<std::shared_ptr<const Type>>(nameable_type->t)) {
+        return nullptr;
+    }
     return std::get<std::shared_ptr<const Type>>(nameable_type->t);
 }
 
@@ -797,7 +799,7 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                         report_error_location(val_expr->source_span);
                         std::cerr << "Type not compatible for relative comparisons" << std::endl;
                     }
-                    return nullptr;
+                    return std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
             }
             assert(false);
             return nullptr;
@@ -909,8 +911,9 @@ bool type_check_statement(CoreEnv& env, std::shared_ptr<Stmt> stmt) {
             if(!cond_type) {
                 return false;
             }
-            auto bool_type = std::make_shared<Type>(Type{Type::TBool{}, std::nullopt});
             if(!type_is_bool(env.type_env.type_context, cond_type)) {
+                report_error_location(while_expr.cond->source_span);
+                std::cerr << "Condition does not have type boolean" << std::endl;
                 return false;
             }
             // Creating a scope for the body

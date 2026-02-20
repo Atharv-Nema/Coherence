@@ -1,4 +1,3 @@
-
 /*
 Triangles will form a connected region in the callable graph that looks
 like a triangle
@@ -6,21 +5,24 @@ like a triangle
 
 func triangle1() => unit {
     atomic {
-        (new locked<A>[1] int(1))[0];
+        var lock_var: int locked<A> = (new[1] int(1));
+        lock_var[0];
     }
     return triangle2();
 }
 
 func triangle2() => unit {
     atomic {
-        (new locked<B>[1] int(1))[0];
+        var lock_var: int locked<B> = (new[1] int(1));
+        lock_var[0];
     }
     return triangle3();
 }
 
 func triangle3() => unit {
     atomic {
-        (new locked<C>[1] int(1))[0];
+        var lock_var: int locked<C> = (new[1] int(1));
+        lock_var[0];
     }
     return triangle1();
 }
@@ -28,6 +30,3 @@ func triangle3() => unit {
 actor Main {
     new create() {}
 }
-
-
-
