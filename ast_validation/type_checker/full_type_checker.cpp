@@ -3,6 +3,7 @@
 #include "return_checker.hpp"
 #include "initialization_checker.hpp"
 #include "pattern_matching_boilerplate.hpp"
+#include "type_checker_utils.hpp"
 #include "utils.hpp"
 #include "defer.cpp"
 #include <assert.h>
@@ -24,7 +25,17 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
     return true;
 }
 
+
+
+
 bool type_check_behaviour(TypeEnv& env, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
+    for(TopLevelItem::VarDecl& param: behaviour_def->params) {
+        if(!type_shareable(env.type_context, param.type)) {
+            std::cerr << "Behaviour " << behaviour_def->name << "parameter " << param.name
+            << " is not sendable" << std::endl;
+            return false; 
+        }
+    }
     return type_check_callable_body(env, nullptr, behaviour_def->params, behaviour_def->body);
 }
 

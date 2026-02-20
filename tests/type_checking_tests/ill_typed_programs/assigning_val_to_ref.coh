@@ -1,6 +1,6 @@
 actor Main {
     new create() {
-        var x: int val = new val[1] int(0);
+        var x: int val = new[1] int(0);
         var y: int ref = x;
     }
 }

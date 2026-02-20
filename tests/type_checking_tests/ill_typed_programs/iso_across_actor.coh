@@ -6,7 +6,7 @@ actor Other {
 actor Main {
     new create() {
         var other_instance: Other = new Other.create();
-        var x: int iso = new iso[1] int(0);
+        var x: int iso = new[1] int(0);
         // sending a ref is not allowed
         other_instance->iso_behaviour(x);
     }
