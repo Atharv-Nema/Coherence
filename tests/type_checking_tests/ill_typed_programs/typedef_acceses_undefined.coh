@@ -1,0 +1,8 @@
+type t = struct {
+    a: x ref;
+    b: int ref;
+}
+
+actor Main {
+    new create() {}
+}

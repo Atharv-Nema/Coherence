@@ -211,7 +211,7 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
             }
             // Now need to take the intersection to be conservative
             for(const auto& var: *then_block_assigned_vars) {
-                if(else_block_assigned_vars->find(var) != else_block_assigned_vars->end()) {
+                if(else_block_assigned_vars->contains(var)) {
                     new_assigned_var.emplace(var);
                 }
             }
@@ -222,7 +222,10 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
             if(valexpr_accesses_uninitialized(env, unassigned_members, while_expr.cond)) {
                 return std::nullopt;
             }
-            return new_assigned_var_in_stmt_list(env, unassigned_members, while_expr.body);
+            if(new_assigned_var_in_stmt_list(env, unassigned_members, while_expr.body) == std::nullopt) {
+                return std::nullopt;
+            }
+            return std::unordered_set<std::string>{};
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_expr) -> std::optional<std::unordered_set<std::string>> {
             return new_assigned_var_in_stmt_list(env, unassigned_members, atomic_expr->body);
@@ -248,7 +251,7 @@ std::optional<std::unordered_set<std::string>> new_assigned_var_in_stmt_list(
             return std::nullopt;
         }
         for(const std::string& var: *new_assigned_var) {
-            assert(curr_unassigned_members.find(var) != curr_unassigned_members.end());
+            assert(curr_unassigned_members.contains(var));
             curr_unassigned_members.erase(var);
             newly_assigned_members.emplace(var);
         }
@@ -264,7 +267,7 @@ bool initialization_check(
     InitEnv init_env(curr_actor, actor_frontend);
     std::unordered_set<std::string> unassigned_members;
     for(const auto& [k, v]: curr_actor->member_vars) {
-        assert(unassigned_members.find(k) == unassigned_members.end());
+        assert(!unassigned_members.contains(k));
         unassigned_members.insert(k);
     }
     auto assigned_vars = new_assigned_var_in_stmt_list(init_env, unassigned_members, constructor_def->body);
@@ -273,7 +276,7 @@ bool initialization_check(
     }
     bool all_assigned = true;
     for(const auto& k: unassigned_members) {
-        if(assigned_vars->find(k) == assigned_vars->end()) {
+        if(!assigned_vars->contains(k)) {
             std::cerr << "Constructor " << constructor_def->name << " of " << actor_frontend->actor_name 
             << " does not initialize " << k << std::endl;
             all_assigned = false;

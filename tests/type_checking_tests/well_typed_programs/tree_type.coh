@@ -1,0 +1,9 @@
+type tree = struct {
+    left: tree ref;
+    right: tree ref;
+    tree_val: int;
+}
+
+actor Main {
+    new create() {}
+}

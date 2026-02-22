@@ -50,12 +50,77 @@ bool type_check_constructor(TypeEnv& env, std::shared_ptr<TopLevelItem::Construc
 }
 
 
+bool type_accesses_raw_named(const std::string& name, std::shared_ptr<const Type> type) {
+    return std::visit(Overload{
+        [&](const Type::TNamed& t_named) {
+            return t_named.name == name;
+        },
+        [&](const auto&) { return false; }
+    }, type->t);
+}
+
+bool nameable_accesses_raw_named(const std::string& name, std::shared_ptr<NameableType> nameable) {
+    return std::visit(Overload{
+        [&](std::shared_ptr<const Type> type) {
+            return type_accesses_raw_named(name, type);
+        },
+        [&](const NameableType::Struct& t_struct) {
+            for(auto& [mem_name, mem_type]: t_struct.members) {
+                if(type_accesses_raw_named(name, mem_type)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }, nameable->t);
+}
+
+bool type_accesses_undefined(TypeContext& type_context, std::shared_ptr<const Type> type) {
+    return std::visit(Overload{
+        [&](const Type::TNamed& t_named) {
+            return type_context.contains(t_named.name);
+        },
+        [&](const Type::Pointer& ptr) {
+            return type_accesses_undefined(type_context, ptr.base_type);
+        },
+        [&](const auto&) { return false; }
+    }, type->t);
+}
+
+bool nameable_accesses_undefined(
+    TypeContext& type_context, 
+    std::shared_ptr<const NameableType> nameable_type) {
+    return std::visit(Overload{
+        [&](std::shared_ptr<const Type> type) {
+            return type_accesses_undefined(type_context, type);
+        },
+        [&](const NameableType::Struct& t_struct) {
+            for(auto& [mem_name, mem_type]: t_struct.members) {
+                if(type_accesses_undefined(type_context, mem_type)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }, nameable_type->t);
+}
+
 
 bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
             assert(!env.type_context.contains(type_def.type_name));
             // CR: Enforce an invariant that cannot point directly to a nameable type
+            if(nameable_accesses_raw_named(type_def.type_name, type_def.nameable_type)) {
+                report_error_location(toplevel_item.source_span);
+                std::cerr << type_def.type_name << " cannot directly refer to itself " << std::endl;
+                return false;
+            }
+            if(nameable_accesses_undefined(env.type_context, type_def.nameable_type)) {
+                report_error_location(toplevel_item.source_span);
+                std::cerr << type_def.type_name << " accesses undefined type" << std::endl;
+                return false;
+            }
             env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             return true;
         },

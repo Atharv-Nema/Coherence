@@ -1,0 +1,7 @@
+type t = struct {
+    a: t;
+}
+
+actor Main {
+    new create() {}
+}
