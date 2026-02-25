@@ -68,12 +68,15 @@ void thread_loop() {
         assert(actor_instance_state_opt != std::nullopt);
         std::shared_ptr<ActorInstanceState> actor_instance_state = *actor_instance_state_opt;
 
-        State expected = State::RUNNABLE;
-        bool set_running = actor_instance_state->state.compare_exchange_strong(expected, State::RUNNING);
-        assert(set_running);
-        auto msg_opt = actor_instance_state->mailbox.try_pop_front();
-        assert(msg_opt != std::nullopt);
-        MailboxItem msg = *msg_opt;
+        MailboxItem msg;
+        {
+            std::lock_guard<std::mutex> instance_guard(actor_instance_state->instance_lock);
+            assert(actor_instance_state->state == State::RUNNABLE);
+            actor_instance_state->state = State::RUNNING;
+            assert(!actor_instance_state->mailbox.empty());
+            msg = actor_instance_state->mailbox.front();
+            actor_instance_state->mailbox.pop_front();
+        }
         // If the actor_instace_state->next_continuation != std::nullptr, this means that we need to
         // call that continuation
         if(actor_instance_state->next_continuation == nullptr) {
@@ -96,10 +99,13 @@ void thread_loop() {
                     std::free(actor_instance_state->running_be_sp);
                     actor_instance_state->running_be_sp = nullptr;
                     loop_done = true;
-                    actor_instance_state->state = State::EMPTY;
-                    if (!actor_instance_state->mailbox.empty()) {
-                        State expected = State::EMPTY;
-                        if (actor_instance_state->state.compare_exchange_strong(expected, State::RUNNABLE)) {
+                    {
+                        std::lock_guard<std::mutex> instance_guard(actor_instance_state->instance_lock);
+                        if(actor_instance_state->mailbox.empty()) {
+                            actor_instance_state->state = State::EMPTY;
+                        }
+                        else {
+                            actor_instance_state->state = State::RUNNABLE;
                             runtime_ds->schedule_queue.emplace_back(actor_instance_id);
                             runtime_ds->thread_bed.release();
                         }
