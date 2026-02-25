@@ -711,19 +711,20 @@ primary_expr
         delete $2; delete $5;
       }
     /* Allocation: new <cap>[size] <type>(default_value) */
-    | TOK_NEW TOK_LSQUARE val_expr TOK_RSQUARE full_type TOK_LPAREN val_expr TOK_RPAREN {
+    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE full_type TOK_LPAREN val_expr TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
                 nullptr,
                 ValExpr::NewInstance{
-                    std::move(*$5),  // Type
-                    std::move(*$7),  // default_value
-                    std::move(*$3)   // size
+                    std::move(*$6),  // Type
+                    std::move(*$2),  // Cap
+                    std::move(*$8),  // default_value
+                    std::move(*$4)   // size
                 }
             }
         ));
-        delete $3; delete $5; delete $7;
+        delete $2; delete $4; delete $6; delete $8;
       }
     /* Actor construction: new Actor.ctor(args...) */
     | TOK_NEW TOK_IDENT TOK_DOT TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {

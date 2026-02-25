@@ -37,6 +37,7 @@ struct ValExpr {
     // Allocations
     struct NewInstance {
         std::shared_ptr<const Type> type;
+        Cap cap;
         std::shared_ptr<ValExpr> init_expr;
         std::shared_ptr<ValExpr> size;
     };

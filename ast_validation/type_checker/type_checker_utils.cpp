@@ -105,7 +105,7 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
             return Cap{Cap::Val{}}; 
         },
         [](const Cap::Iso_cap&, const Cap::Iso&) -> std::optional<Cap> { 
-            return Cap{Cap::Iso{}}; 
+            return Cap{Cap::Iso_cap{}}; 
         },
         [&](const Cap::Iso_cap&, const Cap::Locked&) -> std::optional<Cap> { 
             return inner_view; 
@@ -356,6 +356,7 @@ bool type_assignable(
             auto rhs_deref_type = get_dereferenced_type(rhs);
             assert(lhs_deref_type != nullptr);
             assert(rhs_deref_type != nullptr);
+            // CR: Think very carefully about this line
             if(!type_assignable(type_context, lhs_deref_type, rhs_deref_type)) {
                 // std::cerr << "The base types of the pointers do not match" << std::endl;
                 return false;
@@ -402,16 +403,17 @@ bool type_shareable(TypeContext& type_context, std::shared_ptr<const Type> type)
 }
 
 std::shared_ptr<const Type> unaliased_type(std::shared_ptr<const Type> type) {
-    if(!std::holds_alternative<Type::Pointer>(type->t)) {
-        return type;
-    }
-    Type::Pointer pointer = std::get<Type::Pointer>(type->t);
-    Cap effective_cap = viewpoint_adaptation_op(type->viewpoint, pointer.cap).value();
-    if(!std::holds_alternative<Cap::Iso>(effective_cap.t)) {
-        return type;
-    }
-    else {
-        return std::make_shared<const Type>(
-            Type {Type::Pointer {pointer.base_type, Cap::Iso_cap{}}, std::nullopt});
-    }
+    return apply_viewpoint_to_type(Cap{Cap::Iso_cap{}}, type);
+    // if(!std::holds_alternative<Type::Pointer>(type->t)) {
+    //     return type;
+    // }
+    // Type::Pointer pointer = std::get<Type::Pointer>(type->t);
+    // Cap effective_cap = viewpoint_adaptation_op(type->viewpoint, pointer.cap).value();
+    // if(!std::holds_alternative<Cap::Iso>(effective_cap.t)) {
+    //     return type;
+    // }
+    // else {
+    //     return std::make_shared<const Type>(
+    //         Type {Type::Pointer {pointer.base_type, Cap::Iso_cap{}}, std::nullopt});
+    // }
 }

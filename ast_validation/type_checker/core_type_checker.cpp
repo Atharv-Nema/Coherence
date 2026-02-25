@@ -202,13 +202,13 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
         [&](const ValExpr::NewInstance& new_instance) -> std::shared_ptr<const Type> {
             auto size_type = val_expr_type(env, new_instance.size);
             if(!size_type) {
-                // No need to log as the previous [val_expr_type] call would have performed the logging
                 return nullptr;
             }
             std::shared_ptr<const Type> init_expr_type = val_expr_type(env, new_instance.init_expr);
             if(!init_expr_type) {
                 return nullptr;
             }
+            init_expr_type = apply_viewpoint_to_type(new_instance.cap, init_expr_type);
             if(!type_assignable(env.type_env.type_context, new_instance.type, init_expr_type)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Initialization expression does not match user type" << std::endl;
@@ -221,7 +221,7 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                 return nullptr;
             }
             return std::make_shared<Type>(
-                    Type{Type::Pointer{new_instance.type, Cap {Cap::Iso_cap{}}}, std::nullopt});
+                    Type{Type::Pointer{new_instance.type, new_instance.cap}, std::nullopt});
         },
 
         [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::shared_ptr<const Type> {
@@ -280,14 +280,25 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                 std::cerr << "Dereferenced object is not a pointer" << std::endl;
                 return nullptr;
             }
-            if(auto* locked_cap = std::get_if<Cap::Locked>(&pointer_type->cap.t)) {
-                if(env.atomic_nest_level == 0) {
+            Cap ptr_cap = viewpoint_adaptation_op(internal_type->viewpoint, pointer_type->cap).value();
+            return std::visit(Overload{
+                [&](const Cap::Tag&) -> std::shared_ptr<const Type> {
                     report_error_location(val_expr->source_span);
-                    std::cerr << "Dereferencing an object protected by a lock outside an atomic section" << std::endl;
+                    std::cerr << "Cannot dereference a tag pointer" << std::endl;
                     return nullptr;
+                },
+                [&](const Cap::Locked&) -> std::shared_ptr<const Type> {
+                    if(env.atomic_nest_level == 0) {
+                        report_error_location(val_expr->source_span);
+                        std::cerr << "Dereferencing an object protected by a lock outside an atomic section" << std::endl;
+                        return nullptr;
+                    }
+                    return get_dereferenced_type(internal_type);
+                },
+                [&](const auto&) {
+                    return get_dereferenced_type(internal_type);
                 }
-            }
-            return pointer_type->base_type;
+            }, ptr_cap.t);
         },
 
         [&](const ValExpr::Field& field_access) -> std::shared_ptr<const Type> {
