@@ -15,24 +15,21 @@ H    (isolated)
 
 func A() => unit {
     atomic { 
-        var lock_var: int locked<A> = (new[1] int(1));
-        lock_var[0];
+        (new locked<A>[1] int(1))[0];
     }
     return B();
 }
 
 func B() => unit {
     atomic { 
-        var lock_var: int locked<B> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<B>[1] int(1))[0];
     }
     return C();
 }
 
 func C() => unit {
     atomic { 
-        var lock_var: int locked<C> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<C>[1] int(1))[0];
     }
     A();        // closes triangle SCC
     D();        // enters second SCC
@@ -42,40 +39,35 @@ func C() => unit {
 
 func D() => unit {
     atomic { 
-        var lock_var: int locked<D> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<D>[1] int(1))[0];
     }
     return E();
 }
 
 func E() => unit {
     atomic { 
-        var lock_var: int locked<E> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<E>[1] int(1))[0];
     }
     return D();        // D <-> E SCC
 }
 
 func F() => unit {
     atomic { 
-        var lock_var: int locked<F> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<F>[1] int(1))[0];
     }
     return ();
 }
 
 func G() => unit {
     atomic { 
-        var lock_var: int locked<G> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<G>[1] int(1))[0];
     }
     return ();
 }
 
 func Tail() => unit {
     atomic { 
-        var lock_var: int locked<Tail> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<Tail>[1] int(1))[0];
     }
     A();
     G();
@@ -84,8 +76,7 @@ func Tail() => unit {
 
 func H() => unit {
     atomic { 
-        var lock_var: int locked<H> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<H>[1] int(1))[0];
     }
     return ();
 }

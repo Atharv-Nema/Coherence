@@ -1,6 +1,6 @@
 actor Main {
     new create() {
-        var x: int iso = new[1] int(0);
+        var x: int iso = new iso[1] int(0);
         var y: int iso = x;
     }
 }

@@ -78,7 +78,7 @@ bool nameable_accesses_raw_named(const std::string& name, std::shared_ptr<Nameab
 bool type_accesses_undefined(TypeContext& type_context, std::shared_ptr<const Type> type) {
     return std::visit(Overload{
         [&](const Type::TNamed& t_named) {
-            return type_context.contains(t_named.name);
+            return !type_context.contains(t_named.name);
         },
         [&](const Type::Pointer& ptr) {
             return type_accesses_undefined(type_context, ptr.base_type);
@@ -116,12 +116,12 @@ bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
                 std::cerr << type_def.type_name << " cannot directly refer to itself " << std::endl;
                 return false;
             }
+            env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             if(nameable_accesses_undefined(env.type_context, type_def.nameable_type)) {
                 report_error_location(toplevel_item.source_span);
                 std::cerr << type_def.type_name << " accesses undefined type" << std::endl;
                 return false;
             }
-            env.type_context.emplace(type_def.type_name, type_def.nameable_type);
             return true;
         },
         [&](std::shared_ptr<TopLevelItem::Func> func_def) {

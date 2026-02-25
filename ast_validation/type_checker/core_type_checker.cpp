@@ -220,8 +220,9 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                 std::cerr << "Size expression must be of type int" << std::endl;
                 return nullptr;
             }
+            // The [Cap{Cap::Iso_cap{}}] part is for unaliasing
             return std::make_shared<Type>(
-                    Type{Type::Pointer{new_instance.type, new_instance.cap}, std::nullopt});
+                    Type{Type::Pointer{new_instance.type, new_instance.cap}, Cap{Cap::Iso_cap{}}});
         },
 
         [&](const ValExpr::ActorConstruction& actor_constr_expr) -> std::shared_ptr<const Type> {

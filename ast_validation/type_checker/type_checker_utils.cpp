@@ -1,6 +1,7 @@
 #include "type_checker_utils.hpp"
 #include "pattern_matching_boilerplate.hpp"
 #include <cassert>
+#include <functional>
 
 bool ref_cap_equal(Cap c1, Cap c2) {
     if (c1.t.index() != c2.t.index()) 
@@ -165,6 +166,21 @@ bool capability_mutable(Cap c) {
     }, c.t);
 }
 
+bool capability_covariant(Cap c1, Cap c2) {
+    if(capabilities_assignable(c1, c2)) {
+        return true;
+    }
+    if(std::holds_alternative<Cap::Iso>(c1.t) && 
+       std::holds_alternative<Cap::Iso>(c2.t)) {
+        return true;
+    }
+    return false;
+}
+
+bool capability_invariant(Cap c1, Cap c2) {
+    return capability_covariant(c1, c2) && capability_covariant(c2, c1);
+}
+
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 
 // it. Otherwise, returns [nullptr] 
 std::shared_ptr<const Type> get_dereferenced_type(std::shared_ptr<const Type> type) {
@@ -305,10 +321,18 @@ bool type_equality_comparable(
     }, type_1->t, type_2->t);
 }
 
-bool type_assignable(
-    TypeContext& type_context, 
-    std::shared_ptr<const Type> lhs, 
-    std::shared_ptr<const Type> rhs) {
+// This function compares [lhs] and [rhs]. Whenever it reaches pointer types, it applies the
+// [cap_compare] on it, and then recursively applies [type_compare] with the lhs_cap on the
+// dereferenced types (so that it can apply different [cap_compare] if needed). The interpretation
+// of it independently is not that clear. But the point of this is to factor out the common/recursive
+// part of covariance, invariance and assignable checkers.
+bool pointer_property_compare_template(
+    TypeContext& type_context,
+    std::shared_ptr<const Type> lhs,
+    std::shared_ptr<const Type> rhs,
+    std::function<bool(Cap, Cap)> cap_compare,
+    std::function<bool(
+        Cap, std::shared_ptr<const Type>, std::shared_ptr<const Type>)> type_compare) {
     lhs = get_standardized_type(type_context, lhs);
     rhs = get_standardized_type(type_context, rhs);
     return std::visit(Overload{
@@ -335,7 +359,7 @@ bool type_assignable(
                     apply_viewpoint_to_type(lhs->viewpoint, mem_type);
                 std::shared_ptr<const Type> viewed_rhs_type =
                     apply_viewpoint_to_type(rhs->viewpoint, mem_type);
-                if(!type_assignable(type_context, viewed_lhs_type, viewed_rhs_type)) {
+                if(!pointer_property_compare_template(type_context, viewed_lhs_type, viewed_rhs_type, cap_compare, type_compare)) {
                     return false;
                 }
             }
@@ -351,30 +375,79 @@ bool type_assignable(
             return true;
         },
         [&](const Type::Pointer& ptr_lhs, const Type::Pointer& ptr_rhs) {
-            // 1. Need to check that the dereferenced type are assignable
+            // 1. Checking whether the capabilities are assignable
+            auto lhs_cap = viewpoint_adaptation_op(lhs->viewpoint, ptr_lhs.cap).value();
+            auto rhs_cap = viewpoint_adaptation_op(rhs->viewpoint, ptr_rhs.cap).value();
+            if(!cap_compare(lhs_cap, rhs_cap)) {
+                return false;
+            }
+            // 2. Checking whether the dereferenced type make sense. If the outer capability
+            // is mutable, the dereferenced type needs to be invariant. Else, it can just be
+            // covariant.
+            
             auto lhs_deref_type = get_dereferenced_type(lhs);
             auto rhs_deref_type = get_dereferenced_type(rhs);
             assert(lhs_deref_type != nullptr);
             assert(rhs_deref_type != nullptr);
-            // CR: Think very carefully about this line
-            if(!type_assignable(type_context, lhs_deref_type, rhs_deref_type)) {
-                // std::cerr << "The base types of the pointers do not match" << std::endl;
-                return false;
-            }
-            auto lhs_cap = viewpoint_adaptation_op(lhs->viewpoint, ptr_lhs.cap);
-            auto rhs_cap = viewpoint_adaptation_op(rhs->viewpoint, ptr_rhs.cap);
-            assert(lhs_cap != std::nullopt);
-            assert(rhs_cap != std::nullopt);
-            if(!capabilities_assignable(lhs_cap.value(), rhs_cap.value())) {
-                return false;
-            }
-            return true;
+            return type_compare(lhs_cap, lhs_deref_type, rhs_deref_type);
         },
         [&](const auto&, const auto&) {
             return false;
         }
     }, lhs->t, rhs->t);
 }
+
+bool type_invariant(
+    TypeContext& type_context, 
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2) {
+    auto curried_invariant = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
+        return type_invariant(type_context, t1, t2);
+    };
+    return pointer_property_compare_template(type_context, t1, t2, capability_invariant, curried_invariant);
+}
+
+bool type_covariant(
+    TypeContext& type_context,
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2);
+
+// Rules for when to allow assigning of pointers. t1 and t2 are the types of the dereference of the two pointer
+bool pointer_subtyping_on_dereferenced_types(
+    TypeContext& type_context,
+    Cap pointer_cap,
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2) {
+    if(capability_mutable(pointer_cap)) {
+        // Need to be invariant if [pointer_cap] is mutable
+        return type_invariant(type_context, t1, t2);
+    }
+    else {
+        return type_covariant(type_context, t1, t2);
+    }
+}
+
+bool type_covariant(
+    TypeContext& type_context,
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2) {
+    auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
+        return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
+    };
+    return pointer_property_compare_template(type_context, t1, t2, capability_covariant, curried_action);
+}
+
+bool type_assignable(
+    TypeContext& type_context,
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2) {
+    auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
+        return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
+    };
+    return pointer_property_compare_template(type_context, t1, t2, capabilities_assignable, curried_action);
+}
+
+
 
 bool type_shareable(TypeContext& type_context, std::shared_ptr<const Type> type) {
     return std::visit(Overload{
@@ -404,16 +477,4 @@ bool type_shareable(TypeContext& type_context, std::shared_ptr<const Type> type)
 
 std::shared_ptr<const Type> unaliased_type(std::shared_ptr<const Type> type) {
     return apply_viewpoint_to_type(Cap{Cap::Iso_cap{}}, type);
-    // if(!std::holds_alternative<Type::Pointer>(type->t)) {
-    //     return type;
-    // }
-    // Type::Pointer pointer = std::get<Type::Pointer>(type->t);
-    // Cap effective_cap = viewpoint_adaptation_op(type->viewpoint, pointer.cap).value();
-    // if(!std::holds_alternative<Cap::Iso>(effective_cap.t)) {
-    //     return type;
-    // }
-    // else {
-    //     return std::make_shared<const Type>(
-    //         Type {Type::Pointer {pointer.base_type, Cap::Iso_cap{}}, std::nullopt});
-    // }
 }

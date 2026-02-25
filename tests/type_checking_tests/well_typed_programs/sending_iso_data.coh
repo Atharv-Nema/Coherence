@@ -1,7 +1,7 @@
 actor Other {
     iso_data: int iso;
     new create() {
-        iso_data := new[1] int(0);
+        iso_data := new iso[1] int(0);
     }
     be change_iso_data(int iso new_iso_data) {
         iso_data = unalias(new_iso_data);
@@ -11,8 +11,8 @@ actor Other {
 actor Main {
     new create() {
         var other_instance: Other = new Other.create();
-        var iso_int: int iso = new[1] int(3);
-        other_instance->change_iso_data(iso_int = new[1] int(0));
+        var iso_int: int iso = new iso[1] int(3);
+        other_instance->change_iso_data(iso_int = new iso[1] int(0));
         other_instance->change_iso_data(unalias(iso_int));
     }
 }

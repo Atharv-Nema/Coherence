@@ -1,15 +1,13 @@
 func chain1() => unit {
     atomic { 
-        var lock_var: int locked<A> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<A>[1] int(1))[0];
     }
     return chain2();
 }
 
 func chain2() => unit {
     atomic { 
-        var lock_var: int locked<B> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<B>[1] int(1))[0];
     }
     branch_left();
     branch_right();
@@ -18,16 +16,14 @@ func chain2() => unit {
 
 func branch_left() => unit {
     atomic { 
-        var lock_var: int locked<C> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<C>[1] int(1))[0];
     }
     return ();
 }
 
 func branch_right() => unit {
     atomic { 
-        var lock_var: int locked<D> = (new[1] int(1));
-        lock_var[0]; 
+        (new locked<D>[1] int(1))[0];
     }
     return ();
 }

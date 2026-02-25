@@ -5,24 +5,21 @@ like a triangle
 
 func triangle1() => unit {
     atomic {
-        var lock_var: int locked<A> = (new[1] int(1));
-        lock_var[0];
+        (new locked<A>[1] int(1))[0];
     }
     return triangle2();
 }
 
 func triangle2() => unit {
     atomic {
-        var lock_var: int locked<B> = (new[1] int(1));
-        lock_var[0];
+        (new locked<B>[1] int(1))[0];
     }
     return triangle3();
 }
 
 func triangle3() => unit {
     atomic {
-        var lock_var: int locked<C> = (new[1] int(1));
-        lock_var[0];
+        (new locked<C>[1] int(1))[0];
     }
     return triangle1();
 }

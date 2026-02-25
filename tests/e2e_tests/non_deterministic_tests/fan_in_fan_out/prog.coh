@@ -11,7 +11,7 @@ actor Worker {
 
 actor Main {
     new create() {
-        var worker_arr: Worker ref = new[10000] Worker(new Worker.create(this));
+        var worker_arr: Worker ref = new ref[10000] Worker(new Worker.create(this));
         var i: int = 0;
         while(i < 10000) {
             worker_arr[i] = new Worker.create(this);
