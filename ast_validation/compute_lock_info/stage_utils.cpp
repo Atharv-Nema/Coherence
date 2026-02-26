@@ -2,6 +2,7 @@
 #include "pattern_matching_boilerplate.hpp"
 #include "utils.hpp"
 #include <cassert>
+#include "ast_walkers.hpp"
 
 std::shared_ptr<std::unordered_set<std::string>> get_callable_locks(SyncCallable sync_callable) {
     return std::visit(

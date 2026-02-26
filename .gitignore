@@ -4,3 +4,5 @@ SyntaxBrainstorming
 .pytest_cache
 llvm_trial
 temp*
+errors_noticed.txt
+pony_trial

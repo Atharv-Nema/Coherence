@@ -5,6 +5,7 @@
 #include "defer.cpp"
 #include "utils.hpp"
 #include "stage_utils.hpp"
+#include "ast_walkers.hpp"
 
 void fill_stmt_info(
     std::shared_ptr<Stmt> stmt,

@@ -54,7 +54,8 @@ std::pair<std::string, ValueCategory> emit_valexpr(
         },
         [&](ValExpr::VNullptr) {
             std::string null_reg = gen_state.reg_label_gen.new_temp_reg();
-            gen_state.out_stream << "%" + null_reg << " = null" << std::endl;
+            // %<null_reg> = bitcast ptr null to ptr
+            gen_state.out_stream << "%" + null_reg << " = bitcast ptr null to ptr" << std::endl;
             return make_pair(
                 null_reg,
                 ValueCategory::RVALUE
@@ -83,7 +84,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     ValueCategory::RVALUE);
             }
             return make_pair(
-                gen_state.var_reg_mapping[var.name], 
+                gen_state.var_reg_mapping.at(var.name), 
                 ValueCategory::LVALUE);
         },
         [&](const ValExpr::VStruct& vstruct) {
@@ -106,7 +107,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     convert_to_rvalue(gen_state, llvm_field_type, val_expr_reg, val_cat);
                 std::string temp_reg = gen_state.reg_label_gen.new_temp_reg();
                 gen_state.out_stream << "%" << temp_reg << " = insertvalue " << llvm_type->llvm_type_name 
-                << " " << curr_accum_expr << ", " << llvm_field_type << " " << "%" << val_expr_reg << ", " 
+                << " " << curr_accum_expr << ", " << llvm_field_type << " " << "%" << val_expr_reg_rval << ", " 
                 << field_no << std::endl;
                 curr_accum_expr = "%" + temp_reg;
             }
@@ -252,7 +253,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // modify the variable in-place (the variable will not be used until it is
             // assigned again)
             return make_pair(
-                gen_state.var_reg_mapping[consume.var_name], 
+                gen_state.var_reg_mapping.at(consume.var_name), 
                 ValueCategory::LVALUE);
         },
         [&](const ValExpr::PointerAccess& pointer_access) {
@@ -423,8 +424,8 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
     std::visit(Overload{
         [&](const Stmt::VarDeclWithInit& var_decl_with_init) {
             // We have already allocated memory at the start of the function. Just need to assign it
-            std::string var_type = llvm_type_of_coh_type(gen_state, var_decl_with_init.init->expr_type)->llvm_type_name;
             assert(gen_state.var_reg_mapping.find(var_decl_with_init.name) != gen_state.var_reg_mapping.end());
+            std::string var_type = llvm_type_of_coh_type(gen_state, var_decl_with_init.init->expr_type)->llvm_type_name;
             std::string stack_reg = gen_state.var_reg_mapping.at(var_decl_with_init.name);
             std::string init_reg = emit_valexpr_rvalue(gen_state, var_decl_with_init.init);
             // store <llvm_type> %<init_reg>, ptr %<stack_reg>

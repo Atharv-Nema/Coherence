@@ -3,6 +3,7 @@
 #include "utils.hpp"
 #include <assert.h>
 #include "defer.cpp"
+#include "ast_walkers.hpp"
 
 struct GraphBuilderEnv {
     std::shared_ptr<DeclCollection> decl_collection;

@@ -1,5 +1,4 @@
-#pragma once
-#include "top_level.hpp"
+#include "debug_printer.hpp"
 #include "../global_utils/pattern_matching_boilerplate.hpp"
 #include <iostream>
 

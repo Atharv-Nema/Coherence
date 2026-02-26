@@ -2,6 +2,7 @@
 #include "pattern_matching_boilerplate.hpp"
 #include <cassert>
 #include <functional>
+#include "debug_printer.hpp"
 
 bool ref_cap_equal(Cap c1, Cap c2) {
     if (c1.t.index() != c2.t.index()) 
@@ -83,7 +84,8 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
             return Cap{Cap::Tag{}}; 
         },
         [](const Cap::Iso&, const Cap::Ref&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
+            // CR: Potentially [Iso]???
+            return Cap{Cap::Iso{}}; 
         },
         [](const Cap::Iso&, const Cap::Val&) -> std::optional<Cap> { 
             return Cap{Cap::Val{}}; 
@@ -100,7 +102,7 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
             return Cap{Cap::Tag{}}; 
         },
         [](const Cap::Iso_cap&, const Cap::Ref&) -> std::optional<Cap> { 
-            return Cap{Cap::Ref{}}; 
+            return Cap{Cap::Iso_cap{}}; 
         },
         [](const Cap::Iso_cap&, const Cap::Val&) -> std::optional<Cap> { 
             return Cap{Cap::Val{}}; 
@@ -166,7 +168,7 @@ bool capability_mutable(Cap c) {
     }, c.t);
 }
 
-bool capability_covariant(Cap c1, Cap c2) {
+bool capability_subtype(Cap c1, Cap c2) {
     if(capabilities_assignable(c1, c2)) {
         return true;
     }
@@ -177,8 +179,13 @@ bool capability_covariant(Cap c1, Cap c2) {
     return false;
 }
 
-bool capability_invariant(Cap c1, Cap c2) {
-    return capability_covariant(c1, c2) && capability_covariant(c2, c1);
+// CR: Make the theory more robust
+bool capability_aliasable(Cap c1, Cap c2) {
+    if(std::holds_alternative<Cap::Iso>(c1.t) &&
+       std::holds_alternative<Cap::Iso_cap>(c2.t)) {
+        return true;
+    }
+    return capability_subtype(c1, c2) && capability_subtype(c2, c1);
 }
 
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 
@@ -316,6 +323,9 @@ bool type_equality_comparable(
         [](const Type::TInt&, const Type::TInt&) {return true;},
         [](const Type::TBool&, const Type::TBool&) {return true;},
         [](const Type::Pointer&, const Type::Pointer&) {return true;},
+        [](const Type::Pointer&, const Type::TNullptr&) {return true;},
+        [](const Type::TNullptr&, const Type::Pointer&) {return true;},
+        [](const Type::TNullptr&, const Type::TNullptr&) {return true;},
         [](const Type::TActor&, const Type::TActor&) {return true;},
         [](const auto&, const auto&) {return false;}
     }, type_1->t, type_2->t);
@@ -381,7 +391,25 @@ bool pointer_property_compare_template(
             if(!cap_compare(lhs_cap, rhs_cap)) {
                 return false;
             }
-            // 2. Checking whether the dereferenced type make sense. If the outer capability
+            // 2. In cases of recursive types, a simple recursive check will lead to an infinite
+            // loop. To prevent this, we can do an early check on whether the two base types are 
+            // named with the same viewpoint. If so, we can simply return true. Note that this
+            // is only true for the pointer assignment case. It is questionable whether I should
+            // be doing this check here, but it seems like the cleanest solution at the moment.
+            bool viewpoint_equal = 
+            ((ptr_lhs.base_type->viewpoint == std::nullopt) && (ptr_rhs.base_type->viewpoint == std::nullopt)) || 
+            (ref_cap_equal(ptr_lhs.base_type->viewpoint.value(), ptr_lhs.base_type->viewpoint.value()));
+            bool recursive_case = viewpoint_equal && std::visit(Overload{
+                    [](const Type::TNamed& lhs_named, const Type::TNamed& rhs_named) {
+                        return lhs_named.name == rhs_named.name;
+                    },
+                    [](const auto&, const auto&) { return false; }
+                }, ptr_lhs.base_type->t, ptr_rhs.base_type->t);
+            if(recursive_case) {
+                return true;
+            }
+
+            // 3. Checking whether the dereferenced type make sense. If the outer capability
             // is mutable, the dereferenced type needs to be invariant. Else, it can just be
             // covariant.
             
@@ -404,7 +432,7 @@ bool type_invariant(
     auto curried_invariant = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
         return type_invariant(type_context, t1, t2);
     };
-    return pointer_property_compare_template(type_context, t1, t2, capability_invariant, curried_invariant);
+    return pointer_property_compare_template(type_context, t1, t2, capability_aliasable, curried_invariant);
 }
 
 bool type_covariant(
@@ -434,7 +462,7 @@ bool type_covariant(
     auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
         return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
     };
-    return pointer_property_compare_template(type_context, t1, t2, capability_covariant, curried_action);
+    return pointer_property_compare_template(type_context, t1, t2, capability_subtype, curried_action);
 }
 
 bool type_assignable(

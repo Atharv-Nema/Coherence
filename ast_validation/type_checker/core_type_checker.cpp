@@ -8,6 +8,7 @@
 #include "defer.cpp"
 #include "utils.hpp"
 #include "type_checker_utils.hpp"
+#include "debug_printer.hpp"
 
 
 struct CoreEnv {
@@ -50,13 +51,6 @@ bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
         [](const auto&) {return false;}
     }, expr->t);
 }
-
-
-
-
-
-
-
 
 std::shared_ptr<const Type> get_actor_member_type(CoreEnv& env, const std::string& var_name) {
     if(!env.type_env.curr_actor) {
@@ -208,8 +202,9 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
             if(!init_expr_type) {
                 return nullptr;
             }
-            init_expr_type = apply_viewpoint_to_type(new_instance.cap, init_expr_type);
-            if(!type_assignable(env.type_env.type_context, new_instance.type, init_expr_type)) {
+            std::shared_ptr<const Type> expected_type = 
+                apply_viewpoint_to_type(new_instance.cap, new_instance.type);
+            if(!type_assignable(env.type_env.type_context, expected_type, init_expr_type)) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Initialization expression does not match user type" << std::endl;
                 return nullptr;

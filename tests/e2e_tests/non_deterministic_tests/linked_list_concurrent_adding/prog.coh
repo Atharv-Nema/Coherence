@@ -1,0 +1,65 @@
+type node = struct {
+    value: int;
+    next: node ref; // Pointer to next node
+}
+
+type linked_list = struct {
+    // tail is a pointer to a pointer. 
+    // It points to the 'next' field of the last node.
+    tail: node ref; 
+    head: node ref;
+}
+
+func insert((linked_list locked<LOCK>) list, int new_val) => unit {
+    atomic {
+        var new_node: node locked<LOCK> = new locked<LOCK>[1] node({
+            value = new_val;
+            next = nullptr;
+        }: locked<LOCK>>(node));
+        if((*list).head == nullptr) {
+            (*list).head = new_node;
+            (*list).tail = new_node;
+            (*(*list).tail).next = new_node;
+            (*list).tail = new_node;
+            return ();
+        }
+        (*(*list).tail).next = new_node;
+        (*list).tail = new_node;
+    }
+    return ();
+}
+
+actor Other {
+    list: linked_list locked<LOCK>;
+    new create((linked_list locked<LOCK>) init_list) {
+        list := init_list;
+    }
+    be add_value(int value) {
+        insert(list, value);
+    }
+}
+
+actor Main {
+    new create() {
+        var shared_list: linked_list locked<LOCK> = new ref[1] linked_list({
+            head = nullptr;
+            tail = nullptr;
+        } : linked_list);
+
+        var actors: Other ref = new ref[10000] Other(new Other.create(shared_list));
+        var i: int = 1;
+        while (i < 10000) {
+            actors[i] = new Other.create(shared_list);
+            actors[i]->add_value(i);
+            i = i + 1;
+        }
+
+        atomic {
+            var current: node locked<LOCK> = (*shared_list).head;
+            while (current != nullptr) {
+                OUT (*current).value;
+                current = (*current).next;
+            }
+        }
+    }
+}

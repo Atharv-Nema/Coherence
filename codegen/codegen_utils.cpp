@@ -1,18 +1,25 @@
 #include "codegen_utils.hpp"
 #include "pattern_matching_boilerplate.hpp"
 #include "special_reg_names.hpp"
+#include "ast_walkers.hpp"
 
 std::unordered_map<std::string, std::shared_ptr<const Type>> collect_local_variable_types(
         std::vector<std::shared_ptr<Stmt>>& callable_body) {
     std::unordered_map<std::string, std::shared_ptr<const Type>> local_vars;
-    for(auto stmt: callable_body) {
+    auto dummy_valexpr_walker = [&](std::shared_ptr<ValExpr> val_expr) {return;};
+    std::function<void(std::shared_ptr<Stmt>)> stmt_action;
+    stmt_action = [&](std::shared_ptr<Stmt> stmt) {
         std::visit(Overload{
             [&](const Stmt::VarDeclWithInit &var_decl_init) {
                 assert(local_vars.find(var_decl_init.name) == local_vars.end());
                 local_vars.emplace(var_decl_init.name, var_decl_init.type);
             },
-            [&](const auto& p){}
+            [&](const auto&){}
         }, stmt->t);
+        valexpr_and_stmt_visitors_stmt_walker(stmt, dummy_valexpr_walker, stmt_action);
+    };
+    for(auto stmt: callable_body) {
+        stmt_action(stmt);
         
     }
     return local_vars;

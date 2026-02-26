@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <memory>
 #include <iostream>
+#include "ast_walkers.hpp"
 
 bool update_valexpr_validity_info(
     ScopedStore<std::string, bool>& var_valid,

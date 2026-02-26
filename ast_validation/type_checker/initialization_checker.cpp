@@ -1,5 +1,6 @@
 #include "initialization_checker.hpp"
 #include "general_validator_structs.hpp"
+#include "ast_walkers.hpp"
 #include "utils.hpp"
 #include <iostream>
 

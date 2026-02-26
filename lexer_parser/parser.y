@@ -92,7 +92,7 @@
 %type <stmt>            stmt
 %type <stmt_list>       stmt_list block
 %type <val_expr>        val_expr
-%type <val_expr>        assignment_expr comparison_expr additive_expr multiplicative_expr postfix_expr primary_expr
+%type <val_expr>        assignment_expr comparison_expr additive_expr multiplicative_expr unary_expr postfix_expr primary_expr
 %type <val_expr_list>   val_expr_list nonempty_val_expr_list
 %type <type>            full_type normal_type atomic_type
 %type <cap>             cap
@@ -602,7 +602,7 @@ additive_expr
 
 /* Multiplicative level: * and / */
 multiplicative_expr
-    : postfix_expr { $$ = $1; }
+    : unary_expr { $$ = $1; }
     | multiplicative_expr TOK_STAR postfix_expr {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
@@ -630,6 +630,28 @@ multiplicative_expr
             }
         ));
         delete $1; delete $3;
+      }
+    ;
+
+/* Unary level: Dereference (*) */
+unary_expr
+    : postfix_expr { $$ = $1; }
+    | TOK_STAR unary_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{
+                span_from(@$),
+                nullptr,
+                ValExpr::PointerAccess{ 
+                    make_shared<ValExpr>(ValExpr{
+                        span_from(@$),
+                        nullptr,
+                        ValExpr::VInt {0}
+                    }),
+                    std::move(*$2) 
+                }
+            }
+        ));
+        delete $2;
       }
     ;
 
