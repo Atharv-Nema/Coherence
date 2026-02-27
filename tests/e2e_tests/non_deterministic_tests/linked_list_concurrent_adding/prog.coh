@@ -19,8 +19,6 @@ func insert((linked_list locked<LOCK>) list, int new_val) => unit {
         if((*list).head == nullptr) {
             (*list).head = new_node;
             (*list).tail = new_node;
-            (*(*list).tail).next = new_node;
-            (*list).tail = new_node;
             return ();
         }
         (*(*list).tail).next = new_node;
@@ -34,26 +32,33 @@ actor Other {
     new create((linked_list locked<LOCK>) init_list) {
         list := init_list;
     }
-    be add_value(int value) {
+    be add_value(int value, Main sender) {
         insert(list, value);
+        if(value == 9999) {
+            sender->task_finished();
+        } 
     }
 }
 
 actor Main {
+    shared_list: linked_list locked<LOCK>;
     new create() {
-        var shared_list: linked_list locked<LOCK> = new ref[1] linked_list({
+        shared_list := new ref[1] linked_list({
             head = nullptr;
             tail = nullptr;
         } : linked_list);
 
         var actors: Other ref = new ref[10000] Other(new Other.create(shared_list));
-        var i: int = 1;
+        var i: int = 0;
         while (i < 10000) {
-            actors[i] = new Other.create(shared_list);
-            actors[i]->add_value(i);
+            if(i != 0) {
+                actors[i] = new Other.create(shared_list);
+            }
+            actors[i]->add_value(i, this);
             i = i + 1;
         }
-
+    }
+    be task_finished() {
         atomic {
             var current: node locked<LOCK> = (*shared_list).head;
             while (current != nullptr) {

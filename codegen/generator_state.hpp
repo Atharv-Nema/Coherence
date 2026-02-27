@@ -70,8 +70,9 @@ struct GenState {
     // These should also be the llvm_function_name. So no need for llvm_callable_info actually
     // The struct has name %llvm_function_name.param
     // Also, the struct associated with the actor is %actor_name.struct
-    std::shared_ptr<TopLevelItem::Actor> curr_actor;
+    std::shared_ptr<TopLevelItem::Actor> curr_actor = nullptr;
     std::unordered_map<std::string, uint64_t> lock_id_map;
+    std::vector<uint64_t> locks_acquired;
     // File to which llvm needs to be written to
     std::ostream& out_stream;
     GenState(): out_stream(std::cout) {}

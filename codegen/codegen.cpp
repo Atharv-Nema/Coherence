@@ -377,7 +377,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             switch(bin_op_expr.op) {
                 case BinOp::Add:
                     gen_state.out_stream 
-                    << " add " << llvm_cmp_type  << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    << " add i32 %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Sub:
                     gen_state.out_stream << " sub i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
@@ -389,22 +389,22 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     gen_state.out_stream << " udiv i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Geq:
-                    gen_state.out_stream << " icmp sge i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp sge " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Leq:
-                    gen_state.out_stream << " icmp sle i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp sle " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Eq:
-                    gen_state.out_stream << " icmp eq i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp eq " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Neq:
-                    gen_state.out_stream << " icmp ne i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp ne " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Gt:
-                    gen_state.out_stream << " icmp sgt i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp sgt " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Lt:
-                    gen_state.out_stream << " icmp slt i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " icmp slt " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
             }
             return make_pair(result_reg, ValueCategory::RVALUE);
@@ -419,6 +419,15 @@ std::string emit_valexpr_rvalue(
     std::string llvm_type = llvm_type_of_coh_type(gen_state, val_expr->expr_type)->llvm_type_name;
     return convert_to_rvalue(gen_state, llvm_type, expr_reg, val_cat);
 }
+
+void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt);
+
+void emit_statement_codegen_list(GenState& gen_state, const std::vector<std::shared_ptr<Stmt>>& stmt_list) {
+    for(std::shared_ptr<Stmt> stmt: stmt_list) {
+        emit_statement_codegen(gen_state, stmt);
+    }
+}
+
 
 void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
     std::visit(Overload{
@@ -512,16 +521,12 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             << "label " << "%" + else_label << std::endl;
             gen_state.out_stream << then_label << ":" << std::endl;
             // Compiling the if-block
-            for(std::shared_ptr<Stmt> then_block_stmt: if_stmt.then_body) {
-                emit_statement_codegen(gen_state, then_block_stmt);
-            }
+            emit_statement_codegen_list(gen_state, if_stmt.then_body);
             branch_label(gen_state, end_label);
             // Compiling the else-block
             gen_state.out_stream << else_label << ":" << std::endl;
             if(if_stmt.else_body != std::nullopt) {
-                for(std::shared_ptr<Stmt> else_block_stmt: *if_stmt.else_body) {
-                    emit_statement_codegen(gen_state, else_block_stmt);
-                }
+                emit_statement_codegen_list(gen_state, *if_stmt.else_body);
             }
             branch_label(gen_state, end_label);
             gen_state.out_stream << end_label << ":" << std::endl;
@@ -537,40 +542,45 @@ void emit_statement_codegen(GenState& gen_state, std::shared_ptr<Stmt> stmt) {
             gen_state.out_stream << "br i1 " << "%" + cond_reg << ", label " << "%" + body_label << ", label "
             << "%" + end_label << std::endl;
             gen_state.out_stream << body_label << ":" << std::endl;
-            for(std::shared_ptr<Stmt> body_stmt: while_stmt.body) {
-                emit_statement_codegen(gen_state, body_stmt);
-            }
+            emit_statement_codegen_list(gen_state, while_stmt.body);
             branch_label(gen_state, cond_label);
             gen_state.out_stream << end_label << ":" << std::endl;
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_stmt) {
-            std::vector<uint64_t> locks_acquired;
-            locks_acquired.reserve(atomic_stmt->locks_dereferenced->size());
+            if(gen_state.locks_acquired.size() != 0) {
+                assert(atomic_stmt->locks_dereferenced->empty());
+                emit_statement_codegen_list(gen_state, atomic_stmt->body);
+                return;
+            }
+            gen_state.locks_acquired.reserve(atomic_stmt->locks_dereferenced->size());
             for(const std::string& lock: *(atomic_stmt->locks_dereferenced)) {
                 if(gen_state.lock_id_map.find(lock) == gen_state.lock_id_map.end()) {
                     gen_state.lock_id_map.emplace(lock, gen_state.lock_id_map.size());
                 }
                 assert(gen_state.lock_id_map.find(lock) != gen_state.lock_id_map.end());
                 uint64_t lock_id = gen_state.lock_id_map.at(lock);
-                locks_acquired.push_back(lock_id);
+                gen_state.locks_acquired.push_back(lock_id);
             }
-            sort(locks_acquired.begin(), locks_acquired.end());
-            for(uint64_t lock_id: locks_acquired) {
+            sort(gen_state.locks_acquired.begin(), gen_state.locks_acquired.end());
+            for(uint64_t lock_id: gen_state.locks_acquired) {
                 SuspendTag suspend_tag;
                 suspend_tag.kind = SuspendTagKind::LOCK;
                 suspend_tag.lock_id = lock_id;
                 generate_suspend_call(gen_state, suspend_tag);
             }
-            for(std::shared_ptr<Stmt> stmt: atomic_stmt->body) {
-                emit_statement_codegen(gen_state, stmt);
-            }
-            for(uint64_t lock_id: locks_acquired) {
+            emit_statement_codegen_list(gen_state, atomic_stmt->body);
+            for(uint64_t lock_id: gen_state.locks_acquired) {
                 gen_state.out_stream << "call void @handle_unlock(i64 " << lock_id << ")" << std::endl;
             }
+            gen_state.locks_acquired.clear();
         },
         [&](const Stmt::Return& return_stmt) {
             std::string return_expr_reg = emit_valexpr_rvalue(gen_state, return_stmt.expr);
             std::string llvm_return_type = llvm_type_of_coh_type(gen_state, return_stmt.expr->expr_type)->llvm_type_name;
+            // Need to release any locks held
+            for(uint64_t lock_id: gen_state.locks_acquired) {
+                gen_state.out_stream << "call void @handle_unlock(i64 " << lock_id << ")" << std::endl;
+            }
             gen_state.out_stream << "ret " << llvm_return_type << " " << "%" + return_expr_reg << std::endl;
         }
     }, stmt->t);
@@ -610,9 +620,7 @@ void compile_callable_body(
     }
 
     // Now everything is set up properly. Can proceed with the generation of statements
-    for(std::shared_ptr<Stmt> stmt: callable_body) {
-        emit_statement_codegen(gen_state, stmt);
-    }
+    emit_statement_codegen_list(gen_state, callable_body);
 }
 
 void compile_synchronous_callable(
