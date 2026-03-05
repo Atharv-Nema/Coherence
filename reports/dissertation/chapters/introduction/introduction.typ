@@ -2,6 +2,7 @@
 #set heading(numbering: "1.1")
 #set page(paper: "a4", margin: 2cm)
 #set par(justify: true)
+#show "—": it => sym.wj + it
 
 = Introduction
 
@@ -39,7 +40,7 @@ In Pony, every _reference_ type has an associated capability that restricts how 
 === Gudka's Lock Inference for Java
 _Lock inference_ is a term used to refer to program analysis techniques that automatically determine which locks must be acquired to ensure a block of code executes safely. By shifting the responsibility of locking from the developer to the compiler, lock inference eliminates human errors that typically lead to data races and deadlocks.
 
-In this work, Gudka developed a system of lock-inference for Java. In his model, developers are no longer required to manage individual locks. Instead, they wrap sensitive code in _atomic sections_---logical units of code that the system guarantees will execute without interference from other threads. Gudka's system statically analyses these sections to compute the _lock-set_---the collection of locks required to protect the data being accessed. To prevent deadlocks, the system uses a "try-and-back-off" strategy, ensuring that if all locks cannot be acquired safely, the current ones are released before retrying.
+In his work, Gudka developed a system of lock-inference for Java. In his model, developers are no longer required to manage individual locks. Instead, they wrap sensitive code in _atomic sections_---logical units of code that the system guarantees will execute without interference from other threads. Gudka's system statically analyses these sections to compute the _lock-set_---the collection of locks required to protect the data being accessed. To prevent deadlocks, the system uses a "try-and-back-off" strategy, ensuring that if all locks cannot be acquired safely, the current ones are released before retrying.
 
 === Castegren's Oolong
 Castegren introduced a new reference capability called `locked` in his work on Oolong. A reference protected by this capability can only be accessed after the lock associated with the capability has been acquired, preventing data-races.
