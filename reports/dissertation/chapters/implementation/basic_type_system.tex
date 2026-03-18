@@ -1,0 +1,366 @@
+
+\documentclass[a4paper,12pt,fleqn]{article}
+
+% --- Core Packages ---
+\usepackage[margin=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{libertine} % Font matching Linux Libertine
+\usepackage{amsmath, amssymb, amsthm}
+
+% --- Inference Rules Package ---
+\usepackage{bussproofs}
+
+% --- Left-align display math ---
+\setlength{\mathindent}{0pt}
+
+% --- No paragraph indentation ---
+\setlength{\parindent}{0pt}
+
+% --- Custom Commands ---
+\newcommand{\tack}{\vdash}
+\newcommand{\tackl}{\dashv}
+
+\begin{document}
+
+\section{Coherence Semantics}
+This document describes the semantics on which the Coherence language is based on.
+
+\section{Basic cut-down version of the language}
+This cutdown version does not have the full features of the language. It is described as below.
+
+\subsection{Formal Syntax}
+
+\subsubsection{Types}
+\[
+\begin{array}{lcll}
+T & ::= & B \mid B\ \kappa & \text{(full coherence type)} \\[0.5em]
+B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) & \text{(basic type)} \\[0.5em]
+\kappa & ::= & \mathtt{ref} \mid \mathtt{val} \mid \mathtt{iso} \mid \mathtt{locked}\langle L \rangle & \text{(reference capabilities)} \\[0.5em]
+\hat{T} & ::= & B  \mid \mathtt{struct}\ \{\ \overline{f : B;}\ \} & \text{(nameable type)}
+\end{array}
+\]
+\\
+TODO: Add explanation of this stuff
+\\
+\subsubsection{Top-level items}
+These are items that occur in the top-level of a program. They include type definitions, top-level functions, and actor definitions.
+\[
+\begin{array}{lcll}
+P & ::= & \overline{D} & \text{(program)} \\[0.5em]
+D & ::= & \mathtt{type}\ N = \hat{T} & \text{(type definition)} \\
+  & \mid & \mathtt{func}\ m(\overline{x : T}) \Rightarrow T\ \{\ \overline{s}\ \} & \text{(function definition)} \\
+  & \mid & \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} & \text{(actor definition)} \\[0.5em]
+M & ::= & \mathtt{new}\ k(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \text{(constructor)} \\
+  & \mid & \mathtt{func}\ m(\overline{T\ \mathit{arg}}) \Rightarrow T\ \{\ \overline{s}\ \} & \text{(method)} \\
+  & \mid & \mathtt{be}\ b(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \text{(behaviour)}
+\end{array}
+\]
+
+\subsubsection{Statements}
+Statements are parts of the body that are terminated with a semi-colon in the body of a callable (function, behaviour, or constructor). They can have side effects and do not return a value.
+
+\[
+\begin{array}{lcll}
+s & ::= & \mathtt{var}\ x : T = e\ ; & \text{(local declaration)} \\
+  & \mid & f := e\ ; & \text{(member initialisation)} \\
+  & \mid & e \to b(\overline{e})\ ; & \text{(behaviour call)} \\
+  & \mid & \mathtt{OUT}\ e\ ; & \text{(print statement)} \\
+  & \mid & \mathtt{if}\ (e)\ \{\ \overline{s}\ \}\ \mathtt{else}\ \{\ \overline{s}\ \} & \text{(if-else statement)} \\
+  & \mid & \mathtt{while}\ (e)\ \{\ \overline{s}\ \} & \text{(while statement)} \\
+  & \mid & \mathtt{atomic}\ \{\ \overline{s}\ \} & \text{(atomic section)}\\
+  & \mid & \mathtt{return}\ e\ ; & \text{(return)}\\
+  & \mid & e\ ; & \text{(expression whose value is discarded)}
+\end{array}
+\]
+
+\subsubsection{Expressions}
+These are parts of the program that evaluate to a value.
+
+\[
+\begin{array}{lcll}
+e & ::= & () & \text{(unit)} \\
+  & \mid & i & \text{(integer literal)} \\
+  & \mid & \mathtt{true} \mid \mathtt{false} & \text{(boolean literal)} \\
+  & \mid & x & \text{(variable)} \\
+  & \mid & \{\ \overline{f = e;}\ \} : N & \text{(struct literal)} \\
+  & \mid & \mathtt{new}\ \kappa\ [e]\ B\ (e) & \text{(allocation)} \\
+  & \mid & \mathtt{new}\ A.k(\overline{e}) & \text{(actor construction)} \\
+  & \mid & e[e] & \text{(pointer access)} \\
+  & \mid & e.f & \text{(field access)} \\
+  & \mid & e = e & \text{(assignment)} \\
+  & \mid & m(\overline{e}) & \text{(function call)} \\
+  & \mid & e\ \mathit{op}\ e & \text{(binary operation)}
+\end{array}
+\]
+
+\section{Type checking}
+This part of the document describes the type-checking rules carried out on the cut-down version of the language. In the formal rules below, assume that renaming has been carried out and so all names are distinct and conflict-free.
+
+\subsection{Typing Environment}
+The environment $\Gamma$ consists of the following:
+\begin{itemize}
+    \item $\Gamma_V$: a mapping from variable names to their types
+    \item $\Gamma_L$: a boolean about whether the type-checker is in an atomic section
+    \item $\Gamma_A$: a mapping from actor names to an object containing their information (constructors, functions and behaviours).
+    \item $\Gamma_T$: mapping to named types.
+    \item $\Gamma_F$: mapping from function names to their information.
+    \item $\Gamma_{\text{this}}$: the type of the current actor.
+\end{itemize}
+
+\subsection{Expression typing}
+I will not be focusing on binary operation typing as it is kind of simple and not worth mentioning.
+\\
+\\
+\begin{tabular}{c@{\qquad}c@{\qquad}c}
+    \AxiomC{}
+    \RightLabel{(Int)}
+    \UnaryInfC{$\Gamma \tack i : \text{int}$}
+    \DisplayProof
+&
+    \AxiomC{}
+    \RightLabel{(True)}
+    \UnaryInfC{$\Gamma \tack \text{true} : \text{bool}$}
+    \DisplayProof
+&
+    \AxiomC{}
+    \RightLabel{(False)}
+    \UnaryInfC{$\Gamma \tack \text{false} : \text{bool}$}
+    \DisplayProof
+\end{tabular}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\text{variable\_type}(x, \Gamma) = T$}
+    \RightLabel{(Var)}
+    \UnaryInfC{$\Gamma \tack x : T$}
+\end{prooftree}
+
+\vspace{1em}
+\begin{prooftree}
+    \AxiomC{$\text{get\_struct\_type}(N, \Gamma) = \text{struct } \{ \overline{f:B} \}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{B'}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(\overline{B}, \overline{B'})$}
+    \RightLabel{(Struct)}
+    \TrinaryInfC{$\Gamma \tack (\{ \overline{f = e} \} : N) : N$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_s : \text{Int}$}
+    \AxiomC{$\Gamma \tack e_d : B'$}
+    \AxiomC{$\Gamma \tack \text{assignable}(B, B')$}
+    \RightLabel{(Alloc)}
+    \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$A \in \Gamma_A$}
+    \AxiomC{$k \in A_{\text{ctor}}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{type\_assignable}(k_{\text{param}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Actor creation)}
+    \QuaternaryInfC{$\Gamma \tack \text{new } A.k(\overline{e}) : \text{Actor}(A)$}
+\end{prooftree}
+
+\vspace{1em}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
+    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
+    % \AxiomC{$\Gamma_L = 1$}
+    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa)$}
+    \RightLabel{(Pointer access)}
+    \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : N$}
+    \AxiomC{$S(N) = \text{struct } \{ \overline{f:B} \}$}
+    \AxiomC{$f_i \in \overline{f}$}
+    \RightLabel{(Field access)}
+    \TrinaryInfC{$\Gamma \tack e.f_i : B_i$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_1 : T_1$}
+    \AxiomC{$\Gamma \tack e_2 : T_2$}
+    \AxiomC{$\Gamma \tack \text{type\_assignable}(T_1, T_2)$}
+    \AxiomC{$\Gamma \tack \text{appear\_lhs}(e_1)$}
+    \RightLabel{(Assign)}
+    \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_F(m)_{sig} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{type\_assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Func-Call)}
+    \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
+\end{prooftree}
+
+\subsection{Statement typing}
+$\Gamma \tack s \tackl \Gamma'$ says that $s$ is valid and after that, the environment becomes $\Gamma'$.
+A list of statements $\overline{s}$ is typed by the following two rules:
+
+\begin{center}
+\begin{tabular}{c@{\qquad\qquad}c}
+    \AxiomC{}
+    \RightLabel{(Seq-Nil)}
+    \UnaryInfC{$\Gamma \tack [] \tackl \Gamma$}
+    \DisplayProof
+&
+    \AxiomC{$\Gamma \tack s \tackl \Gamma'$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{(Seq-Cons)}
+    \BinaryInfC{$\Gamma \tack s{::}\overline{s} \tackl \Gamma''$}
+    \DisplayProof
+\end{tabular}
+
+\vspace{2em}
+\end{center}
+The typing rules for individual statements are as follows:
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : T_e$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T, T_e)$}
+    \RightLabel{(Var-Decl)}
+    \BinaryInfC{$\Gamma \tack \text{var } x : T = e; \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_{\text{this}} = A$}
+    \AxiomC{$A_{\text{fields}}(f) = T_f$}
+    \AxiomC{$\Gamma \tack e : T_e$}
+    \AxiomC{$\text{assignable}(T_f, T_e)$}
+    \RightLabel{(Member-Init)}
+    \QuaternaryInfC{$\Gamma \tack f := e \tackl \Gamma$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_a : \text{Actor}(A_{\text{name}})$}
+    \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
+    \AxiomC{$\text{type\_assignable}(b_{\text{param}}, \overline{T_e})$}
+    \RightLabel{[Behv-Call]}
+    \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}); \tackl \Gamma$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : \text{Int}$}
+    \RightLabel{(Out)}
+    \UnaryInfC{$\Gamma \tack \text{OUT } e; \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : T$}
+    \RightLabel{[Raw expression]}
+    \UnaryInfC{$\Gamma \tack e; \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : \text{bool}$}
+    \AxiomC{$\Gamma \tack \overline{s_1} \tackl \Gamma_1$}
+    \AxiomC{$\Gamma \tack \overline{s_2} \tackl \Gamma_2$}
+    \RightLabel{(If-Else)}
+    \TrinaryInfC{$\Gamma \tack \mathtt{if}\ (e)\ \{\ \overline{s_1}\ \}\ \mathtt{else}\ \{\ \overline{s_2}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma[L \mapsto \text{true}] \tack \overline{s} \tackl \Gamma'$}
+    \RightLabel{[Atomic]}
+    \UnaryInfC{$\Gamma \tack \text{atomic } \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : \text{Bool}$}
+    \AxiomC{$\Gamma \tack \overline{s} \tackl \Gamma'$}
+    \RightLabel{[While]}
+    \BinaryInfC{$\Gamma \tack \text{while } (e) \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : T$}
+    \RightLabel{[Return]}
+    \UnaryInfC{$\Gamma \tack \text{return } e; \tackl \Gamma$}
+\end{prooftree}
+\end{center}
+
+\subsection{Top-level typing}
+
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack \hat{T} : \text{valid}$}
+    \RightLabel{[TypeDef]}
+    \UnaryInfC{$\Gamma \tack \text{type } N = \hat{T} \tack \Gamma[C \mapsto C[N \mapsto \hat{T}]]$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\Gamma' \tack \text{returns}(\overline{s}, \phi_r)$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Func]}
+    \TrinaryInfC{$\Gamma \tack \text{func } m(\overline{x : \phi_p}) \Rightarrow \phi_r \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\text{doesnt\_return}(\overline{s})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Constructor]}
+    \TrinaryInfC{$\Gamma \tack \mathtt{new}\ k(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\text{doesnt\_return}(\overline{s})$}
+    \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Be]}
+    \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack \overline{T} : \text{valid}$}
+    \AxiomC{$\Gamma_{\text{base}} = \Gamma[this \mapsto \text{Actor}(A)]$}
+    \AxiomC{$\Gamma_{\text{base}} \tack \overline{M} \tackl \Gamma_{\text{base}}$}
+    \RightLabel{[T-Actor]}
+    \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} \tackl \Gamma$}
+\end{prooftree}
+\end{center}
+
+\subsubsection{Full program typing}
+A full program $P = \overline{D}$ is typed in two phases. First, we collect all top-level declarations of functions and actors to build an initial environment $\Gamma_0$.
+\\
+In the second phase, the entire declaration list is type-checked under $\Gamma_0$. The program is well-typed if both phases succeed:
+
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\text{initial\_env}(\overline{D}) = \Gamma_0$}
+    \AxiomC{$\Gamma_0 \tack \overline{D} \tackl \Gamma'$}
+    \RightLabel{[T-Program]}
+    \BinaryInfC{$\tack \overline{D} : \text{ok}$}
+\end{prooftree}
+\end{center}
+
+\end{document}
