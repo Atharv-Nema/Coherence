@@ -26,7 +26,8 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
         // Nonsensical case: Viewing an iso_cap
         [](const auto&, const Cap::Iso_cap&) -> std::optional<Cap> { 
             assert(false); 
-            return Cap{Cap::Tag{}};},
+            // return Cap{Cap::Tag{}};
+        },
         
         // Tag
         [](const Cap::Tag&, const Cap::Tag&) -> std::optional<Cap> { 

@@ -6,3 +6,16 @@ llvm_trial
 temp*
 errors_noticed.txt
 pony_trial
+
+# LaTeX artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+*.toc
+*.out
+*.lof
+*.lot
+*.bbl
+*.blg
