@@ -1,0 +1,121 @@
+\documentclass[a4paper,12pt,fleqn]{article}
+
+% --- Core Packages ---
+\usepackage{titlesec}
+\usepackage[margin=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{libertine} % Font matching Linux Libertine
+\usepackage{amsmath, amssymb, amsthm}
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{4}
+\appendix
+% --- Inference Rules Package ---
+\usepackage{bussproofs}
+
+% --- Left-align display math ---
+\setlength{\mathindent}{0pt}
+
+% --- No paragraph indentation ---
+\setlength{\parindent}{0pt}
+
+% --- Custom Commands ---
+\newcommand{\tack}{\vdash}
+\newcommand{\tackl}{\dashv}
+
+\begin{document}
+\section{\textit{Coherence1.0} typing rules}
+\subsection{Expression typing}
+\begin{tabular}{c@{\qquad}c@{\qquad}c}
+    \AxiomC{}
+    \RightLabel{(Int)}
+    \UnaryInfC{$\Gamma \tack i : \text{int}$}
+    \DisplayProof
+&
+    \AxiomC{}
+    \RightLabel{(True)}
+    \UnaryInfC{$\Gamma \tack \text{true} : \text{bool}$}
+    \DisplayProof
+&
+    \AxiomC{}
+    \RightLabel{(False)}
+    \UnaryInfC{$\Gamma \tack \text{false} : \text{bool}$}
+    \DisplayProof
+\end{tabular}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\text{variable\_type}(x, \Gamma) = T$}
+    \RightLabel{(Var)}
+    \UnaryInfC{$\Gamma \tack x : T$}
+\end{prooftree}
+
+\vspace{1em}
+\begin{prooftree}
+    \AxiomC{$\text{get\_struct\_type}(N, \Gamma) = \text{struct } \{ \overline{f:B} \}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{B'}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(\overline{B}, \overline{B'})$}
+    \RightLabel{(Struct)}
+    \TrinaryInfC{$\Gamma \tack (\{ \overline{f = e} \} : N) : N$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_s : \text{Int}$}
+    \AxiomC{$\Gamma \tack e_d : B'$}
+    \AxiomC{$\Gamma \tack \text{assignable}(B, B')$}
+    \RightLabel{(Alloc)}
+    \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$A \in \Gamma_A$}
+    \AxiomC{$k \in A_{\text{ctor}}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(k_{\text{param}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Actor creation)}
+    \QuaternaryInfC{$\Gamma \tack \text{new } A.k(\overline{e}) : \text{Actor}(A)$}
+\end{prooftree}
+
+\vspace{1em}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
+    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
+    % \AxiomC{$\Gamma_L = 1$}
+    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa)$}
+    \RightLabel{(Pointer access)}
+    \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : N$}
+    \AxiomC{$S(N) = \text{struct } \{ \overline{f:B} \}$}
+    \AxiomC{$f_i \in \overline{f}$}
+    \RightLabel{(Field access)}
+    \TrinaryInfC{$\Gamma \tack e.f_i : B_i$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_1 : T_1$}
+    \AxiomC{$\Gamma \tack e_2 : T_2$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T_1, T_2)$}
+    \AxiomC{$\Gamma \tack \text{appear\_lhs}(e_1)$}
+    \RightLabel{(Assign)}
+    \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_F(m)_{sig} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Func-Call)}
+    \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
+\end{prooftree}
+
+\end{document}

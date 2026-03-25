@@ -1,0 +1,280 @@
+\documentclass[a4paper,12pt,fleqn]{article}
+
+% --- Core Packages ---
+\usepackage{titlesec}
+\usepackage[margin=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{float}
+\usepackage{libertine} % Font matching Linux Libertine
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+\usepackage{listings}
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{4}
+% --- Inference Rules Package ---
+\usepackage{bussproofs}
+
+% --- Left-align display math ---
+\setlength{\mathindent}{0pt}
+
+% --- No paragraph indentation ---
+\setlength{\parindent}{0pt}
+\titlespacing*{\paragraph}{0pt}{3.25ex plus 1ex minus .2ex}{0pt}
+
+% --- Custom Commands ---
+\newcommand{\tack}{\vdash}
+\newcommand{\tackl}{\dashv}
+
+\begin{document}
+\section{Implementation}
+This chapter describes the theory and the code needed to be developed for the implementation of the \textit{Coherence} language.
+% CR: Make this better english.
+\begin{itemize}
+    \item We first introduce the formal syntax and type-checking rules of \textit{Coherence} (Section 4.1).
+    \item We then provide an overview of the frontend of the language, covering the abstract syntax tree (AST), the lexer and the parser stages (Section 4.2).
+    \item We then discuss the AST validation stage, which includes the implementation of the type-checking rules and some processing for proper handover to the codegeneration stage (Section 4.3).
+    \item We then discuss the implementation of the runtime system (Section 4.4).
+    \item We then discuss the lowering to LLVM (Section 4.5).
+    \item Finally, we present an extension to the language, which involves allowing for pointers to pointers (Section 4.6).
+\end{itemize}
+
+\subsection{Formal theory}
+This section describes the formal syntax and type-checking rules of the basic version of \textit{Coherence}. In Section 4.6, we will discuss the formal syntax and type-system for the extension to the language. I will refer to this basic version as \textit{Coherence1.0} when discussing features unique to it.
+\subsubsection{Formal syntax}
+The coherence language syntax into four main categories: types, expressions, statements and top-level items.
+\begin{itemize}
+    \item \textbf{Expressions} are parts of the program that can evaluate to a value.
+    \item \textbf{Types} are used to make sure that the expressions are used correctly. The type-system assigns a type to every expression in the program.
+    \item \textbf{Statements} are lines in the body of the program. These are the core instructions that the program executes. These are lines terminated with a semicolon. These include variable declarations, control structure (like while loops and if statements) and behaviour calls.
+    \item \textbf{Top-level items} are definitions present at the top level of a \textit{Coherence} program. These include type definitions, actor definitions and top-level function definitions.
+\end{itemize}
+\paragraph{Types\\}
+\textit{Coherence1.0} only allows pointers to point to non-pointer types (it forbids multi-level pointers). It does this to prevent dealing with the complexities of viewpoint adaptation. \textit{Coherence2.0} introduces multi-level pointers. The cleanest way to enforce this is at the syntax level.
+\[
+\begin{array}{lcll}
+T & ::= & B \mid B\ \kappa & \text{(full coherence type)} \\[0.5em]
+B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) & \text{(basic type)} \\[0.5em]
+\kappa & ::= & \mathtt{ref} \mid \mathtt{val} \mid \mathtt{iso} \mid \mathtt{locked}\langle L \rangle & \text{(reference capabilities)} \\[0.5em]
+T_N & ::= & B  \mid \mathtt{struct}\ \{\ \overline{f : B;}\ \} & \text{(nameable type)}
+\end{array}
+\]
+\begin{itemize}
+    \item \textbf{B} refers to basic types. These are types that do not have pointers in them. They include the standard types (int, bool and unit), named types, and actor types (given to actor-instances).
+    \item \textbf{T} is the full coherence type. It is either a basic type, or a pointer to the basic type. The pointer case has the associated reference capability of the pointer in the type.
+    \item $\boldsymbol{\kappa}$ are the reference capabilities of the language. \textit{Coherence1.0}'s uses \texttt{ref}, \texttt{iso}, \texttt{val} and \texttt{locked<L>}, which have been described in the preparation section.
+    \item $\boldsymbol{T_N}$ refers to nameable types. These are types that can be aliased in top-level type definition. This serves as more than just syntactic sugar: structs can only be used using this name definition. These can either be basic types or struct definitions.
+\end{itemize}
+\paragraph{Expressions\\}
+Expressions are parts of the program that can evaluate to a value. In the rules given below, $i$ refers to integer literal, $x$ refers to variables, $f$ refers to fields, $m$ refers to methods, $A$ refers to actor-template names, and $k$ refers to actor constructors.
+\[
+\begin{array}{lcll}
+e & ::= & () & \text{(unit)} \\
+  & \mid & i & \text{(integer literal)} \\
+  & \mid & \mathtt{true} \mid \mathtt{false} & \text{(boolean literal)} \\
+  & \mid & x & \text{(variable)} \\
+  & \mid & \{\ \overline{f = e;}\ \} : N & \text{(struct literal)} \\
+  & \mid & \mathtt{new}\ \kappa\ [e]\ B\ (e) & \text{(allocation)} \\
+  & \mid & \mathtt{new}\ A.k(\overline{e}) & \text{(actor construction)} \\
+  & \mid & e[e] & \text{(pointer access)} \\
+  & \mid & e.f & \text{(field access)} \\
+  & \mid & e = e & \text{(assignment)} \\
+  & \mid & m(\overline{e}) & \text{(function call)} \\
+  & \mid & \mathtt{unalias}(x) & \text{(ownership transfer)}\\
+  & \mid & e\ \mathit{op}\ e & \text{(binary operation)}
+\end{array}
+\]
+While most constructs are fairly standard, several specific features of the \textit{Coherence} expression syntax warrant further explanation:
+\begin{itemize}
+    \item \textbf{Allocation:} Pointers in \textit{Coherence} are treated as arrays. The allocation syntax $\mathtt{new}\ \boldsymbol{\kappa}\ [e]\ B\ (e)$ requires the explicit declaration of a capability, the array size (within \texttt{[]}), and a default initialization value (within \texttt{()}). 
+    \item \textbf{Actor construction:} An actor can have multiple constructors, which is why the constructor name has to be specified during creation.
+    \item \textbf{Struct Literal:} Unlike languages such as OCaml, which identifies structures based on member names, \textit{Coherence} requires an explicit type name $N$. This design choice prioritizes clarity and prevents ambiguity in cases where multiple structures share identical field names.
+    \item \textbf{Operators:} Explanation of the specific binary operators ($\mathit{op}$) supported by \textit{Coherence} is omitted as the rules followed are pretty standard across programming languages.
+    \item \textbf{Assignment:} The reason assignment is treated as an expression is because assignment evaluates to the previous lhs value.
+    \item \textbf{Ownership transfer:} To maintain the single-alias invariant of the \texttt{iso} capability, an actor must explicitly relinquish its reference. The \texttt{unalias} keyword allows the programmer to invalidate a local variable, returning the "unaliased" value. The compiler statically ensures that the variable remains inaccessible until it has been replenished with a new value.
+% CR: Potentially a note box about different undefined behaviours possible.
+\end{itemize}
+\paragraph{Statements\\}
+Statements are instructions that define the program's imperative logic. $b$ to the behaviour of the actor being called.
+\[
+\begin{array}{lcll}
+s & ::= & \mathtt{var}\ x : T = e\ ; & \text{(local declaration)} \\
+  & \mid & f := e\ ; & \text{(member initialisation)} \\
+  & \mid & e \to b(\overline{e})\ ; & \text{(behaviour call)} \\
+  & \mid & \mathtt{OUT}\ e\ ; & \text{(print statement)} \\
+  & \mid & \mathtt{if}\ (e)\ \{\ \overline{s}; \}\ \mathtt{else}\ \{\ \overline{s}\ \} & \text{(if-else statement)} \\
+  & \mid & \mathtt{while}\ (e)\ \{\ \overline{s}; \} & \text{(while statement)} \\
+  & \mid & \mathtt{atomic}\ \{\ \overline{s}\ \} & \text{(atomic section)}\\
+  & \mid & \mathtt{return}\ e\ ; & \text{(return)}\\
+  & \mid & e\ ; & \text{(expression whose value is discarded)}
+\end{array}
+\]
+Note that in all of the rules future, $\overline{X}$ refers to a list of $X$. Some interesting statement constructors are explained below:
+\begin{itemize}
+    \item \textbf{Member intialisation:} To prevent undefined behaviour due to uninitialised fields, \textit{Coherence} enforces that constructors initialise all of the actor fields. \textit{Coherence} cannot use the simple assignment for initialising the members, as assignment must evaluate to the previously held value. Hence, \textit{Coherence} provides special syntax for initialising members, and performs checks to make sure that members are initialised and used correctly. The specific checks will be discussed in section (4.1.1.2 or something).
+    \item \textbf{OUT:} Used for printing integers to \texttt{stdout}.
+\end{itemize}
+\paragraph{Top-level items\\}
+Top-level items are definitions present at the top level of a \textit{Coherence} program.
+\[
+\begin{array}{lcll}
+P & ::= & \overline{D} & \text{(program)} \\[0.5em]
+D & ::= & \mathtt{type}\ N = T_N & \text{(type definition)} \\
+  & \mid & \mathtt{func}\ m(\overline{x : T}) \Rightarrow T\ \{\ \overline{s}\ \} & \text{(function definition)} \\
+  & \mid & \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} & \text{(actor definition)} \\[0.5em]
+M & ::= & \mathtt{new}\ k(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \text{(constructor)} \\
+  & \mid & \mathtt{func}\ m(\overline{T\ \mathit{arg}}) \Rightarrow T\ \{\ \overline{s}\ \} & \text{(method)} \\
+  & \mid & \mathtt{be}\ b(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \text{(behaviour)}
+\end{array}
+\]
+A program $P$ is a list of top-level items $D$. Top-level items are either type-definitions, function definitions, or actor-definitions. An actor contains a list of member fields, and a list of constructors, private functions, and behaviours.
+
+\subsubsection{Typing rules}
+% CR: Make this sentence better or something
+The typing rules presented in this section are intended as a high-level description of the typing rules, rather than an exhaustive formal compiler specification. Several complex validation checks are encapsulated by named procedures or predicates. Most of these will be treated as black-boxes: there behaviour will be explained in words. However, an attempt to capture their implementation in mathematical notation.
+\\
+The typing environment $\Gamma$ maintains the contextual state required by the type-checker. In the description of the typing context, the term \textit{metadata structure} of an object is a structure that contains all the necessary data about the object. Data is accessed using subscript notation. The underlying mathematical representation of these structures are omitted for brevity.
+\begin{itemize}
+    \item $\Gamma_V$: a mapping from local variable names to their types
+    \item $\Gamma_L$: boolean flag indicating whether the current typing context is scoped within an \texttt{atomic} section
+    \item $\Gamma_A$: a mapping from actor names to their metadata structure.
+    \item $\Gamma_T$: mapping to named types.
+    \item $\Gamma_F$: mapping from top-level function names to their metadata structure.
+    \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
+\end{itemize}
+\paragraph{Expression typing\\}
+Expressions are given types using judgements of form $\Gamma \tack e : T$. The full type checking rules are included in appendixA(TODO: ADD THE LINK TO IT OR SOMETHING). The interesting cases are described below:
+\begin{itemize}
+  \item 
+    \AxiomC{$\text{variable\_type}(x, \Gamma) = T$}
+    \RightLabel{(Var)}
+    \UnaryInfC{$\Gamma \tack x : T$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    The \texttt{variable\_type} procedure resolves identifiers across a unified scope comprising of actor fields of $\Gamma_{this}$ and local variables in $\Gamma_V$. The language prevents shadowing of actor fields by local variables and hence there is no ambiguity.
+  \item
+    \AxiomC{$\Gamma \tack e_1 : T_1$}
+    \AxiomC{$\Gamma \tack e_2 : T_2$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T_1, T_2)$}
+    \AxiomC{$\Gamma \tack \text{appear\_lhs}(e_1)$}
+    \RightLabel{(Assign)}
+    \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    As previously noted, assignment expressions evaluate to the previous value of the left-hand side (LHS). The point of this non-standard behaviour is to facilitate transfer of \texttt{iso} references. The returned value has lost an alias because of the write. The type system must capture this to allow sending the unaliased \texttt{iso} to another actor. In other words, the pseudocode below should type check
+\begin{lstlisting}
+var x: int iso = ...;
+actor_instance->receive_iso(x = ...);
+\end{lstlisting}
+    To faciliate this, the compiler uses the \texttt{iso\textasciicircum} capability. \texttt{iso\textasciicircum} is an ephemeral capability accessible only to the compiler (the programmer cannot write programs using it, which is reflected in the fact that \texttt{iso\textasciicircum} does not appear in the syntax). This is the capability associated with a reference that has no aliases. This concept is reflected in the \texttt{assign} rule using the \texttt{unalias} function, which takes in a type and returns the unaliased version of it. The unalias function maps $B \ iso$ to $B \ iso$\textasciicircum and acts as the identity for all other types.\\
+    The next thing to unpack is the \texttt{assignable} predicate. $\Gamma \tack \text{assignable}(T_1, T_2)$ is meant to express type $T_2$ is assignable to $T_1$. The rules for \texttt{assignable} are as follows:
+    \vspace{1em}\\
+    \begin{tabular}{c@{\qquad}c}
+        \AxiomC{}
+        \RightLabel{(Assign-Basic)}
+        \UnaryInfC{$\Gamma \vdash \text{assignable}(B, B)$}
+        \DisplayProof
+    &
+        \AxiomC{$\kappa_1 <: \kappa_2$}
+        \RightLabel{(Assign-Ptr)}
+        \UnaryInfC{$\Gamma \vdash \text{assignable}(B \ \kappa_1, B \ \kappa_2)$}
+        \DisplayProof
+    \end{tabular}
+    \vspace{1em}\\
+  In other words, basic types must be the same and for pointer types, the inner basic types must be the same and the capabilities must be assignable (given by the relation $<:$).\\
+  \begin{figure}[H]
+    \centering
+  \begin{tikzpicture}[
+    node distance=2cm,
+    cap_node/.style={circle, draw=black, thick, minimum size=1.2cm, font=\ttfamily},
+    arrow/.style={-{Stealth[scale=1.2]}, thick}
+  ]
+   % Nodes
+   \node[cap_node] (isoh) {iso\textasciicircum};
+   \node[cap_node] (iso) [below=of isoh] {iso};
+   \node[cap_node] (ref) [below left=of isoh] {ref};
+   \node[cap_node] (val) [below right=of isoh] {val};
+   % Assignability edges (a -> b means a is assignable to b)
+   \draw[arrow] (isoh) -- (iso);
+   \draw[arrow] (ref) to [loop below](ref);
+   \draw[arrow] (val) to [loop below](val);
+   \draw[arrow] (isoh) to [bend right=45] (ref);
+   \draw[arrow] (isoh) to [bend left=45] (val);
+  \end{tikzpicture}
+  \caption{Capability Assignability Graph.}
+  \label{fig:capability_hierarchy}
+\end{figure}
+  Edges A -> B in the graph mean that $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single alias invariant. Also, nothing is assignable to \texttt{iso\textasciicircum} as any expression with this type cannot appear in the left-hand side of an expression (more about this later on in this section).
+
+
+
+  \item
+    \AxiomC{$\Gamma \tack e_s : \text{Int}$}
+    \AxiomC{$\Gamma \tack e_d : B'$}
+    \AxiomC{$\Gamma \tack \text{assignable}(B, B')$}
+    \RightLabel{(Alloc)}
+    \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    To allocate a pointer to type $B \ \kappa$, the programmer must provide a size expression $e_s$ that evaluates to an integer and a default expression $e_d$ that evaluates to an expression that is assignable to $B$. The judgement rule gives the expression the \textit{unaliased} version of the pointer type, which is a type that represents the fact that the expression has one lesser alias than what the 
+    The newly created pointer's type is the \textit{unaliased} version of the pointer type intended by the programmer. The unaliased version of a type is a type that represents the fact that an alias to the expression represented by the type has been removed. This does not mean anything for most types, as they do not have anything to do with the reference (so for eg unalias(T ref) is just T ref). However, T iso is a type that says that there is only one alias to the expression. Hence, when removing the alias, we can make the returned expression more powerful. Hence, unalias(T iso) is T iso\textasciicircum. iso\textasciicircum is a reference capability only available in the compiler for type checking purposes. It represents a reference with no aliases. It can be freely assigned to any pointer type.
+    This rule says that to allocate a pointer of type $B \ \kappa$, we need to provide it with a type assignable to B, and specify a size expression that evaluates to an integer.
+    Need to talk about this guy. assignable rules are something that need to be discussed here. The rules are simply that there either same type or the pointer types have the same base type with compatible reference capabilities. Also introduce the idea of unalias function which returns the unaliased type. Introduce \texttt{iso\textasciicircum} as a reference capability available only to the compiler. Then we will provide rules for assignment.
+
+\end{itemize}
+
+
+
+\begin{prooftree}
+    \AxiomC{$A \in \Gamma_A$}
+    \AxiomC{$k \in A_{\text{ctor}}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(k_{\text{param}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Actor creation)}
+    \QuaternaryInfC{$\Gamma \tack \text{new } A.k(\overline{e}) : \text{Actor}(A)$}
+\end{prooftree}
+
+\vspace{1em}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
+    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
+    % \AxiomC{$\Gamma_L = 1$}
+    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa)$}
+    \RightLabel{(Pointer access)}
+    \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : N$}
+    \AxiomC{$S(N) = \text{struct } \{ \overline{f:B} \}$}
+    \AxiomC{$f_i \in \overline{f}$}
+    \RightLabel{(Field access)}
+    \TrinaryInfC{$\Gamma \tack e.f_i : B_i$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_1 : T_1$}
+    \AxiomC{$\Gamma \tack e_2 : T_2$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T_1, T_2)$}
+    \AxiomC{$\Gamma \tack \text{appear\_lhs}(e_1)$}
+    \RightLabel{(Assign)}
+    \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_F(m)_{sig} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
+    \RightLabel{(Func-Call)}
+    \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
+\end{prooftree}
+
+
+\end{document}
