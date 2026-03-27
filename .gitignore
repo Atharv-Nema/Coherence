@@ -19,3 +19,5 @@ pony_trial
 *.lot
 *.bbl
 *.blg
+*.pdf
+*.pyg

@@ -82,7 +82,7 @@
     \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
     \AxiomC{$\Gamma \tack e_i : \text{Int}$}
     % \AxiomC{$\Gamma_L = 1$}
-    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa)$}
+    \AxiomC{$\Gamma \tack \text{cap\_readable}(\kappa)$}
     \RightLabel{(Pointer access)}
     \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
 \end{prooftree}
@@ -111,11 +111,156 @@
 \vspace{1em}
 
 \begin{prooftree}
-    \AxiomC{$\Gamma_F(m)_{sig} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    \AxiomC{$\texttt{get\_func}(\Gamma, m) = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
     \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
     \AxiomC{$\Gamma \tack \text{assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
     \RightLabel{(Func-Call)}
     \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
 \end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_V(x) = T$}
+    \RightLabel{(Unalias)}
+    \UnaryInfC{$\Gamma \tack \mathtt{unalias}(x) : \text{unalias}(T)$}
+\end{prooftree}
+
+\subsection{Statement typing}
+\begin{center}
+\begin{tabular}{c@{\qquad\qquad}c}
+    \AxiomC{}
+    \RightLabel{(Seq-Nil)}
+    \UnaryInfC{$\Gamma \tack [] \tackl \Gamma$}
+    \DisplayProof
+&
+    \AxiomC{$\Gamma \tack s \tackl \Gamma'$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{(Seq-Cons)}
+    \BinaryInfC{$\Gamma \tack s{::}\overline{s} \tackl \Gamma''$}
+    \DisplayProof
+\end{tabular}
+\end{center}
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : T_e$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T, T_e)$}
+    \RightLabel{(Var-Decl)}
+    \BinaryInfC{$\Gamma \tack \text{var } x : T = e; \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\text{is\_constructor}(\Gamma_{callable})$}
+    \AxiomC{$(\Gamma_{this})_{\text{fields}}(f) = T_f$}
+    \AxiomC{$\Gamma \tack e : T_e$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T_f, T_e)$}
+    \RightLabel{(Member-Init)}
+    \QuaternaryInfC{$\Gamma \tack f := e \tackl \Gamma$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_a : \text{Actor}(A_{\text{name}})$}
+    \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(b_{\text{param}}, \overline{T_e})$}
+    \RightLabel{[Behv-Call]}
+    \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}); \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{tabular}{c@{\qquad\qquad}c}
+    \AxiomC{$\Gamma \tack e : \text{Int}$}
+    \RightLabel{(Out)}
+    \UnaryInfC{$\Gamma \tack \text{OUT } e; \tackl \Gamma$}
+    \DisplayProof
+&
+    \AxiomC{$\Gamma \tack e : T$}
+    \RightLabel{[Raw expression]}
+    \UnaryInfC{$\Gamma \tack e; \tackl \Gamma$}
+    \DisplayProof
+\end{tabular}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : \text{bool}$}
+    \AxiomC{$\Gamma \tack \overline{s_1} \tackl \Gamma_1$}
+    \AxiomC{$\Gamma \tack \overline{s_2} \tackl \Gamma_2$}
+    \RightLabel{(If-Else)}
+    \TrinaryInfC{$\Gamma \tack \mathtt{if}\ (e)\ \{\ \overline{s_1}\ \}\ \mathtt{else}\ \{\ \overline{s_2}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma[L \mapsto \text{true}] \tack \overline{s} \tackl \Gamma'$}
+    \RightLabel{[Atomic]}
+    \UnaryInfC{$\Gamma \tack \text{atomic } \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e : \text{Bool}$}
+    \AxiomC{$\Gamma \tack \overline{s} \tackl \Gamma'$}
+    \RightLabel{[While]}
+    \BinaryInfC{$\Gamma \tack \text{while } (e) \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_{callable} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    \AxiomC{$\Gamma \tack e : T_{\text{ret}}$}
+    \RightLabel{[Return]}
+    \BinaryInfC{$\Gamma \tack \text{return } e; \tackl \Gamma$}
+\end{prooftree}
+\end{center}
+
+\subsection{Top-level typing}
+
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack \text{valid}(T_N)$}
+    \RightLabel{[TypeDef]}
+    \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\Gamma' \tack \text{returns}(\overline{s}, \phi_r)$}
+    \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Func]}
+    \QuaternaryInfC{$\Gamma \tack \text{func } m(\overline{x : \phi_p}) \Rightarrow \phi_r \{ \overline{s} \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Constructor]}
+    \TrinaryInfC{$\Gamma \tack \mathtt{new}\ k(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
+    \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Be]}
+    \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
+\end{prooftree}
+
+\vspace{2em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack \overline{T} : \text{valid}$}
+    \AxiomC{$\Gamma_{\text{base}} = \Gamma[this \mapsto \text{Actor}(A)]$}
+    \AxiomC{$\Gamma_{\text{base}} \tack \overline{M} \tackl \Gamma_{\text{base}}$}
+    \RightLabel{[T-Actor]}
+    \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} \tackl \Gamma$}
+\end{prooftree}
+\end{center}
 
 \end{document}

@@ -9,6 +9,25 @@
 \usepackage{libertine} % Font matching Linux Libertine
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{tikz}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+
+% Define a custom style that mimics your Typst block
+\newtcolorbox{notebox}{
+    enhanced,
+    boxrule=0pt,            % Remove the default border
+    leftrule=3pt,           % Add the specific left "stroke"
+    colframe=gray!50,       % Color of the left stroke
+    colback=gray!10,        % Light gray background (80-90% lighten)
+    arc=4pt,                % Radius for rounded corners
+    outer arc=4pt,
+    left=12pt,              % Internal padding (inset)
+    right=12pt,
+    top=8pt,
+    bottom=8pt,
+    fontupper=\small,       % Slightly smaller text for notes
+    breakable               % Allows the box to span across pages
+}
 \usetikzlibrary{arrows.meta, positioning}
 \usepackage{listings}
 \setcounter{secnumdepth}{4}
@@ -142,6 +161,7 @@ The typing environment $\Gamma$ maintains the contextual state required by the t
     \item $\Gamma_T$: mapping to named types.
     \item $\Gamma_F$: mapping from top-level function names to their metadata structure.
     \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
+    \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
 \end{itemize}
 \paragraph{Expression typing\\}
 Expressions are given types using judgements of form $\Gamma \tack e : T$. The full type checking rules are included in appendixA(TODO: ADD THE LINK TO IT OR SOMETHING). The interesting cases are described below:
@@ -183,32 +203,57 @@ actor_instance->receive_iso(x = ...);
     \end{tabular}
     \vspace{1em}\\
   In other words, basic types must be the same and for pointer types, the inner basic types must be the same and the capabilities must be assignable (given by the relation $<:$).\\
-  \begin{figure}[H]
+\begin{figure}[H]
     \centering
-  \begin{tikzpicture}[
-    node distance=2cm,
-    cap_node/.style={circle, draw=black, thick, minimum size=1.2cm, font=\ttfamily},
-    arrow/.style={-{Stealth[scale=1.2]}, thick}
-  ]
-   % Nodes
-   \node[cap_node] (isoh) {iso\textasciicircum};
-   \node[cap_node] (iso) [below=of isoh] {iso};
-   \node[cap_node] (ref) [below left=of isoh] {ref};
-   \node[cap_node] (val) [below right=of isoh] {val};
-   % Assignability edges (a -> b means a is assignable to b)
-   \draw[arrow] (isoh) -- (iso);
-   \draw[arrow] (ref) to [loop below](ref);
-   \draw[arrow] (val) to [loop below](val);
-   \draw[arrow] (isoh) to [bend right=45] (ref);
-   \draw[arrow] (isoh) to [bend left=45] (val);
-  \end{tikzpicture}
-  \caption{Capability Assignability Graph.}
-  \label{fig:capability_hierarchy}
+    \begin{tikzpicture}[
+        % node distance: Vertical then Horizontal
+        node distance=1.5cm and 1.2cm, 
+        % cap_node: inner sep ensures the circle grows with the text
+        cap_node/.style={
+            circle, draw=black, thick, 
+            minimum size=1.4cm, % Increased slightly to fit 'locked<L>' better
+            inner sep=2pt, 
+            font=\ttfamily\small % Slightly smaller font helps with long labels
+        },
+        arrow/.style={-{Stealth[scale=1.2]}, thick}
+    ]
+    
+    % Nodes
+    \node[cap_node] (isoh) {iso\textasciicircum};
+    \node[cap_node] (iso)  [below=of isoh] {iso};
+    \node[cap_node] (ref)  [left=of iso]   {ref};
+    \node[cap_node] (val)  [right=of iso]  {val};
+    \node[cap_node] (lock) [right=of val]  {locked<L>};
+
+    % Assignability edges from iso^
+    \draw[arrow] (isoh) -- (iso);
+    \draw[arrow] (isoh) to [right=25] (ref);
+    \draw[arrow] (isoh) to [left=25] (val);
+    \draw[arrow] (isoh) to [bend left=35] (lock);
+
+    % Self-loops (Reflexivity)
+    % looseness=5 or higher ensures the loop is visible outside the node border
+    \draw[arrow] (isoh) to [loop above, looseness=5] (isoh);
+    \draw[arrow] (ref)  to [loop below, looseness=5] (ref);
+    \draw[arrow] (val)  to [loop below, looseness=5] (val);
+    \draw[arrow] (lock) to [loop below, looseness=2.5] (lock);
+    
+    \end{tikzpicture}
+    \caption{Capability Assignability Graph including the \texttt{locked<L>} capability.}
+    \label{fig:capability_hierarchy}
 \end{figure}
-  Edges A -> B in the graph mean that $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single alias invariant. Also, nothing is assignable to \texttt{iso\textasciicircum} as any expression with this type cannot appear in the left-hand side of an expression (more about this later on in this section).
-
-
-
+  Edges A -> B in the graph mean that $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single alias invariant. A reference with the locked capability is assignable to another reference with a locked capability if they are protected by the same lock. The assignment rules to \texttt{iso\textasciicircum} are irrelevant as an expression that evaluates to \texttt{iso\textasciicircum} will never satisfy .
+  \begin{notebox}
+    \textbf{Assignment to \texttt{iso\textasciicircum}} \\
+    The rules for $<:$ when assigning to \texttt{iso\textasciicircum} are irrelevant. In the \texttt{(Assign)} rule, when $e_1$ evaluates to \texttt{iso\textasciicircum}, it does not satisfy $\Gamma \tack \text{appear\_lhs}(e_1)$. All the other rules involving the predicate \texttt{assignable} have a programmer defined type as the first argument, which cannot contain \texttt{iso\textasciicircum} as programmers do not have access to \texttt{iso\textasciicircum}.
+  \end{notebox}
+  It might seem like the \texttt{assignable} predicate is enough for the assignment rules. However, the destination of an assignment needs to satisfy two additional constraints: it must evaluate to an \textit{lvalue}, and the memory location corresponding to the lvalue must be writable.
+  \begin{notebox}
+    \textbf{lvalue}\\
+    An lvalue is an expression that evaluates to a value stored in a persistent memory location, such as a variable, an object field, or the dereference of a pointer, rather than a temporary result like a literal, a result of an arithmetic expression ($x + y$ for example), or a previous value of a variable ($x = y$). The specific rules used to decide whether an expression is an lvalue is are not discussed as they are fairly standard.
+  \end{notebox}
+  A value is writable if it is not the dereference of a pointer reference capability \texttt{val} (as \texttt{val} guarantees immutability). These constraints are captured by the $\Gamma \tack \text{appear\_lhs}(e_1)$ predicate.
+  
   \item
     \AxiomC{$\Gamma \tack e_s : \text{Int}$}
     \AxiomC{$\Gamma \tack e_d : B'$}
@@ -217,64 +262,139 @@ actor_instance->receive_iso(x = ...);
     \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
     \DisplayProof
     \vspace{1.5em}\\
-    To allocate a pointer to type $B \ \kappa$, the programmer must provide a size expression $e_s$ that evaluates to an integer and a default expression $e_d$ that evaluates to an expression that is assignable to $B$. The judgement rule gives the expression the \textit{unaliased} version of the pointer type, which is a type that represents the fact that the expression has one lesser alias than what the 
-    The newly created pointer's type is the \textit{unaliased} version of the pointer type intended by the programmer. The unaliased version of a type is a type that represents the fact that an alias to the expression represented by the type has been removed. This does not mean anything for most types, as they do not have anything to do with the reference (so for eg unalias(T ref) is just T ref). However, T iso is a type that says that there is only one alias to the expression. Hence, when removing the alias, we can make the returned expression more powerful. Hence, unalias(T iso) is T iso\textasciicircum. iso\textasciicircum is a reference capability only available in the compiler for type checking purposes. It represents a reference with no aliases. It can be freely assigned to any pointer type.
-    This rule says that to allocate a pointer of type $B \ \kappa$, we need to provide it with a type assignable to B, and specify a size expression that evaluates to an integer.
-    Need to talk about this guy. assignable rules are something that need to be discussed here. The rules are simply that there either same type or the pointer types have the same base type with compatible reference capabilities. Also introduce the idea of unalias function which returns the unaliased type. Introduce \texttt{iso\textasciicircum} as a reference capability available only to the compiler. Then we will provide rules for assignment.
-
-\end{itemize}
-
-
-
-\begin{prooftree}
-    \AxiomC{$A \in \Gamma_A$}
-    \AxiomC{$k \in A_{\text{ctor}}$}
-    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
-    \AxiomC{$\Gamma \tack \text{assignable}(k_{\text{param}}, \overline{T_{\text{arg}}})$}
-    \RightLabel{(Actor creation)}
-    \QuaternaryInfC{$\Gamma \tack \text{new } A.k(\overline{e}) : \text{Actor}(A)$}
-\end{prooftree}
-
-\vspace{1em}
-\begin{prooftree}
-    \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
-    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
-    % \AxiomC{$\Gamma_L = 1$}
-    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa)$}
-    \RightLabel{(Pointer access)}
-    \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
-\end{prooftree}
-
-\vspace{1em}
-
-\begin{prooftree}
-    \AxiomC{$\Gamma \tack e : N$}
-    \AxiomC{$S(N) = \text{struct } \{ \overline{f:B} \}$}
-    \AxiomC{$f_i \in \overline{f}$}
-    \RightLabel{(Field access)}
-    \TrinaryInfC{$\Gamma \tack e.f_i : B_i$}
-\end{prooftree}
-
-\vspace{1em}
-
-\begin{prooftree}
-    \AxiomC{$\Gamma \tack e_1 : T_1$}
-    \AxiomC{$\Gamma \tack e_2 : T_2$}
-    \AxiomC{$\Gamma \tack \text{assignable}(T_1, T_2)$}
-    \AxiomC{$\Gamma \tack \text{appear\_lhs}(e_1)$}
-    \RightLabel{(Assign)}
-    \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
-\end{prooftree}
-
-\vspace{1em}
-
-\begin{prooftree}
-    \AxiomC{$\Gamma_F(m)_{sig} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
+    To allocate a pointer to type $B \ \kappa$, the programmer must provide a size expression $e_s$ that evaluates to an integer and a default expression $e_d$ that evaluates to an expression that is assignable to $B$. The judgement gives the expression the type \texttt{unalias}$(B \ \kappa)$. This is safe as there is no alias to the pointer at the time of its creation. The unaliasing is necessary as it allows for a freshly allocated pointer of type $B \ iso$ to be assigned to a local variable of type $B \ iso$.
+  \item
+    \AxiomC{$\texttt{get\_func}(\Gamma, m) = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
     \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
     \AxiomC{$\Gamma \tack \text{assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
     \RightLabel{(Func-Call)}
     \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
+    \DisplayProof
+    \vspace{1.5em}\\
+    Function resolution via \texttt{get\_func} prioritizes member functions: it returns the signature from $(\Gamma_{this})_{func}(m)$ if $m \in (\Gamma_{this})_{func}$. If not, it returns $\Gamma_F(m)$ (the signature from the global scope).
+  \item
+    \AxiomC{$\Gamma_V(x) = T$}
+    \RightLabel{(Unalias)}
+    \UnaryInfC{$\Gamma \tack \mathtt{unalias}(x) : \text{unalias}(T)$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    Usage enforcement for unaliased variables is not enforced by the expression typing rules, as it is handled more cleanly by a separate analysis pass (see Section [TODO]).
+    %CR: Add a text box explaining the restriction of unalias to simple variables.
+
+  \item
+    \AxiomC{$\Gamma \tack e_p : T\ \kappa$}
+    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
+    \AxiomC{$\Gamma \tack \text{cap\_readable}(\kappa)$}
+    \RightLabel{(Pointer access)}
+    \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    The predicate $\texttt{cap\_readable}(\kappa)$ tell us whether a reference protected by $\kappa$ can be dereferenced. The only check that needs to be performed is that if $\kappa = \text{locked<L>}$, then we must be within an atomic section (i.e. $\Gamma_{L}$ must be true).
+    
+\end{itemize}
+\paragraph{Statement typing\\}
+Statements do not evaluate to a value and are run for their side effects. Statements are given well-formedness judgements of form $\Gamma \tack s \tackl \Gamma'$. This says that $s$ is valid assuming environment $\Gamma$, and after $s$, the environment becomes $\Gamma'$. A list of statements $\overline{s}$ is typed by the following two rules:
+
+\begin{center}
+\begin{tabular}{c@{\qquad\qquad}c}
+    \AxiomC{}
+    \RightLabel{(Seq-Nil)}
+    \UnaryInfC{$\Gamma \tack [] \tackl \Gamma$}
+    \DisplayProof
+&
+    \AxiomC{$\Gamma \tack s \tackl \Gamma'$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{(Seq-Cons)}
+    \BinaryInfC{$\Gamma \tack s{::}\overline{s} \tackl \Gamma''$}
+    \DisplayProof
+\end{tabular}
+\end{center}
+
+The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS). Some interesting rules are discussed in this section.
+\begin{itemize}
+  \item
+    \AxiomC{$\Gamma \tack e : T_e$}
+    \AxiomC{$\Gamma \tack \text{assignable}(T, T_e)$}
+    \RightLabel{(Var-Decl)}
+    \BinaryInfC{$\Gamma \tack \text{var } x : T = e; \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    This rule extends the environment $\Gamma_V$ with the new binding $x \mapsto T$.
+  \item 
+    \AxiomC{$\Gamma[L \mapsto \text{true}] \tack \overline{s} \tackl \Gamma'$}
+    \RightLabel{[Atomic]}
+    \UnaryInfC{$\Gamma \tack \text{atomic } \{ \overline{s} \} \tackl \Gamma$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    To type-check an \texttt{atomic} block, the internal statements $\overline{s}$ are checked in an environment where $\Gamma_L$ is set to true. Note that the rule concludes with the original environment $\Gamma$ rather than the updated $\Gamma'$. This ensures that any local variables defined within the atomic block are correctly scoped and do not leak into the surrounding context.
+  \item
+    \AxiomC{$\Gamma \tack e_a : \text{Actor}(A_{\text{name}})$}
+    \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
+    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
+    \AxiomC{$\Gamma \tack \text{assignable}(b_{\text{param}}, \overline{T_e})$}
+    \RightLabel{[Behv-Call]}
+    \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}); \tackl \Gamma$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    The \texttt{(Assign)} rule relies on the top-level item rules to maintain global isolation. These rules require all behavior arguments to be sendable, which ensures that references protected by \texttt{ref} never exit or enter a behavior's scope. These rules are discussed in (TODO: Add a section link or something).
+\end{itemize}
+\paragraph{Top-level item typing\\}
+Top-level items, like statements, are typed using the judgement $\Gamma \tack D \tackl \Gamma'$. The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS). Some important rules are discussed in this section.
+\begin{itemize}
+  \item 
+    \AxiomC{$\Gamma \tack T_N : \text{valid}$}
+    \RightLabel{[TypeDef]}
+    \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    This rule updates the type-context. The predicate \texttt{valid} checks that all named types present in the AST of $T_N$ are present in $\Gamma_C$.
+  \item
+    \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
+    \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
+    \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
+    \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
+    \RightLabel{[T-Be]}
+    \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
+    \DisplayProof
+    \vspace{1.5em}\\
+    The \texttt{sendable} predicate is the additional check that was being talked about in section (TODO). This checks that none of the behaviour arguments is a reference protected by the \texttt{ref} capability. The \texttt{valid\_var\_usage} predicate checks that unaliased variables are used safely. The implementation of this procedure is discussed in section (TODO).
+\end{itemize}
+
+\paragraph{Full-program typing\\}
+A full program $P = \overline{D}$ is typed in two phases. First, we collect all top-level declarations of functions and actors to build an initial environment $\Gamma_0$. This upfront collection of declarations enables mutual recursion between definitions. The specific consequences of this language design choice are discussed in later sections.
+\\
+In the second phase, the entire declaration list is type-checked under $\Gamma_0$. The program is well-typed if both phases succeed. 
+\begin{center}
+\begin{prooftree}
+    \AxiomC{$\text{initial\_env}(\overline{D}) = \Gamma_0$}
+    \AxiomC{$\Gamma_0 \tack \overline{D} \tackl \Gamma'$}
+    \RightLabel{[T-Program]}
+    \BinaryInfC{$\text{well\_typed}(\overline{D})$}
 \end{prooftree}
+\end{center}
+\begin{notebox}
+\textbf{Theoretical time complexity\\}
+To guarantee that all programs can be compiled efficiently, the compilation to LLVM IR aims to have a linear worst-case time complexity. This constraint provides a guarantee of scalability and predictable compilation times. This is a central theme of this implementation which informs quite a few design choices. Every major algorithm is accompanied by a formal complexity analysis.
+\end{notebox}
+\subsection{Frontend}
+This section discusses the implementation of the first stage of the \textit{Coherence} compilation pipeline: the compiler frontend. It 
+\subsubsection{Lexing and parsing}
+The compiler frontend transforms raw source text into an AST through two primary stages:
+\begin{itemize}
+  \item \textbf{Lexing:} This stage is responsible for converting raw source code to a stream of tokens. \textit{Coherence} uses a lexer generator called \textit{FLEX}. \textit{FLEX} takes in a lexer.l file, which contains the lexer specification, and generates a C++ file implementing the lexer based on the specifications. The generated lexer's time complexity is linear in the number of input characters.
+  \item \textbf{Parsing:} This stage processes the stream the tokens to produce the AST. \textit{Coherence} uses a parser generator called \textit{BISON}. \textit{BISON} takes in a parser.y, which specified the context-free grammar of the language, and generates a C++ file implementing the parser. The generated parser's time complexity is linear in the number of tokens.
+I decided to use lexer and parser generators as opposed to handwriting them as they are easier to extend and can efficiently handle LR(1) grammars, which are expressive enough to easily represent most programming constructs.
+\end{itemize}
+
+\subsubsection{AST implementation}
+The AST is designed as a faithful, near-isomorphic representation of the language's formal grammar. The key features of the implementation include:
+\begin{itemize}
+  \item AST nodes that correspond to code written by the user (Expressions, Statements, and Top-Level Items) have a \textit{SourceSpan} field. SourceSpan allows the compiler to map AST nodes to specific line numbers and character offsets for precise error reporting.
+  \item The C++ types implementing the AST nodes adhere to C++'s rule of zero, which states that structs should not define custom destructors, copy/move constructors, or assignment operators, and should rely compiler-generated defaults. To that end, the AST types heavily use the standard library. For e.g., the AST uses std::shared\_ptr instead of raw pointers, which automatically manages memory using reference counting, avoiding the need for a custom destructor and preventing memory leaks.
+  \item A common pattern in the compiler is copying AST nodes. To guarantee that this can be done efficiently, it helps to make the AST node's copy operations constant time. This is achieved through pointer indirections: structures of potentially unbounded length (like the list member variables of an actor) are managed via std::shared\_ptr rather than being stored directly as a member of the struct. Consequently, copying a node is reduced to copying the underlying shared\_ptr, which is a constant time operation. This prevents an accidental high worst-case asymptotic complexity due to careless copying.
+  \item AST nodes representing expressions have a field for the type of the expression. These fields are initially empty and are filled during the AST-validation pass. This information is needed during \textit{code generation} (codegen).
+\end{itemize}
+\subsection{AST validation}
 
 
 \end{document}

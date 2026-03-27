@@ -37,7 +37,7 @@ This cutdown version does not have the full features of the language. It is desc
 T & ::= & B \mid B\ \kappa & \text{(full coherence type)} \\[0.5em]
 B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) & \text{(basic type)} \\[0.5em]
 \kappa & ::= & \mathtt{ref} \mid \mathtt{val} \mid \mathtt{iso} \mid \mathtt{locked}\langle L \rangle & \text{(reference capabilities)} \\[0.5em]
-\hat{T} & ::= & B  \mid \mathtt{struct}\ \{\ \overline{f : B;}\ \} & \text{(nameable type)}
+T_N & ::= & B  \mid \mathtt{struct}\ \{\ \overline{f : B;}\ \} & \text{(nameable type)}
 \end{array}
 \]
 \\
@@ -48,7 +48,7 @@ These are items that occur in the top-level of a program. They include type defi
 \[
 \begin{array}{lcll}
 P & ::= & \overline{D} & \text{(program)} \\[0.5em]
-D & ::= & \mathtt{type}\ N = \hat{T} & \text{(type definition)} \\
+D & ::= & \mathtt{type}\ N = T_N & \text{(type definition)} \\
   & \mid & \mathtt{func}\ m(\overline{x : T}) \Rightarrow T\ \{\ \overline{s}\ \} & \text{(function definition)} \\
   & \mid & \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} & \text{(actor definition)} \\[0.5em]
 M & ::= & \mathtt{new}\ k(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \text{(constructor)} \\
@@ -94,10 +94,10 @@ e & ::= & () & \text{(unit)} \\
 \end{array}
 \]
 
-\section{Type checking}
+\subsection{Type checking}
 This part of the document describes the type-checking rules carried out on the cut-down version of the language. In the formal rules below, assume that renaming has been carried out and so all names are distinct and conflict-free.
 
-\subsection{Typing Environment}
+\subsubsection{Typing Environment}
 The environment $\Gamma$ consists of the following:
 \begin{itemize}
     \item $\Gamma_V$: a mapping from variable names to their types
@@ -108,7 +108,7 @@ The environment $\Gamma$ consists of the following:
     \item $\Gamma_{\text{this}}$: the type of the current actor.
 \end{itemize}
 
-\subsection{Expression typing}
+\subsubsection{Expression typing}
 I will not be focusing on binary operation typing as it is kind of simple and not worth mentioning.
 \\
 \\
@@ -204,7 +204,7 @@ I will not be focusing on binary operation typing as it is kind of simple and no
     \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
 \end{prooftree}
 
-\subsection{Statement typing}
+\subsubsection{Statement typing}
 $\Gamma \tack s \tackl \Gamma'$ says that $s$ is valid and after that, the environment becomes $\Gamma'$.
 A list of statements $\overline{s}$ is typed by the following two rules:
 
@@ -298,13 +298,13 @@ The typing rules for individual statements are as follows:
 \end{prooftree}
 \end{center}
 
-\subsection{Top-level typing}
+\subsubsection{Top-level typing}
 
 \begin{center}
 \begin{prooftree}
-    \AxiomC{$\Gamma \tack \hat{T} : \text{valid}$}
+    \AxiomC{$\Gamma \tack T_N : \text{valid}$}
     \RightLabel{[TypeDef]}
-    \UnaryInfC{$\Gamma \tack \text{type } N = \hat{T} \tack \Gamma[C \mapsto C[N \mapsto \hat{T}]]$}
+    \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
 \end{prooftree}
 
 \vspace{2em}
@@ -361,6 +361,101 @@ In the second phase, the entire declaration list is type-checked under $\Gamma_0
     \RightLabel{[T-Program]}
     \BinaryInfC{$\tack \overline{D} : \text{ok}$}
 \end{prooftree}
+\end{center}
+
+\section{Full coherence}
+This is the entire version of the language.
+\subsection{Formal syntax}
+
+The full language extends the cut-down version with additional capabilities, viewpoint-adapted types, nested pointer types, a \texttt{nullptr} value, and a \texttt{consume} expression for transferring ownership.
+
+\subsubsection{Types}
+\[
+\begin{array}{lcll}
+B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) \mid B\ \kappa & \text{(base type)} \\[0.5em]
+T & ::= & B \mid \kappa \triangleright B\ & \text{(full type)} \\[0.5em]
+
+\kappa & ::= & \mathtt{tag} \mid \mathtt{ref} \mid \mathtt{val} \mid \mathtt{iso} \mid \mathtt{iso\_cap} \mid \mathtt{locked}\langle L \rangle & \text{(reference capabilities)} \\[0.5em]
+T_N & ::= & T \mid \mathtt{struct}\ \{\ \overline{f : T;}\ \} & \text{(nameable type)}
+\end{array}
+\]
+
+\subsubsection{Top-level items}
+The top-level structure is identical to the cut-down version.
+
+
+\subsubsection{Statements}
+
+Identical to the cut-down version.
+
+\subsubsection{Expressions}
+
+The full language adds two new expression forms: a \texttt{nullptr} literal and a \texttt{consume} expression. The \texttt{consume} expression transfers ownership of an \texttt{iso}-capability variable, rendering the original binding unusable afterwards.
+
+\[
+\begin{array}{lcll}
+e & ::= & \cdots & \text{(same as in the cut-down version)} \\
+  & \mid & \mathtt{nullptr} & \text{(null pointer)} \\
+  & \mid & \mathtt{new}\ \kappa\ [e]\ T\ (e) & \text{(allocation, extended)} \\
+  & \mid & \mathtt{consume}(x) & \text{(ownership transfer)}
+\end{array}
+\]
+
+
+Compared to the cut-down version, allocation now takes a full type $T$ rather than a base type $B$ as the element type, enabling allocation of pointer arrays.
+
+
+\subsection{Type checking}
+
+All expression typing rules from the cut-down version carry over unchanged, except for the following modified and new rules.
+
+\subsubsection{Expression typing}
+
+\begin{center}
+
+\begin{prooftree}
+    \AxiomC{}
+    \RightLabel{(Nullptr)}
+    \UnaryInfC{$\Gamma \tack \mathtt{nullptr} : B\ \kappa$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_s : \text{Int}$}
+    \AxiomC{$\Gamma \tack e_d : T'$}
+    \AxiomC{$\text{apply\_viewpoint}(\kappa, T) = T_{view}$}
+    \AxiomC{$\Gamma \tack \text{type\_assignable}(T_{view}, T')$}
+    \RightLabel{(Alloc)}
+    \QuaternaryInfC{$\Gamma \tack \text{new } \kappa[e_s] T(e_d) : \text{unalias}(T\ \kappa)$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma_V(x) = T$}
+    \RightLabel{(Consume)}
+    \UnaryInfC{$\Gamma \tack \mathtt{consume}(x) : \text{unalias}(T)$}
+\end{prooftree}
+
+\vspace{1em}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e :  \kappa \triangleright \mathtt{Named}(N) $}
+    \AxiomC{$\text{get\_struct\_type}(N, \Gamma) = \text{struct } \{ \overline{f:T_f} \}$}
+    \AxiomC{$f_i \in \overline{f}$}
+    \RightLabel{(Field-Access)}
+    \TrinaryInfC{$\Gamma \tack e.f_i : \text{apply\_viewpoint}(\kappa, T_{f_i})$}
+\end{prooftree}
+
+\begin{prooftree}
+    \AxiomC{$\Gamma \tack e_p : B\ \kappa_p$}
+    \AxiomC{$\Gamma \tack e_i : \text{Int}$}
+    \AxiomC{$\Gamma \tack \text{ref\_readable}(\kappa_p)$}
+    \RightLabel{(Ptr-Access)}
+    \TrinaryInfC{$\Gamma \tack e_p[e_i] : \text{apply\_viewpoint}(\kappa_p, B)$}
+\end{prooftree}
+
 \end{center}
 
 \end{document}
