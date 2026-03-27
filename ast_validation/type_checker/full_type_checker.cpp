@@ -109,7 +109,11 @@ bool nameable_accesses_undefined(
 bool type_check_toplevel_item(TypeEnv& env, TopLevelItem toplevel_item) {
     return std::visit(Overload{
         [&](const TopLevelItem::TypeDef& type_def) {
-            assert(!env.type_context.contains(type_def.type_name));
+            if(env.type_context.contains(type_def.type_name)) {
+                report_error_location(toplevel_item.source_span);
+                std::cerr << "Type " << type_def.type_name << " already defined" << std::endl;
+                return false;
+            }
             // CR: Enforce an invariant that cannot point directly to a nameable type
             if(nameable_accesses_raw_named(type_def.type_name, type_def.nameable_type)) {
                 report_error_location(toplevel_item.source_span);
