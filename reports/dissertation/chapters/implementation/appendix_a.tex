@@ -6,6 +6,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{libertine} % Font matching Linux Libertine
+\usepackage{listings}
 \usepackage{amsmath, amssymb, amsthm}
 \setcounter{secnumdepth}{4}
 \setcounter{tocdepth}{4}
@@ -262,5 +263,42 @@
     \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} \tackl \Gamma$}
 \end{prooftree}
 \end{center}
+
+\section{\textit{Algorithm pseudocode}}
+\subsection{Return checker}
+\begin{lstlisting}{language=ocaml}
+type status = Returns | DoesNotReturn | Invalid
+
+(* Merges paths for branching logic *)
+let merge s1 s2 = 
+    match (s1, s2) with
+    | (Invalid, _) | (_, Invalid) -> Invalid
+    | (Returns, Returns)          -> Returns
+    | _                           -> DoesNotReturn
+
+(* Evaluates a single statement *)
+let rec stmt_return_status stmt = match stmt with
+    | Return _    -> Returns
+    | Atomic body -> stmt_list_return_status body
+    | If (_, then_b, Some else_b) -> 
+        let s1 = stmt_return_status (last then_b) in
+        let s2 = stmt_return_status (last else_b) in
+        merge s1 s2
+    | While (_, body) -> 
+        (* Loops are never guaranteed to return as the 
+           condition may be false *)
+        merge (stmt_list_return_status body) DoesNotReturn
+    | _ -> DoesNotReturn
+
+(* Evaluates a sequence, detecting dead code *)
+and stmt_list_return_status stmts = match stmts with
+    | [] -> DoesNotReturn
+    | [s] -> stmt_return_status s
+    | s :: rest -> 
+        match stmt_return_status s with
+        (* Error: Dead code follows a return *)
+        | Returns | Invalid -> Invalid 
+        | DoesNotReturn -> stmt_list_return_status rest
+\end{lstlisting}
 
 \end{document}

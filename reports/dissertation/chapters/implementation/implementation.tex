@@ -11,6 +11,7 @@
 \usepackage{tikz}
 \usepackage[most]{tcolorbox}
 \usepackage{xcolor}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, backgrounds, fit, calc, shapes.multipart}
 
 % Define a custom style that mimics your Typst block
 \newtcolorbox{notebox}{
@@ -30,7 +31,7 @@
 }
 \usetikzlibrary{arrows.meta, positioning}
 \usepackage{listings}
-\setcounter{secnumdepth}{4}
+\setcounter{secnumdepth}{5}
 \setcounter{tocdepth}{4}
 % --- Inference Rules Package ---
 \usepackage{bussproofs}
@@ -41,6 +42,7 @@
 % --- No paragraph indentation ---
 \setlength{\parindent}{0pt}
 \titlespacing*{\paragraph}{0pt}{3.25ex plus 1ex minus .2ex}{0pt}
+\titlespacing*{\subparagraph}{0pt}{3.25ex plus 1ex minus .2ex}{0pt}
 
 % --- Custom Commands ---
 \newcommand{\tack}{\vdash}
@@ -372,10 +374,7 @@ In the second phase, the entire declaration list is type-checked under $\Gamma_0
     \BinaryInfC{$\text{well\_typed}(\overline{D})$}
 \end{prooftree}
 \end{center}
-\begin{notebox}
-\textbf{Theoretical time complexity\\}
-To guarantee that all programs can be compiled efficiently, the compilation to LLVM IR aims to have a linear worst-case time complexity. This constraint provides a guarantee of scalability and predictable compilation times. This is a central theme of this implementation which informs quite a few design choices. Every major algorithm is accompanied by a formal complexity analysis.
-\end{notebox}
+
 \subsection{Frontend}
 This section discusses the implementation of the first stage of the \textit{Coherence} compilation pipeline: the compiler frontend. It 
 \subsubsection{Lexing and parsing}
@@ -395,6 +394,317 @@ The AST is designed as a faithful, near-isomorphic representation of the languag
   \item AST nodes representing expressions have a field for the type of the expression. These fields are initially empty and are filled during the AST-validation pass. This information is needed during \textit{code generation} (codegen).
 \end{itemize}
 \subsection{AST validation}
+The \textit{ast validation} phase enforces language safety invariants and performs the inferences required for codegen. This chapter details the multi-stage implementation of this phase.
 
+\begin{figure}[H]
+\centering
+\noindent
+\scalebox{0.75}{%
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    stage/.style={
+        rectangle split, rectangle split parts=2,
+        draw=black, thick, fill=white,
+        rectangle split part fill={gray!20, white},
+        text width=6.5cm, inner xsep=8pt, align=center, font=\sffamily
+    },
+    io/.style={
+        ellipse, draw=black, thick, fill=gray!10,
+        text width=3.5cm, align=center, font=\itshape\small\sffamily,
+        inner sep=4pt
+    },
+    arr/.style={-{Stealth[scale=1.0]}, thick}
+]
 
+    % --- PIPELINE NODES ---
+    \node[io] (input) {Raw Program AST};
+
+    % STAGE 1
+    \node[stage, below=of input] (s1) {
+        \textbf{1. Variable Validity Checks}
+        \nodepart{second}
+        \small
+        \begin{tabular}{@{}p{0.0cm} p{5.9cm}@{}}
+            $\bullet$ & Validate local variable overriding \\
+            $\bullet$ & Alpha-rename local variables \\
+            $\bullet$ & Run unalias checker \\
+        \end{tabular}
+    };
+
+    \node[io, below=of s1] (ast1) {Alpha-Renamed AST};
+
+    % STAGE 2
+    \node[stage, below=of ast1] (s2) {
+        \textbf{2. Declaration Collection}
+        \nodepart{second}
+        \small
+        \begin{tabular}{@{}p{0.0cm} p{5.9cm}@{}}
+            $\bullet$ & Collect top-level functions \& actors declarations \\
+            $\bullet$ & Report duplicates \\
+        \end{tabular}
+    };
+
+    % STAGE 3
+    \node[stage, below=of s2] (s3) {
+        \textbf{3. Type-Checking Stage}
+        \nodepart{second}
+        \small
+        \begin{tabular}{@{}p{0.0cm} p{5.9cm}@{}}
+            \multicolumn{2}{@{}l}{\textbf{Core Checking:}} \\[2pt]
+            $\bullet$ & Implements typing judgements for expressions and statements \\
+            $\bullet$ & Fill expression types \\[6pt]
+            \multicolumn{2}{@{}l}{\textbf{Top-level Checking:}} \\[2pt]
+            $\bullet$ & Initialization check (constructors) \\
+            $\bullet$ & Return check (functions) \\
+        \end{tabular}
+    };
+
+    \node[io, below=of s3] (ast2) {Fully Typed AST};
+
+    % STAGE 4
+    \node[stage, below=of ast2] (s4) {
+        \textbf{4. Lock-inference}
+        \nodepart{second}
+        \small
+        \begin{tabular}{@{}p{0.0cm} p{5.9cm}@{}}
+            $\bullet$ & Perform lock inference \\
+        \end{tabular}
+    };
+
+    \node[io, below=of s4] (output) {Validated AST};
+
+    % --- CONNECTORS ---
+    \draw[arr] (input) -- (s1);
+    \draw[arr] (s1) -- (ast1);
+    \draw[arr] (ast1) -- (s2);
+    \draw[arr] (s2) -- (s3);
+    \draw[arr] (s3) -- (ast2);
+    \draw[arr] (ast2) -- (s4);
+    \draw[arr] (s4) -- (output);
+
+\end{tikzpicture}%
+}
+\caption{The multi-stage AST validation and processing pipeline.} 
+\label{fig:ast-validation}
+\end{figure}
+
+\subsubsection{Variable validity checks}
+This pass is responsible for preventing variable redefinition within the same scope (override checker), the alpha-renaming of overriden variables, and enforcing unaliasing safety requirements (unalias checker).
+\paragraph{ScopedStore\\}
+\textit{ScopedStore} is a recurring data structure in the \textit{Coherence} compiler. It is a specialized key-value store used to manage data across nested visibility levels. It implements a hierarchical mapping where definitions in later/inner scopes shadow those in earlier/outer scopes, ensuring the most recent version of a key is always retrieved. It supports the following update operations.
+\begin{itemize}
+    \item \textbf{create\_new\_scope}: Creates a new scope layer.
+    \item \textbf{insert}: Adds a key-value pair to the current scope, overwriting existing local definitions while shadowing those in the outer scopes.
+    \item \textbf{pop\_scope}: Restores the previous state by removing all entries defined in the current layer.
+\end{itemize}
+It also supports the following queries:
+\begin{itemize}
+  \item \textbf{key\_in\_curr\_scope}: Returns true if the key has an entry in the current scope.
+  \item \textbf{get\_value}: Returns the latest value associated with a key.
+\end{itemize}
+As an example, take a look at the sample C++ code:
+\begin{lstlisting}{language=cpp}
+// ScopedStore is a template which takes in a key type (K)
+// and a value type (V)
+ScopedStore<std::string, int> store;
+// Create a global scope
+store.create_new_scope();
+store.insert("x", 10);
+// get_value returns an optional. This line outputs '10'
+std::cout << store.get_value("x").value_or(-1) << "\n";
+// Create a nested scope
+store.create_new_scope();
+// As 'x' does not have a value in the newly created scope, 
+// this line outputs 'No'
+std::cout << (store.key_in_curr_scope("x") ? "Yes" : "No") << "\n";
+// This insert shadows 'x'
+store.insert("x", 20);
+// Outputs 20
+std::cout <<  store.get_value("x").value_or(-1) << "\n";
+// Outputs 'Yes'
+std::cout << ("store.key_in_curr_scope("x") ? "Yes" : "No") << "\n";
+// Exit Nested Scope
+store.pop_scope();
+// Outputs previous value of 'x' which is '10'
+std::cout << store.get_value("x").value_or(-1) << "\n";
+\end{lstlisting}
+To ensure high performance, the \textit{ScopedStore} is implemented such that all these operations are amortized constant time. The structure maintains two data members to track its state:
+\begin{itemize}
+  \item \textbf{scope\_list}: This is a std::vector (C++'s implementation of resizable arrays) of std::unordered\_set<K> (C++'s implementation of hash-sets). This acts as a stack of scopes, where each set contains only the keys defined within that specific nesting level.
+  \item \textbf{key\_val\_map}: This is an std::unordered\_map (C++'s implementation of hash-maps) that associates keys with a std::vector of all the different values corresponding to it.
+\end{itemize}
+The different operations are implemented as follows:
+\begin{itemize}
+  \item \textbf{create\_new\_scope}: Simply append an empty set to \texttt{scope\_list}.
+  \item \textbf{insert}: First checks if the key exists in the current scope's set. If it exists, the latest value in \texttt{key\_val\_map} is updated. Otherwise, the key is added to the current scope's set, and a new value is pushed onto the std::vector associated with the key in \texttt{key\_val\_map}.
+  \item \textbf{pop\_scope}: Iterate through the keys stored in the most recent scope in \texttt{scope\_list}. For each key, pop the top value from the corresponding std::vector in \texttt{key\_val\_map}. Finally, the latest scope itself is popped from \texttt{scope\_list}.
+\end{itemize}
+This design achieves an amortized $O(1)$ time complexity for all update operations. The querying operations can also be implemented in $O(1)$ time.
+
+\paragraph{Override checker\\}
+Leveraging the ScopedStore, the override checker is implemented via a recursive traversal of the AST. Upon encountering a variable definition, the checker verifies that the identifier is not already present in the current scope layer. It then inserts the key to the current scope. For nested blocks, such as atomic sections, the checker creates a new scope layer to the \textit{ScopedStore}, validates the inner statements, and subsequently pops the scope to restore the parent environment.
+
+\paragraph{Alpha-renaming\\}
+Alpha-renaming is done before the unalias-checker is run as it makes the checker's logic much simpler. Alpha renaming is done very easily using \textit{ScopedStore}: we simply store the renamed name as a value of the original name, creating and destroying scopes as needed.
+
+\paragraph{Unalias checker\\}
+The unalias checker's goal is to make sure that there is always an assignment before a variable is consumed and before its value is used through any path in the programs flow graph. <Mention of the rules that need to be held>.
+<Complete this section>
+
+\subsubsection{Declaration Collection}
+The declaration collection pass is responsible for collecting the top-level declarations needed to build the initial typing environment. In particular, it is responsible for building $\Gamma_A$ and $\Gamma_F$. These objects are implemented as a std::unordered\_map from names (strings) to the respective AST nodes. It populates these objects by performing a single can over the top-level items. Its time-complexity is $O(|D|)$, where $|D|$ is the number of top-level items.
+%CR: Need to figure out the phase/stage nonsense terminology
+\subsubsection{Type-Checking stage}
+This stage is responsible for implementing the main components of the type-checking rules of \textit{Coherence}.
+\paragraph{Core type checker\\}
+The core type checker is responsible for implementing the typing judgements for expressions and statements as described in section 1.1. It is fairly straightforward to implement these rules efficiently. Only a single pass through the AST is needed, making this check have a time-complexity of $O(n)$, where $n$ is the number of nodes in the AST of the program.
+\paragraph{Initialization check\\}
+<TODO: Fill after mycroft responds>
+\paragraph{Return check\\}
+The primary responsibility of this component is to ensure that every control-flow path in a function goes through a return statement. It turns out that extending this to verify that there are no unreachable statement is quite simple, and hence the return checker is also responsible for ruling out programs with unreachable statements.
+\begin{notebox}
+\textbf{Unreachable Code\\}
+Unreachable code consists of statements that can never be executed because no control-flow path reaches them. In \textit{Coherence}, this occurs when statements follow a return. This check addresses syntactic unreachability. Semantic unreachability, which implies that no execution path exists for a statement, is undecidable in general.
+\end{notebox}
+The algorithm used is succintly represented as an OCaml program in Appendix B.1. The algorithm's time-complexity is linear in the number of AST nodes (only a single pass through the AST is needed).
+\paragraph{Initialization check\\}
+This check ensures that every constructor initializes all actor member variables across all possible execution paths. Furthermore, it checks that any access to a member variable occurs only after it has been fully initialized on all preceding paths.
+<TODO: COMPLETE AFTER MYCROFT RESPONDS>
+\subsubsection{Lock-inference}
+During execution, when control reaches an atomic section, all required locks must be acquired upfront to ensure atomicity. This stage performs the lock inference necessary for generating the corresponding lock-acquisition code during codegen.
+\paragraph{Introduction\\}
+We associate each atomic section with a set of required lock names (called the \textit{lock-set}). A lock is required if a pointer protected by that lock is dereferenced within the section. This extends transitively to synchronous callables: calling a function or constructor within an atomic section that dereferencing a lock also adds that lock to the atomic section's lock set.
+\begin{notebox}
+  \textbf{Nested atomic section:\\}
+  Nested atomic sections are redundant, as their code executes as a single unit anyway; the implementation treats their lock sets as empty. This case is trivial to handle and we assume it does not occur in this thesis.
+\end{notebox}
+\paragraph{A language without mutual-recursion\\}
+In the absence of mutual recursion, lock inference in \textit{Coherence} is trivial:
+
+\begin{enumerate}
+\item Associate a lock set with each synchronous callable (functions and constructors).
+\item Process the callables in declaration order, from first to last.
+\item For each callable, scan its statements and add a lock whenever a protected pointer is dereferenced. When it calls another callable, which by assumption appears earlier, simply union in that callee's lock set.
+\item After all callables have lock sets, compute each atomic section's lock-set as union of the locks protecting pointers dereferenced directly within the section and the lock-sets of the callables it invokes.
+\end{enumerate}
+
+Let $A$ be the number of atomic sections, $F$ the number of synchronous callables, $E$ the number of synchronous callable calls, and $L$ the number of locks in the program. The lock set associated with any callable or atomic section has size $O(L)$. It follows that propagating locks across callable calls takes $O(F + EL)$ time. Computing the lock sets for atomic sections also takes $O(A + EL)$ time. Hence, the overall time and space complexity are upper bounded by $O(A + F + EL)$ and $O(FL)$ respectively.\\
+
+Now consider the complexity in terms of the source size, measured by the number of AST nodes $N$. $E$, $F$, and $L$ are all $O(N)$. Hence, the worst-case time and space complexity is upper-bounded by $O(N^2)$. We can lower-bound it by constructing a program for which the time and space complexity is quadratic in $N$, getting a strict bound of $\Theta(N^2)$. This program is a linear chain of functions where each function calls the previous one, and each function dereferences a single pointer protected by a distinct lock.
+
+\begin{notebox}
+\textbf{Problems caused by mutual recursion:\\}
+Mutual recursion creates circular dependencies between functions, meaning there is no longer a valid "top-to-bottom" order to process them. If A calls  B, and B calls A, neither of their lock-sets can be fully resolved before the other. A single linear scan is insufficient, and this makes the problem much harder. Note that all of the additional complexity introduced by mutual recursion applies only to computing the callable lock-sets. Once that step is complete, calculating the lock-sets for atomic sections can still be done in exactly the same manner with the same quadratic time bound described in Section 1.3.4.2.
+\end{notebox}
+
+\paragraph{Fixed-point iteration\\}
+One way to solve this issue is to solve a fixed-point equation. The lock-sets of the functions need to satisfy the following equation for all functions $f$:
+$$ locks[f] := \text{direct\_locks}(f) \cup \left( \bigcup_{g \in calls(f)} locks[g] \right) $$
+Here, \texttt{direct\_locks} is set of locks protecting pointer directly dereferenced in the function body, and $calls(f)$ is the set of functions called in the body of $f$. We want the minimum solution to these equations. This can be achieved by iteratively applying the fixed point equations.
+$$
+\begin{array}{l}
+\textbf{for } f \in \textit{functions} \textbf{ do } locks[f] := \text{direct\_locks}(i) \\
+\textbf{while } (locks[] \text{ changes}) \textbf{ do} \\
+\quad \textbf{for } f \in \textit{functions} \textbf{ do} \\
+\quad \quad locks[i] := locks[f] \cup \left( \bigcup_{g \in calls(f)} locks[g] \right)
+\end{array}
+$$
+This process is guaranteed to terminate because each iteration of the fixed-point equation monotonically increases the size of each lock set. Since the total number of locks in the program is finite, these sets cannot grow indefinitely.\\
+
+Let us get an upper bound of the time-complexity of this pass in-terms of $F$, $E$, and $L$. The number of iteration is bounded by $F$. The number of iterations is bounded by $F$. This is because the diameter (maximum length of the call graph) is at most $F$, and each iteration effectively extends the dependency path lengths considered by one (this is the same argument used to bound the time-complexity of the bellmann ford algorithm). The work done in each iteration is bounded by $O(F + EL)$. Hence, the total time complexity is bounded by $O(F * (F + EL))$. In terms of $N$, the time-complexity is bounded by $O(N^3)$ (by assuming that $F$, $E$ and $L$ are all bounded by $O(N)$). This bound is strict. Consider the same call graph used to show strictness from Section 1.3.4.2. If the algorithm iterates through functions from bottom to top, the execution time becomes $\Theta(N^3)$.
+
+\begin{notebox}
+\textbf{Call Graph\\}
+A call graph is a directed graph that represents the calling relationships between subroutines in a computer program. Each vertex represents a subroutine and a directed edge $(f, g)$ exists iff the subroutine $f$ contains a call to the function $g$. In this section, we only deal with synchronous callables, and hence behaviours are not vertices in the call graph.
+\end{notebox}
+
+\paragraph{Escaping cubic time-complexity\\}
+This cubic time complexity following the approach in section 1.3.4.3 is asymptotically worse than the rest of the \textit{Coherence} compiler (which is bounded by $O(N^2))$. To keep the time-complexity linear, we need to analyse  the problems caused by mutual recursion. From the analysis in the previous sections, two issues come to my mind:
+\begin{itemize}
+  \item Because of cyclic dependencies, a single pass algorithm like that described in section 1.3.4.1 does not work.
+  \item Note that the adversial example used to prove the cubic lower bound does not have cycles in its call graph. This tells us that even without cycles, without knowing the optimal traversal order, multiple iterations can be required for convergence.
+\end{itemize}
+These problems will be solved in sequence.
+\subparagraph{Getting rid of cyclic dependencies\\}
+One thing to note is that the algorithm in 1.3.4.1 allowed for the call graph to have self-cycles (self-recursion was allowed). This was not an issue as performing a union with the same set itself would just be a no-op. Now, looking at the mutual dependency example (where A calls B and B calls A), one thing to notice is that their lock-sets must be equal. Hence, if the compiler knew about this mutual dependency, it could make these callables share the same lock-set object, and then a single pass would be enough for convergence! This works because as these callables have the same lock-set, they can be treated as a single combined entity, and their mutually recursive calls can be treated as self-recursion. This concept can be generalized using the concept of \textit{strongly-connected components} (SCCs) of a graph.
+\begin{notebox}
+  \textbf{Strongly connected components:\\}
+  In graph theory, a SSC of a directed graph is a maximal subgraph in which every vertex is reachable from every other vertex.
+\end{notebox}
+All callables within a strongly connected component (SCC) of the call graph must share the same lock set due to mutual dependencies. Therefore, each SCC can be collapsed into a single representative node. After collapsing every SCC, the resulting condensed graph becomes free of cycles!
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{ 
+    \begin{tikzpicture}[
+        node distance=1.2cm,
+        >=Stealth,
+        base_node/.style={
+            circle, draw=black, thick, fill=orange!10, 
+            minimum size=0.6cm, font=\sffamily\scriptsize\bfseries
+        },
+        meta_node/.style={
+            rectangle, rounded corners, draw=black, thick, 
+            minimum width=1.5cm, minimum height=0.8cm, font=\sffamily\small\bfseries
+        },
+        scc_blob/.style={
+            draw, dashed, line width=0.8pt, rounded corners=10pt, inner sep=6pt
+        }
+    ]
+        % --- LEFT SIDE: Original Graph ---
+        \begin{scope}[local bounding box=original]
+            % Red SCC
+            \node[base_node] (1) {1};
+            \node[base_node, right=of 1] (2) {2};
+            \node[base_node, below=0.8cm of 2, xshift=-0.6cm] (3) {3};
+            
+            % Yellow SCC
+            \node[base_node, right=1.2cm of 2] (6) {6};
+            
+            % Blue SCC (Moved down as requested)
+            \node[base_node, below=1.5cm of 6, xshift=0.5cm] (4) {4};
+            \node[base_node, left=of 4] (5) {5};
+
+            \begin{scope}[every edge/.style={draw, thick}]
+                \path [->] (1) edge (2) (2) edge (3) (3) edge (1); % Red
+                \path [->] (4) edge [bend left=20] (5) (5) edge [bend left=20] (4); % Blue
+                \path [->] (2) edge (6) (6) edge (4) (3) edge (5); % Transient
+            \end{scope}
+
+            \begin{scope}[on background layer]
+                \node[scc_blob, fill=red!10, draw=red!40!black, fit=(1) (2) (3), label=above:\scriptsize SCC 1] {};
+                \node[scc_blob, fill=yellow!10, draw=yellow!40!black, fit=(6), label=above:\scriptsize SCC 2] {};
+                \node[scc_blob, fill=blue!10, draw=blue!40!black, fit=(4) (5), label=below:\scriptsize SCC 3] {};
+            \end{scope}
+        \end{scope}
+
+        \draw[->, ultra thick, gray!60] ([xshift=1cm]original.east) -- ++(1.5,0) ;
+
+        \begin{scope}[xshift=8.5cm, yshift=-0.0cm]
+            \node[meta_node, fill=red!10, draw=red!40!black] (M1) {SCC 1};
+            \node[meta_node, fill=yellow!10, draw=yellow!40!black, right=1.2cm of M1] (M2) {SCC 2};
+            \node[meta_node, fill=blue!10, draw=blue!40!black, below=1.2cm of M2] (M3) {SCC 3};
+
+            \begin{scope}[every edge/.style={draw, ultra thick, -{Stealth[scale=1.2]}}]
+                \path [->] (M1) edge (M2);
+                \path [->] (M2) edge (M3);
+                \path [->] (M1) edge [bend right=20] (M3);
+            \end{scope}
+        \end{scope}
+
+    \end{tikzpicture}
+    }
+    \caption{Condensation of SCCs}
+    \label{fig:scc_condensation}
+\end{figure}
+
+Luckily for us, the kosaraju's algorithm allows us to identify maximal SCCs as shown in fig \ref{fig:scc_condensation}. The intricate details of this elegant algorithm are not discussed here,  but it is important to note that it runs in $O(V + E)$ time, where $V$ and $E$ are the number of vertices and edges it the call graph respectively.
+
+\subparagraph{Inferring iteration order\\}
+Note that in a call graph that is a \textit{directed acyclic graph} (DAG), if we can iterate from the bottom-up in some sense, only a single pass is needed. This vague bottom-up concept can be formalized using a concept called topological sort.
+\begin{notebox}
+\textbf{Topological sort:\\}
+A topological sort of a DAG is a linear ordering of its vertices such that for every directed edge $(u,v)$ we have $u$ precedes $v$ in the ordering.
+\end{notebox}
+Iterating through the reverse topological ordering of the call graph ensures that when the time comes to compute the lock-set of a callable, all the dependencies have already have their lock-set computed. Hence, only a single pass is needed to compute the lock-set!
 \end{document}
