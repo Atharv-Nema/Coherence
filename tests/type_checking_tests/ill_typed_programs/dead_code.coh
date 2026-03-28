@@ -1,0 +1,15 @@
+func random_func(int a_) => int {
+    if(a_ == 1) {
+        return 1;
+    }
+    else {
+        a_ = 3;
+        return 2;
+    }
+    return 0;
+}
+
+actor Main {
+    new create() {
+    }
+}

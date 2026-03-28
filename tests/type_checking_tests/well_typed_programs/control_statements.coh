@@ -4,7 +4,6 @@ func random_func(int a_) => int {
     }
     else {
         a_ = 3;
-        return 2;
     }
     while(a_ > 0) {
         a_ = a_ - 1;

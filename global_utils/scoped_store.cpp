@@ -7,7 +7,7 @@
 #include <optional>
 
 
-
+// CR: Potentially, the metadata is not really needed here
 template <typename K, typename V, typename Metadata = std::monostate>
 class ScopedStore {
 private:

@@ -1,4 +1,7 @@
 #include <memory>
 #include "stmts.hpp"
 
-bool statement_returns(std::shared_ptr<Stmt> last_statement);
+enum class ReturnStatus {
+    INVALID, RETURNS, DOESNT_RETURN
+};
+ReturnStatus statement_list_return_status(const std::vector<std::shared_ptr<Stmt>>& stmt_list);

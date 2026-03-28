@@ -18,8 +18,13 @@ bool type_check_function(TypeEnv& env, std::shared_ptr<TopLevelItem::Func> func_
         std::cerr << "Function does not return" << std::endl;
         return false;
     }
-    if(!statement_returns(func_def->body.back())) {
+    ReturnStatus body_returns = statement_list_return_status(func_def->body);
+    if(body_returns == ReturnStatus::DOESNT_RETURN) {
         std::cerr << "Last statement of the function does not return" << std::endl;
+        return false;
+    }
+    else if(body_returns == ReturnStatus::INVALID) {
+        // No need for error reporting as it is done already
         return false;
     }
     return true;
