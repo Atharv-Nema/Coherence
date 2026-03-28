@@ -706,5 +706,8 @@ Note that in a call graph that is a \textit{directed acyclic graph} (DAG), if we
 \textbf{Topological sort:\\}
 A topological sort of a DAG is a linear ordering of its vertices such that for every directed edge $(u,v)$ we have $u$ precedes $v$ in the ordering.
 \end{notebox}
-Iterating through the reverse topological ordering of the call graph ensures that when the time comes to compute the lock-set of a callable, all the dependencies have already have their lock-set computed. Hence, only a single pass is needed to compute the lock-set!
+Processing the call graph in reverse topological order ensures a bottom-up propagation of constraints, where every callee's lock-set is fully resolved before it is required by its caller. This guarantees that the lock-set of every callable is processed in a single pass through the call graph. Iterating in reverse-topological order is extremely simple and requires only a very small modification to the standard depth-first-search iteration. By simply deferring the processing of a node until its entire dependency subtree has been visited, reverse-topological order is guaranteed.
+
+\subparagraph{Final time complexity\\}
+Running kosaraju's algorithm on the call graph is $O(F + E)$. Iterating in reverse-topological order does not incur additional overhead and the sole iteration has a time-complexity of $O(F + EL)$. This results in a resulting time complexity of $\Theta(N^2)$ (this is strict because the example from section 1.3.4.1 still applies).
 \end{document}
