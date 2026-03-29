@@ -11,6 +11,10 @@
 \usepackage{tikz}
 \usepackage[most]{tcolorbox}
 \usepackage{xcolor}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{amsmath}      
+\usepackage{amssymb}      
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, backgrounds, fit, calc, shapes.multipart}
 
 % Define a custom style that mimics your Typst block
@@ -621,7 +625,7 @@ A call graph is a directed graph that represents the calling relationships betwe
 \paragraph{Escaping cubic time-complexity\\}
 This cubic time complexity following the approach in section 1.3.4.3 is asymptotically worse than the rest of the \textit{Coherence} compiler (which is bounded by $O(N^2))$. To keep the time-complexity linear, we need to analyse  the problems caused by mutual recursion. From the analysis in the previous sections, two issues come to my mind:
 \begin{itemize}
-  \item Because of cyclic dependencies, a single pass algorithm like that described in section 1.3.4.1 does not work.
+  \item Because of cyclic dependencies, a single pass algorithm like that described in section 1.3.4.2 does not work.
   \item Note that the adversial example used to prove the cubic lower bound does not have cycles in its call graph. This tells us that even without cycles, without knowing the optimal traversal order, multiple iterations can be required for convergence.
 \end{itemize}
 These problems will be solved in sequence.
@@ -709,5 +713,113 @@ A topological sort of a DAG is a linear ordering of its vertices such that for e
 Processing the call graph in reverse topological order ensures a bottom-up propagation of constraints, where every callee's lock-set is fully resolved before it is required by its caller. This guarantees that the lock-set of every callable is processed in a single pass through the call graph. Iterating in reverse-topological order is extremely simple and requires only a very small modification to the standard depth-first-search iteration. By simply deferring the processing of a node until its entire dependency subtree has been visited, reverse-topological order is guaranteed.
 
 \subparagraph{Final time complexity\\}
-Running kosaraju's algorithm on the call graph is $O(F + E)$. Iterating in reverse-topological order does not incur additional overhead and the sole iteration has a time-complexity of $O(F + EL)$. This results in a resulting time complexity of $\Theta(N^2)$ (this is strict because the example from section 1.3.4.1 still applies).
+Running kosaraju's algorithm on the call graph is $O(F + E)$. Iterating in reverse-topological order does not incur additional overhead and the sole iteration has a time-complexity of $O(F + EL)$. This results in a resulting time complexity of $\Theta(N^2)$ (this is strict because the example from section 1.3.4.2 still applies).
+\subsection{Runtime}
+This section discusses the implementation of the various compopents of the \textit{Coherence} runtime.
+% Scheduling entities:
+%     N worker threads responsible for ...
+%     Scheduler queue for ...
+% Actor Instance information
+%     A map from instance of actorinstance ids
+%     Actor instances themselves, and a description of their fields.
+% Mutex's
+%     MutexMap and the information about the mutex or something
+% Runtime traps
+%     Explanation of the runtime traps
+% Integrating them together
+%     Talk a bit about the entire loop of things happening and how it interacts with 
+%     the generated code.
+% Software engineering concepts used to prevent dataraces and deadlocks
+\subsubsection{Scheduling entities}
+The runtime maintains a global schedule queue that stores information about runnable actor-instances. The runtime spawns $N$ OS-threads at the start of the program  responsible for scheduling and executing actor work. \textit{Coherence} follows $M:N$ scheduling, and hence the number of worker threads does not grow with the number of actor-instances. Each scheduler thread repeatedly pulls runnable actor-instances from the global schedule queue and executes their pending behaviour calls. %CR: Perhaps talk about termination of the program here (or perhaps this could be talked about in integration)
+\subsubsection{Actor-instance information}
+Each actor-instance is associated with a unique unsigned integer. The runtime maintains a map from these ids to their state data, which is stored in \texttt{ActorInstanceState} structures. The map is called the called the \texttt{id\_actor\_instance\_map}. \texttt{ActorInstanceState} stores the following:
+\begin{itemize}
+    \item \textbf{Coordination lock}: An OS-level lock used to make sure that concurrent accesses to the \texttt{ActorInstanceState} are thread safe.
+    \item \textbf{Mailbox}: This stores all of the pending behaviour calls in a mailbox (which is implemented using a queue). The calls are stores as \texttt{MailboxItem}s. These structures contain a function pointer to the LLVM function corresponding to the behaviour to be called and a pointer to the message (an LLVM struct) that contains the call's parameters.
+    \item \textbf{LLVM object}: A pointer to an LLVM struct that stores the actor-instance's member variables.
+    \item \textbf{State}: This is the execution state of an actor-instance. This is one of:
+        \begin{itemize}
+            \item \textbf{EMPTY}: The mailbox of the actor-instance is empty.
+            \item \textbf{RUNNABLE}: The mailbox is not empty and the instance is ready to be run.
+            \item \textbf{WAITING}: The instance is waiting on a lock.
+            \item \textbf{RUNNING}: The instance is currently being executed by some worker thread.
+        \end{itemize}
+        This state is important as it informs the runtime about the actions it needs to take when encountering certain source-code actions (will be discussed in later sections).
+    \item \textbf{Running state}: \texttt{ActorInstanceState} contains two execution-related fields:
+        \begin{itemize}
+            \item A pointer to the running behaviour’s stack, which the runtime frees when the behaviour finishes.
+            \item An \texttt{fcontext\_t} holding the saved context of a user computation that has been halted. This is filled only when the computation blocks (such as on a lock wait) and is required to restore execution later.
+        \end{itemize}
+\end{itemize}
+\subsubsection{User-level mutexes}
+Since worker threads must remain free to process other actor instances while one is blocked on a lock, source-level locks cannot be implemented using OS-level mutexes (doing so would block the entire worker thread). Instead, locks must be implemented at the user level. To design these locks correctly, we first need to jump ahead and analyse how the compiled LLVM code performs locking operations.
+
+\paragraph{Locking behaviour in \textit{Coherence}\\}
+The codegen phase inserts code around atomic section to acquire and release the inferred locks. For example, an atomic section requiring access to locks AA and BB is transformed as follows:
+\begin{lstlisting}
+lock(A);
+lock(B);
+...(atomic section code)
+unlock(A);
+unlock(B);
+\end{lstlisting}
+As shown in section~1.3.4, the inferred locks propogate through function calls. For example, if I have a function that looks like:
+\begin{lstlisting}
+func f() => unit {
+    atomic {
+        ... (section code requires lock A and B)
+    }
+}
+\end{lstlisting}
+If this function is called from an external atomic context:
+\begin{lstlisting}
+atomic {
+    f();
+}
+\end{lstlisting}
+The external atomic section will also require locks A and B. Because of this, the generated LLVM code would try to acquire the same locks both in the external atomic section and in the function body.
+
+\paragraph{Reentrant locks\\}
+To behave correctly under repeated lock acquisitions, the user-level locks must be reentrant. In other words, the thread (or actor) that currently holds a lock is allowed to acquire it multiple times without blocking. The lock is only fully released once the holder calls \texttt{unlock} the same number of times it successfully acquired the lock.
+
+\paragraph{Implementation\\}
+The \texttt{UserMutex} class implements this reentrant lock. The following state is maintained in \texttt{UserMutex}.
+\begin{itemize}
+  \item \textbf{Coordination lock}: An OS-level mutex used briefly to ensure that accesses to the internal state of \texttt{UserMutex} are thread-safe.
+  \item \textbf{Holding instance}: An optional integer storing the ID of the actor currently in possession of the lock. If the lock is not held by any instance, the optional is empty.
+  \item \textbf{Reentrance counter}: A counter that tracks how many times the holding instance has acquired the lock.
+  \item \textbf{Wait queue}: A FIFO queue containing the actor-instance ids waiting on the lock. 
+\end{itemize}
+\texttt{UserMutex} exposes two functions \texttt{lock} and \texttt{unlock}. These operations implement reentrant locking semantics and are scheduler-aware, managing the state transitions of all involved actor instances. The pseudocode for both operations is presented in \ref{TODO: ADD}.
+Source-level locks are uniquely identified by lock IDs, which the runtime maps to their associated \texttt{UserMutex} instances.
+
+\subsubsection{Runtime traps}
+As discussed in Section~\ref{preparation thing}, runtime traps provide the interface through which the generated LLVM code invokes runtime services. They are implemented as runtime-defined functions and exported with \texttt{extern "C"} linkage. This section outlines the set of traps provided by the \textit{Coherence} runtime.
+
+\paragraph{Non-switching traps\\}
+Non-switching traps are traps that execute directly on the same stack that is already allocated for running behaviours, without requiring a context switch to the runtime. This is possible because these traps are guaranteed to complete without needing to wait for any resources.
+\begin{itemize}
+  \item \textbf{void print\_int(int)}: Takes an integer and prints it to stdout. The \texttt{OUT} construct in Coherence is compiled down to this trap.
+  \item \textbf{void handle\_unlock(uint64\_t lock\_id)}: Calls unlock on the \texttt{UserMutex} associated with \texttt{lock\_id}.
+  \item \textbf{void* get\_instance\_struct(uint64\_t instance\_id)}: Returns the pointer to the LLVM object of the actor-instance associated with \texttt{instance\_id}. This is needed because actor-instances are stored as their ids in the compiled LLVM code, and to access its member variables, the LLVM object is needed.
+  \item \textbf{uint64\_t handle\_actor\_creation(void* llvm\_actor\_object)}: Registers a new actor-instance with the runtime. The compiled code is responsible for allocating a pointer of appropriate size to store the instance's member variables. The runtime has no knowledge of the actor-template (type). The runtime simply creates an initial \texttt{ActorInstanceState}, adds it to the \texttt{id\_actor\_instance\_map}, and returns the ID assigned to the new actor-instance.
+  \item \textbf{handle\_behaviour\_call}: Registers a behaviour call with the runtime. It takes a pointer to the message (an LLVM struct containing the behaviour's parameters), an LLVM function pointer to the corresponding behaviour function, and the destination actor-instance ID. The runtime constructs a \texttt{MailboxItem} and enqueues it in the destination actor-instance's queue. If the instance state is \texttt{EMPTY}, it changes the state to \texttt{RUNNABLE} and adds the ID to the schedule queue.
+\end{itemize}
+
+\subparagraph{Switching traps\\}
+These traps are called when the LLVM code needs to perform actions that might lead to halting of the execution. These traps result in a context-switch to the runtime. The traps are for ending the behaviour (called \texttt{handle\_return}) and to try to acquire a lock (called \texttt{handle\_lock}). \\
+For \texttt{handle\_return}, the runtime deallocates \texttt{running\_be\_sp} and updates the actor-instance state—transitioning to \texttt{EMPTY} if the mailbox is empty, or to \texttt{RUNNABLE} otherwise. \\
+For \texttt{handle\_lock}, the runtime calls the \texttt{lock} function of the \texttt{UserMutex} associated with the requested lock ID. If the lock is unavailable, the runtime moves on to other instances, (\texttt{lock} handles state-transitions). If the lock is acquired, control returns to the behaviour.
+
+\subsubsection{The start and the end of execution}
+This section briefly explains how a complete \textit{Coherence} binary (compiled and linked with the runtime) starts and terminates.
+\paragraph{The start\\}
+Semantically, \textit{Coherence} programs start from the \texttt{create} constructor of the \texttt{Main} actor-template. However, constructors are synchronous callables and therefore do not have their own stack (they use the stack of the behaviour that invoked them). One potential solution is to introduce another actor-instance (say, \texttt{start}) with a behaviour that creates an instance of \texttt{Main} using the \texttt{create} constructor. However, this does not resolve the issue: creating this actor-instance still requires a constructor, which in turn requires an execution context. \\
+To break this loop, we can fool the runtime using a dummy actor. Since \texttt{handle\_actor\_creation} treats its \texttt{llvm\_actor\_object} parameter as a black box, we can simply pass a nullptr and receive an ID for a fake \texttt{start} actor-instance in return. Next, we need to send a message to this fake instance. Since \texttt{handle\_behaviour\_call} treats the function pointer opaquely and does not validate it, we can pass a pointer to a custom function that instantiates the \texttt{Main} actor using its \texttt{create} constructor. This completes the initialization. When scheduling commences, the runtime executes this dummy behaviour, providing the necessary stack and execution context for the \texttt{Main} constructor to run.\\
+While all of this could be done in a C++ within the runtime code, it is more convenient to do it directly in LLVM where all the generated code definitions are accessible. Therefore, the bootstrapping logic is placed in an LLVM function called \texttt{coherence\_initialize}, which is generated alongside the user code. The runtime calls this function before scheduling starts.
+
+\paragraph{The end\\}
+\textit{Coherence} programs end when global quiescence is achieved. This is a state where no actor is currently executing and no messages remain in any mailbox or the global schedule queue. Upon detecting global quiescence, all worker threads return, ending the program execution.
+
 \end{document}

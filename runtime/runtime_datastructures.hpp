@@ -119,6 +119,7 @@ struct ActorInstanceState {
 
 struct RuntimeDS {
     // When the schedule queue is empty, threads can sleep in [thread_bed]
+    // CR: Potential undefined behaviour here
     std::binary_semaphore thread_bed;
     std::atomic<uint8_t> threads_asleep;
     std::atomic<uint64_t> instances_created;

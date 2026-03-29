@@ -8,6 +8,10 @@
 \usepackage{libertine} % Font matching Linux Libertine
 \usepackage{listings}
 \usepackage{amsmath, amssymb, amsthm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{amsmath}      
+\usepackage{amssymb}  
 \setcounter{secnumdepth}{4}
 \setcounter{tocdepth}{4}
 \appendix
@@ -300,5 +304,55 @@ and stmt_list_return_status stmts = match stmts with
         | Returns | Invalid -> Invalid 
         | DoesNotReturn -> stmt_list_return_status rest
 \end{lstlisting}
+\subsection{UserMutex implementation}
+\subsubsection{Locking}
+\begin{algorithmic}[1]
+\Procedure{Lock}{$locker\_id$}
+    \State \textbf{acquire} $coord\_lock$
+    
+    % Path 1: Unowned
+    \If{$holding\_instance = \text{null}$}
+        \State $holding\_instance \gets locker\_id$
+        \State $mutex.num\_lock\_called \gets 1$
+        \State \textbf{release} $mutex.coord\_lock$
+        \State \Return \textbf{true}
+    \EndIf
+
+    % Path 2: Reentrant
+    \If{$holding\_instance = locker\_id$}
+        \State $num\_lock\_called \gets num\_lock\_called + 1$
+        \State \textbf{release} $mutex.coord\_lock$
+        \State \Return \textbf{true}
+    \EndIf
+
+    % Path 3: Contention
+    \State Set $locker\_id$'s state to \textbf{WAITING} and add it to mutex's $wait\_queue$
+    \State \textbf{release} $mutex.coord\_lock$
+    \State \Return \textbf{false}
+\EndProcedure
+\end{algorithmic}
+\subsubsection{Unlocking}
+\begin{algorithmic}[1]
+\Procedure{Unlock}{$runtime$}
+    \State \textbf{acquire} $mutex.coord\_lock$
+    \State $mutex.num\_lock\_called \gets mutex.num\_lock\_called - 1$
+    
+    \If{$mutex.num\_lock\_called > 0$}
+        \State \textbf{release} $mutex.coord\_lock$
+        \State \Return
+    \EndIf
+
+    \If{$mutex.wait\_queue$ is empty}
+        \State $mutex.holding\_instance \gets \text{null}$
+    \Else
+        \State $target \gets mutex.wait\_queue.pop\_front()$
+        \State $mutex.holding\_instance \gets target$
+        \State $mutex.num\_lock\_called \gets 1$
+        
+        \State Set $target$'s state to \textbf{RUNNABLE} and add it to the \textit{schedule\_queue}
+    \EndIf
+    \State \textbf{release} $mutex.coord\_lock$
+\EndProcedure
+\end{algorithmic}
 
 \end{document}

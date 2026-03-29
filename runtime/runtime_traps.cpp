@@ -44,9 +44,9 @@ void* get_instance_struct(uint64_t instance_id) {
 // Only registers the actor and returns its unique instance_id.
 // Constructor runs synchronously in the caller, not the actor.
 // CR: Slightly misleading name
-std::uint64_t handle_actor_creation(void* llvm_actor_object)
+uint64_t handle_actor_creation(void* llvm_actor_object)
 {
-    std::uint64_t instance_id = ++(runtime_ds->instances_created);
+    uint64_t instance_id = ++(runtime_ds->instances_created);
 
     auto state = std::make_shared<ActorInstanceState>(llvm_actor_object, instance_id);
 
