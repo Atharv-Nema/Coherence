@@ -11,6 +11,7 @@
 \usepackage{tikz}
 \usepackage[most]{tcolorbox}
 \usepackage{xcolor}
+\usepackage{booktabs}
 \usepackage{algorithmicx}
 \usepackage{algpseudocode}
 \usepackage{amsmath}      
@@ -980,6 +981,125 @@ The key changes made are listed below:
   \item A new reference capability \texttt{tag} is added. This is a capability representing a pointer which no one can read from or write to. As mentioned in the preparation chapter, this is needed for completeness for the definition of $\triangleright$
   \item Structures and named types can now contain pointers.
 \end{itemize}
-The syntax of top-level items and statements remain unchanged. 
-% Should talk about the reason for specifying the capability in the pointer type. Talk about tying the knot for initialization, talk about undefined behaviour and the reason for having nullptr.
+The syntax of top-level items and statements remain unchanged. \\
+\textit{Coherence 1.0} mandated that all pointers be initialized with a valid value. Under this policy, it becomes impossible to terminate the construction of a recursive type. Consider the following definition of a linked list:
+\begin{lstlisting}
+type list = struct {
+    value: int;
+    next: list ref;
+}
+\end{lstlisting}
+To create an instance of a pointer to this structure, we need to do something like
+\begin{lstlisting}
+new ref[1] list({value = 3; next = <instance of list ref>});
+\end{lstlisting}
+To create an instance of \texttt{list ref}, we need to create an instance of the structs field, which is also of type \texttt{list ref}. There is no bottom-out to this recursion! There are a few approaches to solve this problem:
+\begin{itemize}
+  \item \textbf{Variants}: One solution is to introduce Variants into the type system. By allowing a field to inhabit a sum type, we maintain the invariant of strict pointers (where every pointer dereference is guaranteed to be defined) while providing a non-recursive base case.
+  \begin{lstlisting}
+type list = struct {
+    value: int;
+    next: (list ref) | unit;
+}
+new ref[1] list({value = 3; next = ()})
+\end{lstlisting}
+  \item \textbf{Nullptr}: An alternative approach is to relax the strictness of the pointer model by introducing a \texttt{nullptr} value. \texttt{nullptr} acts as default pointer capable of inhabiting any pointer type. This allows the recursive loop to be broken by assigning a \texttt{nullptr} value to the terminal node of a structure:
+  \begin{lstlisting}
+new ref[1] list({value = 3; next = nullptr})
+  \end{lstlisting}
+  Dereferencing a \texttt{nullptr} is undefined behaviour, but pointers can be compared for equality with a \texttt{nullptr}. This design pushed the burden of safety on the programmer.
+\end{itemize}
+\textit{Coherence2.0} chooses the \texttt{nullptr} approach. The primary design goal of \textit{Coherence} is to provide robust guarantees against data races and deadlocks. General memory safety issues, such as null-pointer dereferences, fall outside this scope. This choice is consistent with existing language semantics. For instance, array out-of-bounds accesses are already categorized as undefined behavior. Implementing variants would require major changes to the syntax and the code generation stage.
+\[
+\begin{array}{lcll}
+e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
+  & \mid & \mathtt{nullptr} & \text{(null pointer)} \\
+\end{array}
+\]
+
+\subsubsection{Modifications to the type-system}
+The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$, the compiler must first verify that the outer capabilities satisfy the standard subtyping relation: $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be aggregate types containing further pointers, we must ensure that the ``effective types'' visible through these references are compatible. This is achieved by applying the viewpoint adaptation operator directly to the types, yielding $\kappa_s \triangleright S$ and $\kappa_t \triangleright T$. The required relationship between these adapted types depends on the access permissions granted by the outer capability $\kappa_s$:
+ We also need to make sure that the inner viewpoint-adapted capabilities are compatible.
+\begin{itemize}
+  \item \textbf{Covariant case}:\\ When $\kappa_{s_2}$ is readable but not writable (e.g. \texttt{val}), then all we need is that the inner dereferenced types be covariant. In this case, it means that $(\kappa_{s_2} \triangleright \kappa_{s_1})$ is covariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. There is a slight difference between covariant and assignability, which will be discussed when discussing the definition of $\triangleright$.
+  \item \textbf{Invariant case}:\\ When $\kappa_{s_2}$ is mutable (e.g. \texttt{ref}), we need $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be invariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. If the system permitted covariance, a source could assign a specific inner pointer to a more generic target pointer, and subsequently, the target could be used to write data into that memory location that is incompatible with the source's original, more restrictive type.
+  \item \textbf{Dealing with tag}:\\ The \texttt{tag} capability permits neither read nor write access. When $\kappa_{s_2}$ is \texttt{tag}, the type-checker enforces a requirement of structural congruence: the source and target types must share the same "shape," possessing identical nesting depths and the same underlying base types. While the system would technically remain memory-safe even without this constraint, without this requirement, the \texttt{tag} would effectively function as a universal, blank capability, losing its identity as representating a specific type structure.
+\end{itemize}
+
+\begin{notebox}
+\textbf{Invariance and covariance}:\\
+The covariance relation is represented using the symbol \textit{cov}, and invariance using \textit{inv}. $T_1 \ \textit{cov} \ T_2$ says that a variable of type $T_2$ can safely change its type to be $T_1$. These relations' precise semantic interpretation is a bit unclear, and they mainly exist for correct typing. But broadly, covariance talks about subtyping without worrying about single-alias constraints of reference capabilities and invariance talks about when two types are effectively equal. Covariance of reference capabilities have the same rules as assignability, except for the fact that \texttt{iso} is covariant to itself. Invariance of reference capabilities is the same as equality, except for the fact the \texttt{iso} is invariant to \texttt{iso\textasciicircum}. \textit{cov} extend to full types in a similar way to assignability: mutable outer capabilities require their inner types to satisfy the invariance relation, while immutable capabilities permits the dereferenced types to be compared covariantly.
+\end{notebox} 
+
+Using the newly defined \texttt{assignable} predicate, the rules below are the modfications to the typing rules in \textit{Coherence1.0}.
+\AxiomC{$\Gamma \tack e_s : \text{Int}$}
+\AxiomC{$\Gamma \tack e_d : T'$}
+\AxiomC{$\Gamma \tack \text{assignable}(\kappa \triangleright T, T')$}
+\begin{prooftree}
+\RightLabel{(Alloc)}
+\TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] T(e_d) : \text{unalias}(T\ \kappa)$} 
+\end{prooftree}
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(Nullptr)}
+\UnaryInfC{$\Gamma \tack \mathtt{nullptr} : B\ \kappa$}  
+\end{prooftree}
+
+\subsubsection{Viewpoint adaptation}
+%Need to talk about covariance rules.
+In the preparation section, we described the reason for viewpoint adaptation. However, given the rules above, it seems like these rules should work irrespective of the choice of the viewpoint adaptation operator. It makes us question what is needed of this operator's definition. To answer this question, let us analyse what happens when one tries to derive the assignability rules for a recursive type like \texttt{list}. To figure out for e.g. whether a \texttt{list ref} is assignable to a \texttt{list ref}, we will first check that outer capabilities are assignable, and then look at the assignability of its fields. \texttt{ref} is assignable to \texttt{ref}. Looking at the \texttt{next} fields, we need that $\texttt{list} \ (\text{ref} \triangleright \text{ref})$ is covariant to itself. To verify this, checker will then need to to look at \texttt{list}'s fields again and hence the type-checking will never terminate. This motivates a requirement of $\triangleright$: the choice of $\triangleright$ should ensure that if $\kappa_1$ is assignable to $\kappa_2$, then $T \ \kappa_1$ is assignable to $T \ \kappa_2$ for all types $T$. This should also be true for the invariance and covariance relation on types. The viewpoint adaptation operator is defined below.
+\begin{table}[H]
+\centering
+\caption{Viewpoint Adaptation Matrix ($\kappa_1 \triangleright \kappa_2$)}
+\label{tab:viewpoint-adaptation}
+\begin{tabular}{l|ccccc}
+\hline
+$\kappa_1 \triangleright \kappa_2$ & \textbf{Tag} & \textbf{Ref} & \textbf{Val} & \textbf{Iso} & \textbf{Locked<B>} \\ \hline
+\textbf{Tag}      & Tag & Tag & Tag & Tag & Tag \\
+\textbf{Ref}      & Tag & Ref & Val & Iso & Locked<B> \\
+\textbf{Val}      & Tag & Val & Val & Val & Locked<B> \\
+\textbf{Iso}      & Tag & Iso & Val & Iso & Locked<B> \\
+\textbf{Iso\textasciicircum} & Tag & Iso\textasciicircum & Val & Iso\textasciicircum & Locked<B> \\
+\textbf{Locked<A>}& Tag & Locked<A> & Val & Iso & Locked<B> \\ \hline
+\end{tabular}
+\end{table}
+
+Formally showing that these capabilities satisfy the requirement mentioned above and do not violate the invariants of the reference capabilities will be done in section \ref{?} in the evaluation chapter. I will justify a few of the interesting choices made with examples:
+
+\begin{itemize}
+  \item \textbf{$\text{ref}\ \triangleright\ \text{iso} = \text{iso}$}: At first, it feels like this should break the invariant of a unique \texttt{iso}. However, note that this does not actually increase the number of memory locations that store this reference (the inner \texttt{iso} is still stored in a single field on the heap). We simply have multiple paths (via the \texttt{ref} aliases of the parent structure) that lead to that single unique location. This is not an issue within a single thread because all accesses to the same \texttt{iso} reference happen sequentially within the actor's execution context, preventing concurrent data races. For the same reason, \texttt{locked<A>} $\triangleright$ \texttt{iso} = \texttt{iso}.
+  \item \textbf{$\text{iso}\ \triangleright\ \text{ref} = \text{ref}$}: One might assume this allows assigning a \texttt{ref} to a field within an \texttt{iso} structure. However, the inner type is irrelevant in isolation. The type-checker deals with the adapted type \texttt{iso} $\triangleright$ \texttt{ref}. \texttt{iso} $\triangleright$ \texttt{ref} is \texttt{iso}, and \texttt{ref} is not assignable to \texttt{iso}.
+\end{itemize}
+
+\subsubsection{Implementation}
+The primary modification involved the type-checker, where the assignability, covariance, and invariance relations were implemented alongside an early-exit mechanism to prevent infinite recursion when dealing with recursive types. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \texttt{nullptr} abstraction directly to the standard LLVM \texttt{null} constant.
+
+\subsection{Repository overview}
+The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The implementation comprises the core compiler pipeline—moving from lexing and parsing to AST validation and finally LLVM IR generation—supported by a dedicated C++ runtime and an extensive test suite.
+
+The \textit{Coherence} repository is built following the standard CMake project structure. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, ast-validation and codegen), global utilities, sample programs and integration tests. It also includes a \texttt{Readme.md} file which explains how to setup the compiler.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Overview of the Coherence repository}
+\label{tab:repo-overview}
+\begin{tabular}{l | l | p{7cm}}
+\toprule
+\textbf{Directory} & \textbf{Files and Subdirectories} & \textbf{Description} \\ \midrule
+lexer\_parser/ & lexer.l, parser.y & Frontend code for lexing and parsing. \\ \midrule
+ast/ & expr.hpp, types.hpp,...  & Abstract Syntax Tree node definitions. \\ \midrule
+ast\_validation/ & ast\_validator.cpp & Main entry point for static analysis. \\ 
+ & var\_validity\_checker/ & Variable validity checking. \\ 
+ & declaration\_collection/ & Declaration collection. \\
+ & type\_checker/ & Performs type-checking. \\ 
+ & compute\_lock\_info/ & Performs lock-inference \\ \midrule
+codegen/ & codegen.cpp, ... & Lowering of the validated AST to LLVM IR. \\ \midrule
+runtime/ & entry\_point.cpp, runtime\_traps.cpp, ... & Implementation of the \textit{Coherence} runtime. \\ \midrule
+global\_utils/ & scoped\_store.cpp,... & Shared helper functions and utility classes. \\ \midrule
+coherence/ & main.cpp & Integrates all components to produce the binary acting as the \textit{Coherence} compiler. \\ \midrule
+tests/ & e2e\_tests, type\_checking\_tests, ... & Compiler unit and integration tests. \\ \bottomrule
+\end{tabular}
+\end{table}
+
 \end{document}

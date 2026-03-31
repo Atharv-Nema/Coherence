@@ -169,7 +169,7 @@ bool capability_mutable(Cap c) {
     }, c.t);
 }
 
-bool capability_subtype(Cap c1, Cap c2) {
+bool capability_covariant(Cap c1, Cap c2) {
     if(capabilities_assignable(c1, c2)) {
         return true;
     }
@@ -181,12 +181,12 @@ bool capability_subtype(Cap c1, Cap c2) {
 }
 
 // CR: Make the theory more robust
-bool capability_aliasable(Cap c1, Cap c2) {
+bool capability_invariant(Cap c1, Cap c2) {
     if(std::holds_alternative<Cap::Iso>(c1.t) &&
        std::holds_alternative<Cap::Iso_cap>(c2.t)) {
         return true;
     }
-    return capability_subtype(c1, c2) && capability_subtype(c2, c1);
+    return capability_covariant(c1, c2) && capability_covariant(c2, c1);
 }
 
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 
@@ -433,7 +433,7 @@ bool type_invariant(
     auto curried_invariant = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
         return type_invariant(type_context, t1, t2);
     };
-    return pointer_property_compare_template(type_context, t1, t2, capability_aliasable, curried_invariant);
+    return pointer_property_compare_template(type_context, t1, t2, capability_invariant, curried_invariant);
 }
 
 bool type_covariant(
@@ -463,7 +463,7 @@ bool type_covariant(
     auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
         return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
     };
-    return pointer_property_compare_template(type_context, t1, t2, capability_subtype, curried_action);
+    return pointer_property_compare_template(type_context, t1, t2, capability_covariant, curried_action);
 }
 
 bool type_assignable(

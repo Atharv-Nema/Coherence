@@ -733,7 +733,7 @@ primary_expr
         delete $2; delete $5;
       }
     /* Allocation: new <cap>[size] <type>(default_value) */
-    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE full_type TOK_LPAREN val_expr TOK_RPAREN {
+    | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE normal_type TOK_LPAREN val_expr TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
