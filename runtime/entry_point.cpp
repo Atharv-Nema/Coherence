@@ -5,6 +5,12 @@
 #include <thread>
 #include <condition_variable>
 
+/*
+Lock order:
+(lock mutex) ---> (Actor-instance lock) --> (schedule queue lock)
+*/
+
+
 // CR: May not need [coherence_initialize]. Probably better to directly create [#Start] actor instance 
 // and call its behaviour
 extern "C" void coherence_initialize();
@@ -40,27 +46,26 @@ void thread_loop() {
     using State = ActorInstanceState::State;
 
     while (true) {
-        auto actor_instance_id_opt = runtime_ds->schedule_queue.try_pop_front();
-        if (!actor_instance_id_opt) {
-            // Check whether the sleep counter is 31. That means the program is ending.
-            runtime_ds->threads_asleep++;
-            if(runtime_ds->threads_asleep == 32) {
-                for (int i = 0; i < 32; ++i) {
-                    runtime_ds->thread_bed.release();
-                }
-                return;
-            }
-            else {
-                runtime_ds->thread_bed.acquire();
+        uint64_t actor_instance_id;
+        {
+            std::unique_lock<std::mutex> lock_guard(runtime_ds->schedule_queue_lock);
+            while(runtime_ds->schedule_queue.size() == 0) {
+                runtime_ds->threads_asleep++;
                 if(runtime_ds->threads_asleep == 32) {
+                    runtime_ds->thread_bed.notify_all();
                     return;
                 }
-                runtime_ds->threads_asleep--;
-                continue;
+                else {
+                    runtime_ds->thread_bed.wait(lock_guard);
+                    if(runtime_ds->threads_asleep == 32) {
+                        return;
+                    }
+                    runtime_ds->threads_asleep--;
+                }
             }
-            assert(false); // No control path reaches here
+            actor_instance_id = runtime_ds->schedule_queue.front();
+            runtime_ds->schedule_queue.pop_front();
         }
-        uint64_t actor_instance_id = *actor_instance_id_opt;
 
         auto actor_instance_state_opt = 
             runtime_ds->id_actor_instance_map.get_value(actor_instance_id);
@@ -105,8 +110,12 @@ void thread_loop() {
                         }
                         else {
                             actor_instance_state->state = State::RUNNABLE;
-                            runtime_ds->schedule_queue.emplace_back(actor_instance_id);
-                            runtime_ds->thread_bed.release();
+                            {
+                                std::lock_guard<std::mutex> thread_guard(runtime_ds->schedule_queue_lock);
+                                runtime_ds->schedule_queue.emplace_back(actor_instance_id);
+                                runtime_ds->thread_bed.notify_one();
+                            }
+                            
                         }
                     }
                     break;

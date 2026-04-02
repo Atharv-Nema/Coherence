@@ -8,6 +8,7 @@
 #include <atomic>
 #include <assert.h>
 #include <semaphore>
+#include <condition_variable>
 #include <boost/context/detail/fcontext.hpp>
 
 namespace boost_ctx = boost::context::detail;
@@ -18,42 +19,6 @@ struct MailboxItem {
     uint64_t actor_id;
     void* message;
     void (*behaviour_fn)(void*);
-};
-
-template <typename T>
-class ThreadSafeDeque {
-private:
-    std::mutex dq_lock;
-    std::deque<T> dq;
-
-public:
-    void emplace_back(const T& item) {
-        std::lock_guard<std::mutex> lock(dq_lock);
-        dq.emplace_back(item);
-    }
-
-    void emplace_front(const T& item) {
-        std::lock_guard<std::mutex> lock(dq_lock);
-        dq.emplace_front(item);
-    }
-
-    std::optional<T> try_pop_front() {
-        std::lock_guard<std::mutex> lock(dq_lock);
-        if (dq.empty()) return std::nullopt;
-        T front_ele = dq.front();
-        dq.pop_front();
-        return front_ele;
-    }
-
-    bool empty() {
-        std::lock_guard<std::mutex> lock(dq_lock);
-        return dq.empty();
-    }
-
-    std::size_t size() {
-        std::lock_guard<std::mutex> lock(dq_lock);
-        return dq.size();
-    }
 };
 
 template <typename K, typename V>
@@ -120,13 +85,14 @@ struct ActorInstanceState {
 struct RuntimeDS {
     // When the schedule queue is empty, threads can sleep in [thread_bed]
     // CR: Potential undefined behaviour here
-    std::binary_semaphore thread_bed;
+    std::condition_variable thread_bed;
+    std::mutex schedule_queue_lock;
     std::atomic<uint8_t> threads_asleep;
     std::atomic<uint64_t> instances_created;
-    ThreadSafeDeque<uint64_t> schedule_queue;
+    std::deque<uint64_t> schedule_queue;
     ThreadSafeMap<uint64_t, std::shared_ptr<ActorInstanceState>> id_actor_instance_map;
     std::unordered_map<uint64_t, UserMutex> mutex_map;
-    RuntimeDS(): thread_bed(0) {}
+    RuntimeDS() {}
 };
 
 inline bool UserMutex::lock(RuntimeDS* runtime_ds, uint64_t instance_id) {
@@ -181,7 +147,8 @@ inline void UserMutex::unlock(RuntimeDS* runtime) {
     // Giving the lock to [actor_instance_id]
     holding_instance = actor_instance_id;
     num_lock_called = 1;
+    std::lock_guard<std::mutex> schedule_queue_guard(runtime->schedule_queue_lock);
     runtime->schedule_queue.emplace_back(actor_instance_id);
-    runtime->thread_bed.release();
+    runtime->thread_bed.notify_one();
     return;
 }

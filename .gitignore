@@ -21,3 +21,5 @@ pony_trial
 *.blg
 *.pdf
 *.pyg
+*.bib
+*.xml

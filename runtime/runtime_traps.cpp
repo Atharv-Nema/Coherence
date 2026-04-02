@@ -27,8 +27,11 @@ void handle_behaviour_call(
     actor_instance->mailbox.emplace_back(MailboxItem { instance_id, message, behaviour_fn });
     if(actor_instance->state == State::EMPTY) {
         actor_instance->state = State::RUNNABLE;
-        runtime_ds->schedule_queue.emplace_back(instance_id);
-        runtime_ds->thread_bed.release();
+        {
+            std::lock_guard<std::mutex> schedule_guard(runtime_ds->schedule_queue_lock);
+            runtime_ds->schedule_queue.emplace_back(instance_id);
+            runtime_ds->thread_bed.notify_one();
+        }
     }
 }
 
