@@ -1,5 +1,5 @@
 \documentclass[a4paper,12pt,fleqn]{article}
-
+\setcounter{section}{2}
 % --- Core Packages ---
 \usepackage{titlesec}
 \usepackage[margin=2cm]{geometry}
@@ -19,6 +19,8 @@
 \usepackage{pifont}      % Required for the checkmark and X symbols
 \usepackage{comment}
 \newcommand{\cmark}{\ding{51}}
+\usepackage[backend=bibtex]{biblatex}
+\addbibresource{/home/atharv-nema/Atharv/Coding/Coherence/reports/dissertation/chapters/bibliography.bib}
 \newcommand{\xmark}{\ding{55}} 
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, backgrounds, fit, calc, shapes.multipart}
 
@@ -56,48 +58,46 @@
 % --- Custom Commands ---
 \newcommand{\tack}{\vdash}
 \newcommand{\tackl}{\dashv}
-
 \begin{document}
 \section{Implementation}
 This chapter describes the theory and code needed for the implementation of the \textit{Coherence} language.
-% CR: Make this better english.
 \begin{itemize}
     \item Section \ref{sec:theory} introduces the formal syntax and type-checking rules of \textit{Coherence}.
     \item Section \ref{sec:frontend} provides an overview of the frontend, covering the lexer, parser, and abstract syntax tree (AST).
     \item Section \ref{sec:ast-validation} discusses the AST validation stage, which includes the implementation of the type-checking rules and some processing for proper handover to the code generation stage.
     \item Section \ref{sec:runtime} discusses the implementation of the runtime system.
-    \item Section \ref{sec:codegen} discusses the lowering to LLVM (Section 4.5).
+    \item Section \ref{sec:codegen} discusses the lowering to LLVM.
     \item Section \ref{sec:pointers-to-pointers} presents an extension to the language, which allows for pointers to point to other pointers.
 \end{itemize}
 
 \subsection{Formal theory} \label{sec:theory}
-This section describes the formal syntax and type-checking rules of the basic version of \textit{Coherence}. I will refer to this basic version as \textit{Coherence1.0} when discussing features unique to it.
+This section describes the formal syntax and type-checking rules of the initial version of \textit{Coherence}. I will refer to this initial version as \textit{Coherence1.0} when discussing features unique to it.
 \subsubsection{Formal syntax}
-The coherence language syntax into four main categories: types, expressions, statements and top-level items.
+\textit{Coherence} language syntax is organized under four categories: types, expressions, statements and top-level items.
 \begin{itemize}
-    \item \textbf{Expressions} are parts of the program that can evaluate to a value.
-    \item \textbf{Types} are used to make sure that the expressions are used correctly. The type-system assigns a type to every expression in the program.
-    \item \textbf{Statements} are lines in the body of the program. These are the core instructions that the program executes. These include items like variable declarations, control structure (like while loops and if statements) and behaviour calls.
-    \item \textbf{Top-level items} are definitions present at the top level of a \textit{Coherence} program. These include type, actor and top-level function definitions.
+    \item \textbf{Expressions} are parts of the program that evaluate to a value.
+    \item \textbf{Types} are assigned to expressions by the type-system to make sure that they are used correctly.
+    \item \textbf{Statements} are lines in the body of the program. These are the core instructions that the program executes. These include items like variable declarations, control structures and behaviour invocations.
+    \item \textbf{Top-level items} are definitions present at the top level of a \textit{Coherence} program.
 \end{itemize}
 \paragraph{Types\\}
-\textit{Coherence1.0} only allows pointers to point to non-pointer types (it forbids multi-level pointers). It does this to prevent dealing with the complexities of viewpoint adaptation. \textit{Coherence2.0} in section \ref{sec:pointers-to-pointers} introduces multi-level pointers. The cleanest way to enforce this is at the syntax level.
+\textit{Coherence1.0} only allows pointers to point to non-pointer types. This is done to avoid dealing with the complexities of viewpoint adaptation. \textit{Coherence2.0} in section \ref{sec:pointers-to-pointers} introduces multi-level pointers. The cleanest way to enforce this is at the syntax level.
 \[
 \begin{array}{lcll}
-T & ::= & B \mid B\ \kappa & \text{(full coherence type)} \\[0.5em]
+T & ::= & B \mid B\ \kappa & \text{(full \textit{Coherence} type)} \\[0.5em]
 B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) & \text{(basic type)} \\[0.5em]
 \kappa & ::= & \mathtt{ref} \mid \mathtt{val} \mid \mathtt{iso} \mid \mathtt{locked}\langle L \rangle & \text{(reference capabilities)} \\[0.5em]
 T_N & ::= & B  \mid \mathtt{struct}\ \{\ \overline{f : B;}\ \} & \text{(nameable type)}
 \end{array}
 \]
 \begin{itemize}
-    \item \textbf{B} refers to basic types. Instances of these types do not contain pointers. They include the standard types (int, bool and unit), named types, and actor types (given to actor-instances).
+    \item \textbf{B} refers to basic types. Instances of these types do not contain pointers.
     \item \textbf{T} is the full \textit{Coherence1.0} type. It is either a basic type, or a pointer to the basic type. In the pointer case, the type also includes the associated reference capability.
-    \item $\boldsymbol{\kappa}$ are the reference capabilities of the language. \textit{Coherence1.0}'s uses \texttt{ref}, \texttt{iso}, \texttt{val} and \texttt{locked<L>}, which have been described in the preparation section.
-    \item $\boldsymbol{T_N}$ refers to nameable types. These are types that can be aliased in top-level type definition. This is more than syntactic sugar: structs can only be used through such name definitions. These can either be basic types or struct definitions.
+    \item $\boldsymbol{\kappa}$ refers to the reference capabilities of the language. \textit{Coherence1.0} uses \texttt{ref}, \texttt{iso}, \texttt{val} and \texttt{locked<L>}, which have been described in the preparation chapter.
+    \item $\boldsymbol{T_N}$ refers to nameable types. These are types that can be aliased in top-level type definition. These are more than syntactic sugar: structs can only be used through such name definitions. These can either be basic types or struct definitions.
 \end{itemize}
 \paragraph{Expressions\\}
-Expressions are parts of the program that can evaluate to a value. In the rules given below, $i$ refers to integer literal, $x$ refers to variables, $f$ refers to fields, $m$ refers to methods, $A$ refers to actor-template names, and $k$ refers to actor constructors.
+In the rules given below, $i$ refers to integer literal, $x$ refers to variables, $f$ refers to fields, $m$ refers to methods, $A$ refers to actor-template names, and $k$ refers to actor constructors.
 \[
 \begin{array}{lcll}
 e & ::= & () & \text{(unit)} \\
@@ -115,21 +115,21 @@ e & ::= & () & \text{(unit)} \\
   & \mid & e\ \mathit{op}\ e & \text{(binary operation)}
 \end{array}
 \]
-While most constructs are fairly standard, several specific features of the \textit{Coherence} expression syntax warrant further explanation:
+While most constructs are fairly standard, several specific features of the syntax warrant further explanation:
 \begin{itemize}
     \item \textbf{Allocation:} Pointers in \textit{Coherence} are treated as arrays. The allocation syntax $\mathtt{new}\ \kappa \ [e]\ B\ (e)$ requires the explicit declaration of a capability, the array size (within \texttt{[]}), and a default initialization value (within \texttt{()}). 
     \item \textbf{Actor construction:} An actor can have multiple constructors, which is why the constructor name has to be specified during creation.
     \item \textbf{Struct Literal:} Unlike languages such as OCaml, which identifies structures based on member names, \textit{Coherence} requires an explicit type name $N$. This design choice prioritizes clarity and prevents ambiguity in cases where multiple structures share identical field names.
-    \item \textbf{Operators:} Explanation of the specific binary operators ($\mathit{op}$) supported by \textit{Coherence} is omitted as the rules followed are pretty standard across programming languages.
-    \item \textbf{Assignment:} Assignment is treated as an expression because assignment evaluates to the previous LHS value.
+    \item \textbf{Operators:} Explanation of the specific binary operators ($\mathit{op}$) supported by \textit{Coherence} is omitted as the rules followed are fairly standard across programming languages.
+    \item \textbf{Assignment:} Assignment is treated as an expression because it evaluates to the previous LHS value.
     \item \textbf{Ownership transfer:} To maintain the single-alias invariant of the \texttt{iso} capability, an actor must explicitly relinquish its reference. The \texttt{unalias} keyword allows the programmer to invalidate a local variable, returning the "unaliased" value. The compiler statically ensures that the variable remains inaccessible until it has been replenished with a new value.
 \end{itemize}
 \paragraph{Statements\\}
-Statements are instructions that define the program's imperative logic. $b$ to the behaviour of the actor being called.
+In the syntax below, $b$ refers to the name of the behaviour being invoked.
 \[
 \begin{array}{lcll}
 s & ::= & \mathtt{var}\ x : T = e\ ; & \text{(local declaration)} \\
-  & \mid & f := e\ ; & \text{(member initialisation)} \\
+  & \mid & f := e\ ; & \text{(member initialization)} \\
   & \mid & e \to b(\overline{e})\ ; & \text{(behaviour call)} \\
   & \mid & \mathtt{OUT}\ e\ ; & \text{(print statement)} \\
   & \mid & \mathtt{if}\ (e)\ \{\ \overline{s}; \}\ \mathtt{else}\ \{\ \overline{s}\ \} & \text{(if-else statement)} \\
@@ -139,13 +139,13 @@ s & ::= & \mathtt{var}\ x : T = e\ ; & \text{(local declaration)} \\
   & \mid & e\ ; & \text{(expression whose value is discarded)}
 \end{array}
 \]
-Note that in all of the rules future, $\overline{X}$ refers to a list of $X$. Some interesting statement constructors are explained below:
+$\overline{X}$ refers to a list of $X$. Some interesting features of the syntax are explained below:
 \begin{itemize}
-    \item \textbf{Member intialisation:} To prevent undefined behaviour due to uninitialised fields, \textit{Coherence} enforces that constructors initialise all of the actor fields. \textit{Coherence} cannot use the simple assignment for initialising the members, as assignment must evaluate to the previously held value. Hence, \textit{Coherence} provides special syntax for initialising members, and performs checks to make sure that members are initialised and used correctly. The specific checks will be discussed in section (4.1.1.2 or something).
+    \item \textbf{Member initialization:} To prevent undefined behaviour due to uninitialized fields, \textit{Coherence} enforces that constructors initialize all actor fields. \textit{Coherence} cannot use simple assignments for initializing the members, as assignments must evaluate to the previously held value. Hence, \textit{Coherence} provides special syntax for initializing members. The compiler also makes sure that all members are initialized by the end of the constructor.
     \item \textbf{OUT:} Used for printing integers to \texttt{stdout}.
 \end{itemize}
 \paragraph{Top-level items\\}
-Top-level items are definitions present at the top level of a \textit{Coherence} program.
+The syntax of top-level items is mentioned below:
 \[
 \begin{array}{lcll}
 P & ::= & \overline{D} & \text{(program)} \\[0.5em]
@@ -161,20 +161,10 @@ A program $P$ is a list of top-level items $D$. Top-level items are either type-
 
 \subsubsection{Typing rules}
 % CR: Make this sentence better or something
-The typing rules presented in this section are intended as a high-level description of the typing rules, rather than an exhaustive formal compiler specification. Several complex validation checks are encapsulated by named procedures or predicates. Most of these will be treated as black-boxes: there behaviour will be explained in words. However, an attempt to capture their implementation in mathematical notation.
-\\
-The typing environment $\Gamma$ maintains the contextual state required by the type-checker. In the description of the typing context, the term \textit{metadata structure} of an object is a structure that contains all the necessary data about the object. Data is accessed using subscript notation. The underlying mathematical representation of these structures are omitted for brevity.
-\begin{itemize}
-    \item $\Gamma_V$: a mapping from local variable names to their types
-    \item $\Gamma_L$: boolean flag indicating whether the current typing context is scoped within an \texttt{atomic} section
-    \item $\Gamma_A$: a mapping from actor names to their metadata structure.
-    \item $\Gamma_T$: mapping to named types.
-    \item $\Gamma_F$: mapping from top-level function names to their metadata structure.
-    \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
-    \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
-\end{itemize}
+The typing rules presented in this section are intended as a high-level description of the typing rules, rather than an exhaustive formal compiler specification. Several complex validation checks are encapsulated by named procedures or predicates. Most of these will simply be explained in words and attempts will not be made to capture their implementation in mathematical notation.\\
+The typing environment $\Gamma$ maintains the contextual state required by the type checker. Its internal structure is not described here. The typing rules simply assume that $\Gamma$ provides all necessary information (see \ref{??} for more details).
 \paragraph{Expression typing\\}
-Expressions are given types using judgements of form $\Gamma \tack e : T$. The full type checking rules are included in appendixA(TODO: ADD THE LINK TO IT OR SOMETHING). The interesting cases are described below:
+Expressions are given types using judgements of form $\Gamma \tack e : T$. The full type checking rules are included in \ref{??}. The interesting cases are described below:
 \begin{itemize}
   \item 
     \AxiomC{$\text{variable\_type}(x, \Gamma) = T$}
@@ -182,7 +172,7 @@ Expressions are given types using judgements of form $\Gamma \tack e : T$. The f
     \UnaryInfC{$\Gamma \tack x : T$}
     \DisplayProof
     \vspace{1.5em}\\
-    The \texttt{variable\_type} procedure resolves identifiers across a unified scope comprising of actor fields of $\Gamma_{this}$ and local variables in $\Gamma_V$. The language prevents shadowing of actor fields by local variables and hence there is no ambiguity.
+    The \texttt{variable\_type} procedure resolves identifiers across a unified scope comprising of actor fields and local variables. The language prevents shadowing of actor fields by local variables and hence there is no ambiguity.
   \item
     \AxiomC{$\Gamma \tack e_1 : T_1$}
     \AxiomC{$\Gamma \tack e_2 : T_2$}
@@ -192,13 +182,13 @@ Expressions are given types using judgements of form $\Gamma \tack e : T$. The f
     \QuaternaryInfC{$\Gamma \tack e_1 = e_2 : \text{unalias}(T_1)$}
     \DisplayProof
     \vspace{1.5em}\\
-    As previously noted, assignment expressions evaluate to the previous value of the left-hand side (LHS). The point of this non-standard behaviour is to facilitate transfer of \texttt{iso} references. The returned value has lost an alias because of the write. The type system must capture this to allow sending the unaliased \texttt{iso} to another actor. In other words, the pseudocode below should type check
+    Assignment expressions return the previous value of the LHS. This behaviour exists to enable safe transfer of \texttt{iso} references: the write consumes one alias, so the returned value is now unaliased and can be safely sent to another actor. The type system tracks this alias removal, making the following pseudocode type-check:
 \begin{lstlisting}
 var x: int iso = ...;
 actor_instance->receive_iso(x = ...);
 \end{lstlisting}
-    To faciliate this, the compiler uses the \texttt{iso\textasciicircum} capability. \texttt{iso\textasciicircum} is an ephemeral capability accessible only to the compiler (the programmer cannot write programs using it, which is reflected in the fact that \texttt{iso\textasciicircum} does not appear in the syntax). This is the capability associated with a reference that has no aliases. This concept is reflected in the \texttt{assign} rule using the \texttt{unalias} function, which takes in a type and returns the unaliased version of it. The unalias function maps $B \ iso$ to $B \ iso$\textasciicircum and acts as the identity for all other types.\\
-    The next thing to unpack is the \texttt{assignable} predicate. $\Gamma \tack \text{assignable}(T_1, T_2)$ is meant to express type $T_2$ is assignable to $T_1$. The rules for \texttt{assignable} are as follows:
+    To facilitate this, the compiler uses the \texttt{iso\textasciicircum} capability. \texttt{iso\textasciicircum} is an ephemeral capability accessible only to the compiler. The programmer cannot use it in programs, which is reflected in the fact that \texttt{iso\textasciicircum} does not appear in the syntax. \texttt{iso\textasciicircum} is associated with a reference that has no aliases. The \texttt{assign} rule applies the \texttt{unalias} function, which converts $B \ iso$ to $B \ iso$\textasciicircum\ (acting as the identity for other types), to reflect this unaliasing.\\
+    $\Gamma \tack \text{assignable}(T_1, T_2)$ expresses that type $T_2$ is assignable to $T_1$. The rules for \texttt{assignable} are as follows:
     \vspace{1em}\\
     \begin{tabular}{c@{\qquad}c}
         \AxiomC{}
@@ -252,43 +242,21 @@ actor_instance->receive_iso(x = ...);
     \caption{Capability Assignability Graph including the \texttt{locked<L>} capability.}
     \label{fig:capability_hierarchy}
 \end{figure}
-  Edges A -> B in the graph mean that $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single alias invariant. A reference with the locked capability is assignable to another reference with a locked capability if they are protected by the same lock. The assignment rules to \texttt{iso\textasciicircum} are irrelevant as an expression that evaluates to \texttt{iso\textasciicircum} will never satisfy .
-  \begin{notebox}
-    \textbf{Assignment to \texttt{iso\textasciicircum}} \\
-    The rules for $<:$ when assigning to \texttt{iso\textasciicircum} are irrelevant. In the \texttt{(Assign)} rule, when $e_1$ evaluates to \texttt{iso\textasciicircum}, it does not satisfy $\Gamma \tack \text{appear\_lhs}(e_1)$. All the other rules involving the predicate \texttt{assignable} have a programmer defined type as the first argument, which cannot contain \texttt{iso\textasciicircum} as programmers do not have access to \texttt{iso\textasciicircum}.
-  \end{notebox}
-  It might seem like the \texttt{assignable} predicate is enough for the assignment rules. However, the destination of an assignment needs to satisfy two additional constraints: it must evaluate to an \textit{L-value}, and the memory location corresponding to the L-value must be writable.
+  Edges A -> B in the graph mean that $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single-alias invariant. A reference with the locked capability is assignable to another reference with a locked capability if they are protected by the same lock.
+  The destination of an assignment needs to satisfy two additional constraints: it must evaluate to an \textit{L-value}, and the memory location corresponding to the L-value must be writable.
   \begin{notebox}
     \textbf{L-value}\\
-    An L-value is an expression that evaluates to a value stored in a persistent memory location, such as a variable, an object field, or the dereference of a pointer, rather than a temporary result like a literal, a result of an arithmetic expression ($x + y$ for example), or a previous value of a variable ($x = y$). The specific rules used to decide whether an expression is an L-value is are not discussed as they are fairly standard.
+    An L-value is an expression that evaluates to a value stored in a persistent memory location, such as a variable, an object field, or the dereference of a pointer, rather than a temporary result like a literal, a result of an arithmetic expression ($x + y$ for e.g.), or the previous value of a variable ($x = y$). The specific rules used to decide whether an expression is an L-value are not discussed as they are fairly standard.
   \end{notebox}
-  A value is writable if it is not the dereference of a pointer reference capability \texttt{val} (as \texttt{val} guarantees immutability). These constraints are captured by the $\Gamma \tack \text{appear\_lhs}(e_1)$ predicate.
+  An expression is writable if it is not the dereference of a pointer with the \texttt{val} reference capability (\texttt{val} guarantees immutability). These constraints are captured by the $\Gamma \tack \text{appear\_lhs}(e_1)$ predicate.
   
-  \item
-    \AxiomC{$\Gamma \tack e_s : \text{Int}$}
-    \AxiomC{$\Gamma \tack e_d : B'$}
-    \AxiomC{$\Gamma \tack \text{assignable}(B, B')$}
-    \RightLabel{(Alloc)}
-    \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
-    \DisplayProof
-    \vspace{1.5em}\\
-    To allocate a pointer to type $B \ \kappa$, the programmer must provide a size expression $e_s$ that evaluates to an integer and a default expression $e_d$ that evaluates to an expression that is assignable to $B$. The judgement gives the expression the type \texttt{unalias}$(B \ \kappa)$. This is safe as there is no alias to the pointer at the time of its creation. The unaliasing is necessary as it allows for a freshly allocated pointer of type $B \ iso$ to be assigned to a local variable of type $B \ iso$.
-  \item
-    \AxiomC{$\texttt{get\_func}(\Gamma, m) = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
-    \AxiomC{$\Gamma \tack \overline{e} : \overline{T_{\text{arg}}}$}
-    \AxiomC{$\Gamma \tack \text{assignable}(\overline{T_{\text{param}}}, \overline{T_{\text{arg}}})$}
-    \RightLabel{(Func-Call)}
-    \TrinaryInfC{$\Gamma \tack m(\overline{e}) : T_{\text{ret}} $}
-    \DisplayProof
-    \vspace{1.5em}\\
-    Function resolution via \texttt{get\_func} prioritizes member functions: it returns the signature from $(\Gamma_{this})_{func}(m)$ if $m \in (\Gamma_{this})_{func}$. If not, it returns $\Gamma_F(m)$ (the signature from the global scope).
   \item
     \AxiomC{$\Gamma_V(x) = T$}
     \RightLabel{(Unalias)}
     \UnaryInfC{$\Gamma \tack \mathtt{unalias}(x) : \text{unalias}(T)$}
     \DisplayProof
     \vspace{1.5em}\\
-    Usage enforcement for unaliased variables is not enforced by the expression typing rules, as it is handled more cleanly by a separate analysis pass (see Section [TODO]).
+    Usage enforcement for unaliased variables is not enforced by the expression typing rules, as it is handled more cleanly by a separate analysis pass. \texttt{unalias} is syntactic sugar (all programs can use destructive writes instead) and is limited to raw local variables, as tracking aliases in arbitrary expressions is infeasible for the compiler.
     %CR: Add a text box explaining the restriction of unalias to simple variables.
 
   \item
@@ -299,7 +267,7 @@ actor_instance->receive_iso(x = ...);
     \TrinaryInfC{$\Gamma \tack e_p[e_i] : T$}
     \DisplayProof
     \vspace{1.5em}\\
-    The predicate $\texttt{cap\_readable}(\kappa)$ tell us whether a reference protected by $\kappa$ can be dereferenced. The only check that needs to be performed is that if $\kappa = \text{locked<L>}$, then we must be within an atomic section (i.e. $\Gamma_{L}$ must be true).
+    The predicate $\texttt{cap\_readable}(\kappa)$ tells us whether a reference protected by $\kappa$ can be dereferenced. The only check that needs to be performed is that if $\kappa = \text{locked<L>}$, then the expression must be within an atomic section (i.e. $\Gamma_{L}$ must be true).
     
 \end{itemize}
 \paragraph{Statement typing\\}
@@ -320,7 +288,7 @@ Statements do not evaluate to a value and are run for their side effects. Statem
 \end{tabular}
 \end{center}
 
-The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS). Some interesting rules are discussed in this section.
+The complete statement typing rules are in \ref{??}. Some interesting rules are discussed in this section.
 \begin{itemize}
   \item
     \AxiomC{$\Gamma \tack e : T_e$}
@@ -329,14 +297,7 @@ The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS
     \BinaryInfC{$\Gamma \tack \text{var } x : T = e; \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
     \DisplayProof
     \vspace{1.5em}\\
-    This rule extends the environment $\Gamma_V$ with the new binding $x \mapsto T$.
-  \item 
-    \AxiomC{$\Gamma[L \mapsto \text{true}] \tack \overline{s} \tackl \Gamma'$}
-    \RightLabel{[Atomic]}
-    \UnaryInfC{$\Gamma \tack \text{atomic } \{ \overline{s} \} \tackl \Gamma$}
-    \DisplayProof
-    \vspace{1.5em}\\
-    To type-check an \texttt{atomic} block, the internal statements $\overline{s}$ are checked in an environment where $\Gamma_L$ is set to true. Note that the rule concludes with the original environment $\Gamma$ rather than the updated $\Gamma'$. This ensures that any local variables defined within the atomic block are correctly scoped and do not leak into the surrounding context.
+    This rule extends the local variable information $\Gamma_V$ with the new binding $x \mapsto T$.
   \item
     \AxiomC{$\Gamma \tack e_a : \text{Actor}(A_{\text{name}})$}
     \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
@@ -346,10 +307,10 @@ The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS
     \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}); \tackl \Gamma$}
     \DisplayProof
     \vspace{1.5em}\\
-    The \texttt{(Assign)} rule relies on the top-level item rules to maintain global isolation. These rules require all behavior arguments to be sendable, which ensures that references protected by \texttt{ref} never exit or enter a behavior's scope. These rules are discussed in (TODO: Add a section link or something).
+    $\Gamma_A$ maintains information about actor definitions. The \texttt{(Assign)} rule relies on an additional top-level check to maintain global isolation. This check requires all behaviour arguments to be sendable, ensuring that references protected by \texttt{ref} never exit or enter a behaviour's scope.
 \end{itemize}
 \paragraph{Top-level item typing\\}
-Top-level items, like statements, are typed using the judgement $\Gamma \tack D \tackl \Gamma'$. The complete statement typing rules are in appendex A(TODO: ADD THE LINK TO THIS). Some important rules are discussed in this section.
+Top-level items, like statements, are typed using the judgement $\Gamma \tack D \tackl \Gamma'$. The complete statement typing rules are in \ref{??}. Some important rules are discussed below.
 \begin{itemize}
   \item 
     \AxiomC{$\Gamma \tack T_N : \text{valid}$}
@@ -357,7 +318,7 @@ Top-level items, like statements, are typed using the judgement $\Gamma \tack D 
     \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
     \DisplayProof
     \vspace{1.5em}\\
-    This rule updates the type-context. The predicate \texttt{valid} checks that all named types present in the AST of $T_N$ are present in $\Gamma_C$.
+    $\Gamma_C$ maintains information about type-definitions. This rule updates $\Gamma_C$. The predicate \texttt{valid} checks that all named types present in the AST of $T_N$ are already present in $\Gamma_C$.
   \item
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
     \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
@@ -367,13 +328,11 @@ Top-level items, like statements, are typed using the judgement $\Gamma \tack D 
     \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
     \DisplayProof
     \vspace{1.5em}\\
-    The \texttt{sendable} predicate is the additional check that was being talked about in section (TODO). This checks that none of the behaviour arguments is a reference protected by the \texttt{ref} capability. The \texttt{valid\_var\_usage} predicate checks that unaliased variables are used safely. The implementation of this procedure is discussed in section (TODO).
+    The \texttt{sendable} predicate is the additional check that was being talked about previously. This checks that none of the behaviour arguments is a reference protected by the \texttt{ref} capability. The \texttt{valid\_var\_usage} predicate checks that unaliased variables are used safely. The implementation of this procedure is discussed in section \ref{sec:var-validity}.
 \end{itemize}
 
 \paragraph{Full-program typing\\}
-A full program $P = \overline{D}$ is typed in two phases. First, we collect all top-level declarations of functions and actors to build an initial environment $\Gamma_0$. This upfront collection of declarations enables mutual recursion between definitions. The specific consequences of this language design choice are discussed in later sections.
-\\
-In the second phase, the entire declaration list is type-checked under $\Gamma_0$. The program is well-typed if both phases succeed. 
+A full program $P = \overline{D}$ is typed in two stages. First, all top-level declarations of functions and actors are collected to build an initial environment $\Gamma_0$. This upfront collection of declarations enables mutual recursion between callable definitions. Then, the entire declaration list is type-checked under $\Gamma_0$.
 \begin{center}
 \begin{prooftree}
     \AxiomC{$\text{initial\_env}(\overline{D}) = \Gamma_0$}
@@ -383,26 +342,30 @@ In the second phase, the entire declaration list is type-checked under $\Gamma_0
 \end{prooftree}
 \end{center}
 
+\begin{notebox}
+\textbf{Complexity Notation} \\
+Time complexity is discussed in later sections, where $N$ will refer to the total number of characters in the source file.
+\end{notebox}
 \subsection{Frontend} \label{sec:frontend}
-This section discusses the implementation of the first stage of the \textit{Coherence} compilation pipeline: the compiler frontend. It 
+This section discusses the implementation of the first stage of the \textit{Coherence} compilation pipeline: the compiler frontend.
 \subsubsection{Lexing and parsing}
 The compiler frontend transforms raw source text into an AST through two primary stages:
 \begin{itemize}
-  \item \textbf{Lexing:} This stage is responsible for converting raw source code to a stream of tokens. \textit{Coherence} uses a lexer generator called \textit{FLEX}. \textit{FLEX} takes in a lexer.l file, which contains the lexer specification, and generates a C++ file implementing the lexer based on the specifications. The generated lexer's time complexity is linear in the number of input characters.
-  \item \textbf{Parsing:} This stage processes the stream the tokens to produce the AST. \textit{Coherence} uses a parser generator called \textit{BISON}. \textit{BISON} takes in a parser.y, which specified the context-free grammar of the language, and generates a C++ file implementing the parser. The generated parser's time complexity is linear in the number of tokens.
-I decided to use lexer and parser generators as opposed to handwriting them as they are easier to extend and can efficiently handle LR(1) grammars, which are expressive enough to easily represent most programming constructs.
+  \item \textbf{Lexing:} This stage is responsible for converting raw source code to a stream of tokens. \textit{Coherence} uses a lexer generator called \textit{Flex}. \textit{Flex} takes in a \texttt{lexer.l} file, which contains the lexer specification, and generates a C++ file implementing the lexer based on the specifications. The generated lexer's time complexity is $O(N)$.
+  \item \textbf{Parsing:} This stage processes the stream of tokens from the lexer to produce the AST. \textit{Coherence} uses a parser generator called \textit{Bison}. \textit{Bison} takes in a \texttt{parser.y} file, which specifies the context-free grammar of the language, and generates a C++ file implementing the parser. The generated parser's time complexity is $O(N)$.
 \end{itemize}
+I decided to use lexer and parser generators as opposed to handwriting them as they are easier to extend and can efficiently handle LR(1) grammars, which are expressive enough to easily represent most programming constructs.
 
 \subsubsection{AST implementation}
-The AST is designed as a faithful, near-isomorphic representation of the language's formal grammar. The key features of the implementation include:
+\textcolor{red}{Is this subsection worth including?}\\
+The AST is designed as a faithful representation of the language's formal grammar. The key features of its implementation include:
 \begin{itemize}
-  \item AST nodes that correspond to code written by the user (Expressions, Statements, and Top-Level Items) have a \textit{SourceSpan} field. SourceSpan allows the compiler to map AST nodes to specific line numbers and character offsets for precise error reporting.
-  \item The C++ types implementing the AST nodes adhere to C++'s rule of zero, which states that structs should not define custom destructors, copy/move constructors, or assignment operators, and should rely compiler-generated defaults. To that end, the AST types heavily use the standard library. For e.g., the AST uses std::shared\_ptr instead of raw pointers, which automatically manages memory using reference counting, avoiding the need for a custom destructor and preventing memory leaks.
-  \item A common pattern in the compiler is copying AST nodes. To guarantee that this can be done efficiently, it helps to make the AST node's copy operations constant time. This is achieved through pointer indirections: structures of potentially unbounded length (like the list member variables of an actor) are managed via std::shared\_ptr rather than being stored directly as a member of the struct. Consequently, copying a node is reduced to copying the underlying shared\_ptr, which is a constant time operation. This prevents an accidental high worst-case asymptotic complexity due to careless copying.
-  \item AST nodes representing expressions have a field for the type of the expression. These fields are initially empty and are filled during the AST-validation pass. This information is needed during \textit{code generation} (codegen).
+  \item AST nodes that correspond to code written by the user (expressions, statements, and top-level items) have a \textit{SourceSpan} field. SourceSpan allows the compiler to map AST nodes to specific line numbers and character offsets for precise error reporting.
+  \item The C++ types implementing the AST nodes adhere to C++'s rule of zero, which states that structs should not define custom destructors, copy/move constructors, or assignment operators, and should rely on compiler-generated defaults. To that end, the AST types heavily use the standard library. For e.g., the AST uses std::shared\_ptr instead of raw pointers, which automatically manages memory using reference counting, avoiding the need for a custom destructor and preventing memory leaks.
+  \item Some AST nodes contain empty fields that are populated during AST validation. For example, expression nodes store inferred types, and atomic section nodes store inferred locks. This information is required during code generation.
 \end{itemize}
 \subsection{AST validation} \label{sec:ast-validation}
-The \textit{ast validation} phase enforces language safety invariants and performs the inferences required for codegen. This chapter details the multi-stage implementation of this phase.
+The \textit{AST validation} stage enforces language safety invariants and performs the inferences required for codegen. This chapter details the implementation of this stage.
 
 \begin{figure}[H]
 \centering
@@ -496,178 +459,86 @@ The \textit{ast validation} phase enforces language safety invariants and perfor
 \label{fig:ast-validation}
 \end{figure}
 
-\subsubsection{Variable validity checks}
-This pass is responsible for preventing variable redefinition within the same scope (override checker), the alpha-renaming of overriden variables, and enforcing unaliasing safety requirements (unalias checker).
-\paragraph{ScopedStore\\}
-\textit{ScopedStore} is a recurring data structure in the \textit{Coherence} compiler. It is a specialized key-value store used to manage data across nested visibility levels. It implements a hierarchical mapping where definitions in later/inner scopes shadow those in earlier/outer scopes, ensuring the most recent version of a key is always retrieved. It supports the following update operations.
-\begin{itemize}
-    \item \textbf{create\_new\_scope}: Creates a new scope layer.
-    \item \textbf{insert}: Adds a key-value pair to the current scope, overwriting existing local definitions while shadowing those in the outer scopes.
-    \item \textbf{pop\_scope}: Restores the previous state by removing all entries defined in the current layer.
-\end{itemize}
-It also supports the following queries:
-\begin{itemize}
-  \item \textbf{key\_in\_curr\_scope}: Returns true if the key has an entry in the current scope.
-  \item \textbf{get\_value}: Returns the latest value associated with a key.
-\end{itemize}
-As an example, take a look at the sample C++ code:
-\begin{lstlisting}{language=cpp}
-// ScopedStore is a template which takes in a key type (K)
-// and a value type (V)
-ScopedStore<std::string, int> store;
-// Create a global scope
-store.create_new_scope();
-store.insert("x", 10);
-// get_value returns an optional. This line outputs '10'
-std::cout << store.get_value("x").value_or(-1) << "\n";
-// Create a nested scope
-store.create_new_scope();
-// As 'x' does not have a value in the newly created scope, 
-// this line outputs 'No'
-std::cout << (store.key_in_curr_scope("x") ? "Yes" : "No") << "\n";
-// This insert shadows 'x'
-store.insert("x", 20);
-// Outputs 20
-std::cout <<  store.get_value("x").value_or(-1) << "\n";
-// Outputs 'Yes'
-std::cout << ("store.key_in_curr_scope("x") ? "Yes" : "No") << "\n";
-// Exit Nested Scope
-store.pop_scope();
-// Outputs previous value of 'x' which is '10'
-std::cout << store.get_value("x").value_or(-1) << "\n";
-\end{lstlisting}
-To ensure high performance, the \textit{ScopedStore} is implemented such that all these operations are amortized constant time. The structure maintains two data members to track its state:
-\begin{itemize}
-  \item \textbf{scope\_list}: This is a std::vector (C++'s implementation of resizable arrays) of std::unordered\_set<K> (C++'s implementation of hash-sets). This acts as a stack of scopes, where each set contains only the keys defined within that specific nesting level.
-  \item \textbf{key\_val\_map}: This is an std::unordered\_map (C++'s implementation of hash-maps) that associates keys with a std::vector of all the different values corresponding to it.
-\end{itemize}
-The different operations are implemented as follows:
-\begin{itemize}
-  \item \textbf{create\_new\_scope}: Simply append an empty set to \texttt{scope\_list}.
-  \item \textbf{insert}: First checks if the key exists in the current scope's set. If it exists, the latest value in \texttt{key\_val\_map} is updated. Otherwise, the key is added to the current scope's set, and a new value is pushed onto the std::vector associated with the key in \texttt{key\_val\_map}.
-  \item \textbf{pop\_scope}: Iterate through the keys stored in the most recent scope in \texttt{scope\_list}. For each key, pop the top value from the corresponding std::vector in \texttt{key\_val\_map}. Finally, the latest scope itself is popped from \texttt{scope\_list}.
-\end{itemize}
-This design achieves an amortized $O(1)$ time complexity for all update operations. The querying operations can also be implemented in $O(1)$ time.
-
-\paragraph{Override checker\\}
-Leveraging the ScopedStore, the override checker is implemented via a recursive traversal of the AST. Upon encountering a variable definition, the checker verifies that the identifier is not already present in the current scope layer. It then inserts the key to the current scope. For nested blocks, such as atomic sections, the checker creates a new scope layer to the \textit{ScopedStore}, validates the inner statements, and subsequently pops the scope to restore the parent environment.
-
-\paragraph{Alpha-renaming\\}
-Alpha-renaming is done before the unalias-checker is run as it makes the checker's logic much simpler. Alpha renaming is done very easily using \textit{ScopedStore}: we simply store the renamed name as a value of the original name, creating and destroying scopes as needed.
-
-\paragraph{Unalias checker\\}
-The goal of the unalias checker is to ensure that there is no path in the control-flow graph where a variable is unaliased and then used without an intervening assignment. For example, programs like the following are valid:
-\begin{lstlisting}
-unalias(a);
-a = 4;
-int b = a + 3;
-\end{lstlisting}
-As the value of \texttt{a} was refreshed before it was used. However, the following code is invalid:
-\begin{lstlisting}
-unalias(a);
-if(...) {
-    a = 3;
-}
-int b = a + 3;
-\end{lstlisting}
-As if the condition in the \texttt{if} branch evaluates to false, \texttt{a} will be used without a refresh.\\
-The algorithm will not be discussed in detail here. The high-level idea is that the checker walks the AST, updating a validity map for all in-scope variables as it progresses. The validity information tell us whether a variable can be used. When a variable is assigned to, its validity is refreshed (set to true). When a variable is consumed, its validity removed (set to false). Upon entering a nested scope, the checker tracks updates to the validity status of variables in the enclosing scope (while also verifying that locally defined variables satisfy the unaliasing rule). Depending on the control structure, an appropriate merge operation is then applied to determine the final validity status after the scope. For eg, consider the following code:
-\begin{lstlisting}
-if(...) {
-    unalias(a);
-    unalias(b); 
-    c = 3;
-    d = 4;
-}
-else {
-    unalias(a);
-    b = 3
-    unalias(c);
-    d = 4;
-}  
-\end{lstlisting}
-The \texttt{if} block consumes $\{a, b\}$ and refreshes $\{c, d\}$. The \texttt{else} block consumes ${a, c}$ and refreshes ${b, d}$. Merging these gives us that $\{d\}$ is refreshed (refreshed on all paths) and $\{a, b, c\}$ are consumed (consumed on any path) (so we take the union of the consumed variables and the intersection of the refreshed ones). Similar reasoning can be done for other control structures. The algorithm runs in $O(N^2)$, where $N$ is the number of nodes in the AST.
+\subsubsection{Variable validity checks} \label{sec:var-validity}
+\textcolor{red}{I had a version where I discussed this sub-stage in much more detail, but given the word count, I removed it. Do you think that anything else needs to be said here?}\\
+This sub-stage is responsible for preventing variable redefinition within the same scope (override checker), the alpha-renaming of overridden variables, and enforcing unaliasing safety requirements (unalias checker). The specific details of the algorithms used are not discussed here. The time complexity of performing these checks is $O(N^2)$.
 
 \subsubsection{Declaration Collection}
-The declaration collection pass is responsible for collecting the top-level declarations needed to build the initial typing environment. In particular, it is responsible for building $\Gamma_A$ and $\Gamma_F$. These objects are implemented as a std::unordered\_map from names (strings) to the respective AST nodes. It populates these objects by performing a single can over the top-level items. Its time-complexity is $O(|D|)$, where $|D|$ is the number of top-level items.
-%CR: Need to figure out the phase/stage nonsense terminology
+The declaration collection sub-stage is responsible for collecting the top-level declarations needed to build the initial typing environment. In particular, it is responsible for building $\Gamma_A$ and $\Gamma_F$. These objects are implemented as a hash-map from names (strings) to the respective AST nodes. It populates these objects by performing a single scan over the top-level items.
 \subsubsection{Type-Checking stage}
-This stage is responsible for implementing the main components of the type-checking rules of \textit{Coherence}.
+This sub-stage is responsible for implementing the main components of the type-checking rules of \textit{Coherence}.
 \paragraph{Core type checker\\}
-The core type checker is responsible for implementing the typing judgements for expressions and statements as described in section 1.1. It is fairly straightforward to implement these rules efficiently. Only a single pass through the AST is needed, making this check have a time-complexity of $O(n)$, where $n$ is the number of nodes in the AST of the program.
-\paragraph{Return check\\}
-The primary responsibility of this component is to ensure that every control-flow path in a function goes through a return statement. It turns out that extending this to verify that there are no unreachable statement is quite simple, and hence the return checker is also responsible for ruling out programs with unreachable statements.
-\begin{notebox}
-\textbf{Unreachable Code\\}
-Unreachable code consists of statements that can never be executed because no control-flow path reaches them. In \textit{Coherence}, this occurs when statements follow a return. This check addresses syntactic unreachability. Semantic unreachability, which implies that no execution path exists for a statement, is undecidable in general.
-\end{notebox}
-The algorithm used is succintly represented as an OCaml program in Appendix B.1. The algorithm's time-complexity is linear in the number of AST nodes (only a single pass through the AST is needed).
-\paragraph{Initialization check\\}
-This check ensures that every constructor initializes all actor member variables across all possible execution paths. Furthermore, it checks that any access to a member variable occurs only after it has been fully initialized on all preceding paths. The algorithm used will not be discussed in detail here. At a high level, however, it is a simplified variant of the unalias checker's algorithm. In fact, the problem can be reduced to the unalias checker's problem via a straightforward transformation: we construct a new function body where each member variable is treated as a local variable. These pseudo-locals are consumed at the start of the function (to model their initial, uninitialized state) and used at the end (to enforce that they must be assigned a value before the function exits). The time complexity of the algorithm used is $O(N^2)$.
+The core type checker is responsible for implementing the typing judgements for expressions and statements as described in section \ref{sec:theory}. It is fairly straightforward to implement these rules efficiently. Only a single pass through the AST is needed, making this check have a time complexity of $O(N)$.
+\paragraph{Return and initialization check\\}
+The return check ensures that every possible control-flow path within a function or method concludes with a valid return statement. It additionally identifies syntactically unreachable code, such as statements appearing immediately after a return. This check is performed in $O(N)$ time.
+
+The initialization check verifies that all actor member-variables are fully initialized within constructors across every possible execution path. It further enforces that member variables are never accessed before they have been assigned an initial value. The algorithm utilizes an analysis similar to the unalias checker and operates with $O(N^2)$ time complexity.
+
 \subsubsection{Lock-inference}
+\textcolor{red}{I felt like this section was important because lock-inference is a core part of my project and I had to apply some innovative thinking to make this efficient. However, this subsection is quite long. How do you think I should handle this section and do you think that parts of this should be removed?}\\
 During execution, when control reaches an atomic section, all required locks must be acquired upfront to ensure atomicity. This stage performs the lock inference necessary for generating the corresponding lock-acquisition code during codegen.
 \paragraph{Introduction\\}
-We associate each atomic section with a set of required lock names (called the \textit{lock-set}). A lock is required if a pointer protected by that lock is dereferenced within the section. This extends transitively to synchronous callables: calling a function or constructor within an atomic section that dereferencing a lock also adds that lock to the atomic section's lock set.
+We associate each atomic section with a set of required lock names (called the \textit{lock set}). A lock is required if a pointer protected by that lock is dereferenced within the section. This extends transitively to synchronous callables: calling a function or constructor within an atomic section that dereferencing a lock also adds that lock to the atomic section's lock set.
 \begin{notebox}
   \textbf{Nested atomic section:\\}
-  Nested atomic sections are redundant, as their code executes as a single unit anyway; the implementation treats their lock sets as empty. This case is trivial to handle and we assume it does not occur in this thesis.
+  Nested atomic sections are redundant since their code already executes as a single indivisible unit. The implementation ignores such sections and in the following discussion, we assume that such sections do not occur.
 \end{notebox}
-\paragraph{A language without mutual-recursion\\}
-In the absence of mutual recursion, lock inference in \textit{Coherence} is trivial:
+\paragraph{A language without mutual-recursion\\} \label{sec:without-mutual-recursion}
+In the absence of mutual-recursion, lock inference in \textit{Coherence} is trivial:
 
 \begin{enumerate}
 \item Associate a lock set with each synchronous callable (functions and constructors).
 \item Process the callables in declaration order, from first to last.
 \item For each callable, scan its statements and add a lock whenever a protected pointer is dereferenced. When it calls another callable, which by assumption appears earlier, simply union in that callee's lock set.
-\item After all callables have lock sets, compute each atomic section's lock-set as union of the locks protecting pointers dereferenced directly within the section and the lock-sets of the callables it invokes.
+\item Compute each atomic section's lock set as the union of the locks protecting the pointers dereferenced directly within the section and the lock sets of the callables it invokes.
 \end{enumerate}
 
-Let $A$ be the number of atomic sections, $F$ the number of synchronous callables, $E$ the number of synchronous callable calls, and $L$ the number of locks in the program. The lock set associated with any callable or atomic section has size $O(L)$. It follows that propagating locks across callable calls takes $O(F + EL)$ time. Computing the lock sets for atomic sections also takes $O(A + EL)$ time. Hence, the overall time complexity is upper bounded by $O(A + F + EL)$.\\
+Let $A$ be the number of atomic sections, $F$ the number of synchronous callables, $E$ the number of callable calls, and $L$ the number of locks in the program. The lock set associated with any callable or atomic section has size $O(L)$. Propagating locks across callable calls takes $O(F + EL)$ time. Computing the lock sets for atomic sections also takes $O(A + EL)$ time. Hence, the overall time complexity is upper bounded by $O(A + F + EL)$.\\
 
-Now consider the complexity in terms of the source size, measured by the number of AST nodes $N$. $E$, $F$, and $L$ are all $O(N)$. Hence, the worst-case time complexity is upper-bounded by $O(N^2)$. We can lower-bound it by constructing a program for which the time complexity is quadratic in $N$, getting a strict bound of $\Theta(N^2)$. This program is a linear chain of functions where each function calls the previous one, and each function dereferences a single pointer protected by a distinct lock.
+Now consider the complexity in terms of the source size $N$. $E$, $F$, and $L$ are all $O(N)$. Hence, the worst-case time complexity is upper-bounded by $O(N^2)$. We can lower-bound it by constructing a program for which the time complexity is quadratic in $N$, getting a strict bound of $\Theta(N^2)$. This program, which will be referred to as $\Phi$ in this section, is a linear chain of functions where each function calls the previous one, and each function dereferences a single pointer protected by a distinct lock.
 
 \begin{notebox}
 \textbf{Problems caused by mutual recursion:\\}
-Mutual recursion creates circular dependencies between functions, meaning there is no longer a valid "top-to-bottom" order to process them. If A calls  B, and B calls A, neither of their lock-sets can be fully resolved before the other. A single linear scan is insufficient, and this makes the problem much harder. Note that all of the additional complexity introduced by mutual recursion applies only to computing the callable lock-sets. Once that step is complete, calculating the lock-sets for atomic sections can still be done in exactly the same manner with the same quadratic time bound described in Section 1.3.4.2.
+Mutual recursion creates circular dependencies between functions, meaning that there is no longer a valid "top-to-bottom" order to process them. If A calls  B, and B calls A, neither of their lock sets can be fully resolved before the other. A single linear scan is insufficient, and this makes the problem significantly harder. The additional complexity introduced by mutual recursion applies only to computing the callable lock sets. Once that step is complete, calculating the lock sets for atomic sections can still be done in exactly the same manner with the same quadratic time bound described in section \ref{sec:without-mutual-recursion}.
 \end{notebox}
 
-\paragraph{Fixed-point iteration\\}
-One way to solve this issue is to solve a fixed-point equation. The lock-sets of the functions need to satisfy the following equation for all functions $f$:
+\paragraph{Fixed-point iteration\\} \label{sec:fixed-point-iter}
+One way to solve this issue is to solve a fixed-point equation. The lock sets of the callables need to satisfy the following equation:
 $$ locks[f] := \text{direct\_locks}(f) \cup \left( \bigcup_{g \in calls(f)} locks[g] \right) $$
-Here, \texttt{direct\_locks} is set of locks protecting pointer directly dereferenced in the function body, and $calls(f)$ is the set of functions called in the body of $f$. We want the minimum solution to these equations. This can be achieved by iteratively applying the fixed point equations.
+Here, \texttt{direct\_locks} is the set of locks protecting the pointer directly dereferenced in the $f$'s body, and $calls(f)$ is the set of callables called in the body of $f$. We want the minimum solution to these equations. This can be achieved by iteratively applying the fixed point equations.
 $$
 \begin{array}{l}
-\textbf{for } f \in \textit{functions} \textbf{ do } locks[f] := \text{direct\_locks}(i) \\
+\textbf{for } f \in \textit{callables} \textbf{ do } locks[f] := \text{direct\_locks}(i) \\
 \textbf{while } (locks[] \text{ changes}) \textbf{ do} \\
-\quad \textbf{for } f \in \textit{functions} \textbf{ do} \\
+\quad \textbf{for } f \in \textit{callables} \textbf{ do} \\
 \quad \quad locks[i] := locks[f] \cup \left( \bigcup_{g \in calls(f)} locks[g] \right)
 \end{array}
 $$
-This process is guaranteed to terminate because each iteration of the fixed-point equation monotonically increases the size of each lock set. Since the total number of locks in the program is finite, these sets cannot grow indefinitely.\\
+This process is guaranteed to terminate because each iteration monotonically increases the size of each lock set. Since the total number of locks in the program is finite, these sets cannot grow infinitely.\\
 
-Let us get an upper bound of the time-complexity of this pass in-terms of $F$, $E$, and $L$. The number of iteration is bounded by $F$. The number of iterations is bounded by $F$. This is because the diameter (maximum length of the call graph) is at most $F$, and each iteration effectively extends the dependency path lengths considered by one (this is the same argument used to bound the time-complexity of the bellmann ford algorithm). The work done in each iteration is bounded by $O(F + EL)$. Hence, the total time complexity is bounded by $O(F * (F + EL))$. In terms of $N$, the time-complexity is bounded by $O(N^3)$ (by assuming that $F$, $E$ and $L$ are all bounded by $O(N)$). This bound is strict. Consider the same call graph used to show strictness from Section 1.3.4.2. If the algorithm iterates through functions from bottom to top, the execution time becomes $\Theta(N^3)$.
+The number of iterations is bounded by $F$. This is because the \textit{diameter} (maximum length of a path in the call graph) is at most $F$, and each iteration effectively extends the dependency path lengths considered by one. The work done in each iteration is bounded by $O(F + EL)$. Hence, the total time complexity is bounded by $O(F * (F + EL))$. In terms of $N$, the time complexity is bounded by $O(N^3)$. This bound is strict. Consider the program $\Phi$. If this algorithm iterates through callables in $\Phi$ from bottom to top, the execution time becomes $\Theta(N^3)$.
 
 \begin{notebox}
 \textbf{Call Graph\\}
-A call graph is a directed graph that represents the calling relationships between subroutines in a computer program. Each vertex represents a subroutine and a directed edge $(f, g)$ exists iff the subroutine $f$ contains a call to the function $g$. In this section, we only deal with synchronous callables, and hence behaviours are not vertices in the call graph.
+A call graph is a directed graph that represents the calling relationships between subroutines in a computer program. Each vertex represents a subroutine and a directed edge $(f, g)$ exists if-and-only-if the subroutine $f$ contains a call to the function $g$. In this section, we only deal with synchronous callables, and hence behaviours are not vertices in the call graph.
 \end{notebox}
 
-\paragraph{Escaping cubic time-complexity\\}
-This cubic time complexity following the approach in section 1.3.4.3 is asymptotically worse than the rest of the \textit{Coherence} compiler (which is bounded by $O(N^2))$. To keep the time-complexity linear, we need to analyse  the problems caused by mutual recursion. From the analysis in the previous sections, two issues come to my mind:
+\paragraph{Escaping cubic time complexity\\}
+This cubic time complexity following the approach in section \ref{sec:fixed-point-iter} is asymptotically worse than the rest of the \textit{Coherence} compiler (which is bounded by $O(N^2))$. To keep the time complexity quadratic, we need to analyse the problems caused by mutual recursion. From the analysis in the previous sections, two issues come to mind:
 \begin{itemize}
-  \item Because of cyclic dependencies, a single pass algorithm like that described in section 1.3.4.2 does not work.
-  \item Note that the adversial example used to prove the cubic lower bound does not have cycles in its call graph. This tells us that even without cycles, without knowing the optimal traversal order, multiple iterations can be required for convergence.
+  \item Because of cyclic dependencies, a single-pass algorithm like that described in section \ref{sec:without-mutual-recursion} does not work.
+  \item $\Phi$ did not have cycles in its call graph. This tells us that even without cycles, the optimal traversal order is required for quick convergence.
 \end{itemize}
-These problems will be solved in sequence.
 \subparagraph{Getting rid of cyclic dependencies\\}
-One thing to note is that the algorithm in 1.3.4.1 allowed for the call graph to have self-cycles (self-recursion was allowed). This was not an issue as performing a union with the same set itself would just be a no-op. Now, looking at the mutual dependency example (where A calls B and B calls A), one thing to notice is that their lock-sets must be equal. Hence, if the compiler knew about this mutual dependency, it could make these callables share the same lock-set object, and then a single pass would be enough for convergence! This works because as these callables have the same lock-set, they can be treated as a single combined entity, and their mutually recursive calls can be treated as self-recursion. This concept can be generalized using the concept of \textit{strongly-connected components} (SCCs) of a graph.
+The algorithm in 1.3.4.1 allowed self-cycles (self-recursion), which was fine because unioning a set with itself is a no-op. In the mutual dependency case where $A$ calls $B$ and $B$ calls $A$, the lock sets of $A$ and $B$ must be identical. If the compiler recognizes this, it can assign the same lock-set object to both callables. Mutual recursion is hence treated as self-recursion, a single pass would be enough for convergence! This idea can be generalized using strongly connected components (SCCs) of the call graph.
 \begin{notebox}
   \textbf{Strongly connected components:\\}
-  In graph theory, a SSC of a directed graph is a maximal subgraph in which every vertex is reachable from every other vertex.
+  In graph theory, a SCC of a directed graph is a maximal subgraph in which every vertex is reachable from every other vertex.
 \end{notebox}
-All callables within a strongly connected component (SCC) of the call graph must share the same lock set due to mutual dependencies. Therefore, each SCC can be collapsed into a single representative node. After collapsing every SCC, the resulting condensed graph becomes free of cycles!
+All callables within an SCC of the call graph must share the same lock set due to mutual dependencies. Therefore, each SCC can be collapsed into a single representative node. After collapsing every SCC, the resulting condensed graph becomes free of cycles!\\
+The Kosaraju's algorithm\cite{scc} allows us to identify maximal SCCs as shown in fig \ref{fig:scc_condensation}. The intricate details of this elegant algorithm are not discussed here. It runs in $O(V + E)$ time, where $V$ and $E$ are the number of vertices and edges in the call graph respectively.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     \resizebox{\textwidth}{!}{ 
     \begin{tikzpicture}[
@@ -732,239 +603,140 @@ All callables within a strongly connected component (SCC) of the call graph must
     \label{fig:scc_condensation}
 \end{figure}
 
-Luckily for us, the kosaraju's algorithm allows us to identify maximal SCCs as shown in fig \ref{fig:scc_condensation}. The intricate details of this elegant algorithm are not discussed here,  but it is important to note that it runs in $O(V + E)$ time, where $V$ and $E$ are the number of vertices and edges it the call graph respectively.
+
 
 \subparagraph{Inferring iteration order\\}
-Note that in a call graph that is a \textit{directed acyclic graph} (DAG), if we can iterate from the bottom-up in some sense, only a single pass is needed. This vague bottom-up concept can be formalized using a concept called topological sort.
-\begin{notebox}
-\textbf{Topological sort:\\}
-A topological sort of a DAG is a linear ordering of its vertices such that for every directed edge $(u,v)$ we have $u$ precedes $v$ in the ordering.
-\end{notebox}
-Processing the call graph in reverse topological order ensures a bottom-up propagation of constraints, where every callee's lock-set is fully resolved before it is required by its caller. This guarantees that the lock-set of every callable is processed in a single pass through the call graph. Iterating in reverse-topological order is extremely simple and requires only a very small modification to the standard depth-first-search iteration. By simply deferring the processing of a node until its entire dependency subtree has been visited, reverse-topological order is guaranteed.
+For an acyclic call graph, a single pass suffices when processing in reverse topological order (children before parents). This is easily achieved with a depth-first search by deferring each node's processing until its entire dependency subtree has been processed.
 
 \subparagraph{Final time complexity\\}
-Running kosaraju's algorithm on the call graph is $O(F + E)$. Iterating in reverse-topological order does not incur additional overhead and the sole iteration has a time-complexity of $O(F + EL)$. This results in a resulting time complexity of $\Theta(N^2)$ (this is strict because the example from section 1.3.4.2 still applies).
+Running Kosaraju's algorithm on the call graph is $O(F + E)$. Iterating in reverse-topological order does not incur additional overhead and the sole iteration has a time complexity of $O(F + EL)$. This results in a time complexity of $\Theta(N^2)$. This is strict because the $\Phi$ example still applies.
 \subsection{Runtime} \label{sec:runtime}
-This section discusses the implementation of the various compopents of the \textit{Coherence} runtime.
+This section discusses the implementation of the various components of the \textit{Coherence} runtime.
 \subsubsection{Scheduling entities}
-The runtime maintains a global schedule queue that stores information about runnable actor-instances. The runtime spawns $N$ OS-threads at the start of the program  responsible for scheduling and executing actor work. \textit{Coherence} follows $M:N$ scheduling, and hence the number of worker threads does not grow with the number of actor-instances. Each scheduler thread repeatedly pulls runnable actor-instances from the global schedule queue and executes their pending behaviour calls.
-\subsubsection{Actor-instance information}
-Each actor-instance is associated with a unique unsigned integer. The runtime maintains a map from these ids to their state data, which is stored in \texttt{ActorInstanceState} structures. The map is called the called the \texttt{id\_actor\_instance\_map}. \texttt{ActorInstanceState} stores the following:
-\begin{itemize}
-    \item \textbf{Coordination lock}: An OS-level lock used to make sure that concurrent accesses to the \texttt{ActorInstanceState} are thread safe.
-    \item \textbf{Mailbox}: This stores all of the pending behaviour calls in a mailbox (which is implemented using a queue). The calls are stores as \texttt{MailboxItem}s. These structures contain a function pointer to the LLVM function corresponding to the behaviour to be called and a pointer to the message (an LLVM struct) that contains the call's parameters.
-    \item \textbf{LLVM object}: A pointer to an LLVM struct that stores the actor-instance's member variables.
-    \item \textbf{State}: This is the execution state of an actor-instance. This is one of:
-        \begin{itemize}
-            \item \textbf{EMPTY}: The mailbox of the actor-instance is empty.
-            \item \textbf{RUNNABLE}: The mailbox is not empty and the instance is ready to be run.
-            \item \textbf{WAITING}: The instance is waiting on a lock.
-            \item \textbf{RUNNING}: The instance is currently being executed by some worker thread.
-        \end{itemize}
-        This state is important as it informs the runtime about the actions it needs to take when encountering certain source-code actions (will be discussed in later sections).
-    \item \textbf{Running state}: \texttt{ActorInstanceState} contains two execution-related fields:
-        \begin{itemize}
-            \item A pointer to the running behaviour's stack, which the runtime frees when the behaviour finishes.
-            \item An \texttt{fcontext\_t} holding the saved context of a user computation that has been halted. This is filled only when the computation blocks (such as on a lock wait) and is required to restore execution later.
-        \end{itemize}
-\end{itemize}
+The runtime maintains a global schedule queue that stores information about runnable actor instances. The runtime spawns $N$ OS threads at the start of the program  responsible for scheduling and executing actor work. Each scheduler thread repeatedly pulls runnable actor instances from the global schedule queue and executes their pending behaviour calls.
+\subsubsection{Actor instance data}
+Each actor instance is associated with a unique unsigned integer. The runtime maintains a map from these IDs to their state data, which is stored in \texttt{ActorInstanceState} structures. These structures store a mailbox queue of pending behaviour calls, a pointer to the actor's LLVM object containing the member variables, the instance's execution state (\texttt{EMPTY}, \texttt{RUNNABLE}, \texttt{WAITING}, or \texttt{RUNNING}), the execution context (the running behaviour's stack pointer and a saved \texttt{fcontext\_t} for suspended computations), and a coordination lock for safe concurrent access to these fields.
 \subsubsection{User-level mutexes}
-Since worker threads must remain free to process other actor instances while one is blocked on a lock, source-level locks cannot be implemented using OS-level mutexes (doing so would block the entire worker thread). Instead, locks must be implemented at the user level. To design these locks correctly, we first need to jump ahead and analyse how the compiled LLVM code performs locking operations.
-
-\paragraph{Locking behaviour in \textit{Coherence}\\}
-The codegen phase inserts code around atomic section to acquire and release the inferred locks. For example, an atomic section requiring access to locks AA and BB is transformed as follows:
+Because worker threads must remain free to handle other actor instances when one is blocked, source-level locks cannot rely on OS-level mutexes (which would block the entire worker). Instead, locks must be implemented at the user level. In \textit{Coherence}, codegen inserts lock acquisition and release requests around atomic sections. For e.g., an atomic section requiring locks $A$ and $B$ becomes
 \begin{lstlisting}
-lock(A);
-lock(B);
-...(atomic section code)
-unlock(A);
-unlock(B);
-\end{lstlisting}
-As shown in section~1.3.4, the inferred locks propogate through function calls. For example, if I have a function that looks like:
-\begin{lstlisting}
-func f() => unit {
-    atomic {
-        ... (section code requires lock A and B)
-    }
-}
-\end{lstlisting}
-If this function is called from an external atomic context:
-\begin{lstlisting}
-atomic {
-    f();
-}
-\end{lstlisting}
-The external atomic section will also require locks A and B. Because of this, the generated LLVM code would try to acquire the same locks both in the external atomic section and in the function body.
-
-\paragraph{Reentrant locks\\}
-To behave correctly under repeated lock acquisitions, the user-level locks must be reentrant. In other words, the thread (or actor) that currently holds a lock is allowed to acquire it multiple times without blocking. The lock is only fully released once the holder calls \texttt{unlock} the same number of times it successfully acquired the lock.
-
-\paragraph{Implementation\\}
-The \texttt{UserMutex} class implements this reentrant lock. The following state is maintained in \texttt{UserMutex}.
-\begin{itemize}
-  \item \textbf{Coordination lock}: An OS-level mutex used briefly to ensure that accesses to the internal state of \texttt{UserMutex} are thread-safe.
-  \item \textbf{Holding instance}: An optional integer storing the ID of the actor currently in possession of the lock. If the lock is not held by any instance, the optional is empty.
-  \item \textbf{Reentrance counter}: A counter that tracks how many times the holding instance has acquired the lock.
-  \item \textbf{Wait queue}: A FIFO queue containing the actor-instance ids waiting on the lock. 
-\end{itemize}
-\texttt{UserMutex} exposes two functions \texttt{lock} and \texttt{unlock}. These operations implement reentrant locking semantics and are scheduler-aware, managing the state transitions of all involved actor instances. The pseudocode for both operations is presented in \ref{TODO: ADD}.
-Source-level locks are uniquely identified by lock IDs, which the runtime maps to their associated \texttt{UserMutex} instances.
+lock(A); lock(B); ...atomic code... unlock(A); unlock(B);  
+\end{lstlisting} 
+Inferred locks propagate through calls: if \(\texttt{f()}\) requires locks A and B inside an atomic block and is called from an external atomic context, the outer atomic section will also require A and B. Hence, the same locks may be acquired multiple times. To support this safely, user-level locks must be reentrant: an actor holding a lock may acquire it repeatedly without blocking, and the lock is fully released only when \(\texttt{unlock}\) has been called as many times as successful \(\texttt{lock}\) calls.\\
+The runtime implements this via the \texttt{UserMutex} class. At a high level, \texttt{UserMutex} tracks the current holding instance, counts reentrant acquisitions, and maintains a FIFO queue for waiting actors. It also contains a coordination lock to ensures thread-safe access to its internal state. The pseudocode for \texttt{lock} and \texttt{unlock} is presented in section \ref{??}.
 
 \subsubsection{Runtime traps}
-As discussed in Section~\ref{preparation thing}, runtime traps provide the interface through which the generated LLVM code invokes runtime services. They are implemented as runtime-defined functions and exported with \texttt{extern "C"} linkage. This section outlines the set of traps provided by the \textit{Coherence} runtime.
-
-\paragraph{Non-switching traps\\}
-Non-switching traps are traps that execute directly on the same stack that is already allocated for running behaviours, without requiring a context switch to the runtime. This is possible because these traps are guaranteed to complete without needing to wait for any resources.
-\begin{itemize}
-  \item \textbf{void print\_int(int)}: Takes an integer and prints it to stdout. The \texttt{OUT} construct in Coherence is compiled down to this trap.
-  \item \textbf{void handle\_unlock(uint64\_t lock\_id)}: Calls unlock on the \texttt{UserMutex} associated with \texttt{lock\_id}.
-  \item \textbf{void* get\_instance\_struct(uint64\_t instance\_id)}: Returns the pointer to the LLVM object of the actor-instance associated with \texttt{instance\_id}. This is needed because actor-instances are stored as their ids in the compiled LLVM code, and to access its member variables, the LLVM object is needed.
-  \item \textbf{uint64\_t handle\_actor\_creation(void* llvm\_actor\_object)}: Registers a new actor-instance with the runtime. The compiled code is responsible for allocating a pointer of appropriate size to store the instance's member variables. The runtime has no knowledge of the actor-template (type). The runtime simply creates an initial \texttt{ActorInstanceState}, adds it to the \texttt{id\_actor\_instance\_map}, and returns the ID assigned to the new actor-instance.
-  \item \textbf{handle\_behaviour\_call}: Registers a behaviour call with the runtime. It takes a pointer to the message (an LLVM struct containing the behaviour's parameters), an LLVM function pointer to the corresponding behaviour function, and the destination actor-instance ID. The runtime constructs a \texttt{MailboxItem} and enqueues it in the destination actor-instance's queue. If the instance state is \texttt{EMPTY}, it changes the state to \texttt{RUNNABLE} and adds the ID to the schedule queue.
-\end{itemize}
-
-\subparagraph{Switching traps\\}
-These traps are called when the LLVM code needs to perform actions that might lead to halting of the execution. These traps result in a context-switch to the runtime. The traps are for ending the behaviour (called \texttt{handle\_return}) and to try to acquire a lock (called \texttt{handle\_lock}). \\
-For \texttt{handle\_return}, the runtime deallocates \texttt{running\_be\_sp} and updates the actor-instance state—transitioning to \texttt{EMPTY} if the mailbox is empty, or to \texttt{RUNNABLE} otherwise. \\
-For \texttt{handle\_lock}, the runtime calls the \texttt{lock} function of the \texttt{UserMutex} associated with the requested lock ID. If the lock is unavailable, the runtime moves on to other instances, (\texttt{lock} handles state-transitions). If the lock is acquired, control returns to the behaviour.
+Runtime traps provide the interface through which the generated LLVM code invokes runtime services. \textit{Non-switching} traps execute on the current behaviour's stack, while \textit{switching} traps may suspend execution and return control to the runtime by performing a context switch.
+\begin{table}[H]
+\centering
+\small
+\label{tab:runtime-traps}
+\begin{tabular}{l l p{8cm}}
+\toprule
+\textbf{Category} & \textbf{Trap Name} & \textbf{Description} \\ \midrule
+\textbf{Non-switching} & \texttt{print\_int} & Outputs an integer literal to \texttt{stdout}. \\ \addlinespace
+& \texttt{handle\_unlock} & Releases the \texttt{UserMutex} associated with a given ID. \\ \addlinespace
+& \texttt{get\_instance\_struct} & Maps a unique actor ID to its underlying LLVM data pointer. \\ \addlinespace
+& \texttt{handle\_actor\_creation} & Registers a new instance and returns its unique runtime ID. \\ \addlinespace
+& \texttt{handle\_behaviour\_call} & Enqueues a behaviour message to the mailbox on an actor instance. \\ \midrule
+\textbf{Switching} & \texttt{handle\_lock} & Attempts lock acquisition. Suspends the behaviour execution if unavailable. \\ \addlinespace
+& \texttt{handle\_return} & Finishes behaviour execution and deallocates its stack. \\ \bottomrule
+\end{tabular}
+\caption{Overview of \textit{Coherence} runtime traps}
+\end{table}
 
 \subsubsection{The start and the end of execution}
-This section briefly explains how a complete \textit{Coherence} binary (compiled and linked with the runtime) starts and terminates.
+\textcolor{red}{I felt like the content in "execution start" was interesting, but given the word count, I am considering removing this entire subsection. What do you think?}\\
+This section briefly explains how the execution of a complete \textit{Coherence} binary (compiled and linked with the runtime) starts and terminates.
 \paragraph{Execution start\\}
-Semantically, \textit{Coherence} programs start from the \texttt{create} constructor of the \texttt{Main} actor-template. However, constructors are synchronous callables and therefore do not have their own stack (they use the stack of the behaviour that invoked them). One potential solution is to introduce another actor-instance (say, \texttt{start}) with a behaviour that creates an instance of \texttt{Main} using the \texttt{create} constructor. However, this does not resolve the issue: creating this actor-instance still requires a constructor, which in turn requires an execution context. \\
-To break this loop, we can fool the runtime using a dummy actor. Since \texttt{handle\_actor\_creation} treats its \texttt{llvm\_actor\_object} parameter as a black box, we can simply pass a nullptr and receive an ID for a fake \texttt{start} actor-instance in return. Next, we need to send a message to this fake instance. Since \texttt{handle\_behaviour\_call} treats the function pointer opaquely and does not validate it, we can pass a pointer to a custom function that instantiates the \texttt{Main} actor using its \texttt{create} constructor. This completes the initialization. When scheduling commences, the runtime executes this dummy behaviour, providing the necessary stack and execution context for the \texttt{Main} constructor to run.\\
-While all of this could be done in a C++ within the runtime code, it is more convenient to do it directly in LLVM where all the generated code definitions are accessible. Therefore, the bootstrapping logic is placed in an LLVM function called \texttt{coherence\_initialize}, which is generated alongside the user code. The runtime calls this function before scheduling starts.
+Semantically, \textit{Coherence} programs start from the \texttt{create} constructor of the \texttt{Main} actor template. However, constructors are synchronous callables and therefore do not have their own stack (they use the stack of the behaviour that invoked them). One potential solution is to introduce another actor-instance (say, \texttt{start}) with a behaviour that creates an instance of \texttt{Main} using the \texttt{create} constructor. However, this does not resolve the issue: creating this actor-instance still requires a constructor, which in turn requires an execution context. \\
+To break this loop, we can trick the runtime using a dummy actor. Since \texttt{handle\_actor\_creation} treats its \texttt{llvm\_actor\_object} parameter as a black box, we can simply pass a nullptr and receive an ID for a fake \texttt{start} actor instance in return. Next, we need to send a message to this fake instance. Since any function pointer can be passed to \texttt{handle\_behaviour\_call}, we can pass a pointer to a custom function that instantiates the \texttt{Main} actor using its \texttt{create} constructor. This completes the initialization. When scheduling commences, the runtime executes this dummy behaviour, providing the necessary stack and execution context for the \texttt{Main} constructor to run.\\
+While all of this could be done in a C++ function within the runtime code, it is more convenient to do it directly in LLVM where all the generated code definitions are accessible. Therefore, the bootstrapping logic is placed in an LLVM function called \texttt{coherence\_initialize}, which is generated alongside the user code. The runtime calls this function before scheduling starts.
 
 \paragraph{Execution end\\}
 \textit{Coherence} programs end when global quiescence is achieved. This is a state where no actor is currently executing and no messages remain in any mailbox or the global schedule queue. Upon detecting global quiescence, all worker threads return, ending the program execution.
 
 \subsection{Codegen} \label{sec:codegen}
-%CR: Potentially talk about the memory model
-The standard approach to compiling to LLVM is to use the LLVM API to generate code. However, at this stage I found it significantly simpler to emit the LLVM IR textually by hand rather than using the API. This made debugging easier, provided more fine-grained control over the generated code and avoided compatibility issues arising from frequent changes to the API. However, this approach introduced several challenges, as many constructs had to be translated to LLVM IR by hand. This section outlines the design decisions involved in implementing this code generation phase.
+\textcolor{red}{This section is a lot of walkthrough of specific implementation details. Do you think that the specific details (expecially those in section 3.5.2 and 3.5.3) are important?}\\
+This section outlines the design decisions involved in implementing this code generation stage.\\
+The standard approach of compiling to LLVM is to use the LLVM API to generate code. However, I decided to emit the LLVM IR textually rather than using the API. This made debugging easier, provided finer-grained control over the generated code and avoided compatibility issues arising from frequent changes to the API.
 \subsubsection{Source types to LLVM types}
 The following table summarizes the mapping between \textit{Coherence} source types and their LLVM IR counterparts:
 \begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{7cm}|}
 \hline
-\textbf{Coherence Type} & \textbf{LLVM IR Type} & \textbf{Description} \\ \hline
+\textbf{\textit{Coherence} Type} & \textbf{LLVM IR Type} & \textbf{Description} \\ \hline
 \texttt{Int}            & \texttt{i32}          & 32-bit signed integer \\ \hline
 \texttt{Bool}           & \texttt{i1}           & 1-bit integer (boolean) \\ \hline
 \texttt{Unit}           & \texttt{i1}           & 1-bit dummy value \\ \hline
-\texttt{Actor}          & \texttt{i64}          & 64-bit instance id \\ \hline
+\texttt{Actor}          & \texttt{i64}          & 64-bit instance ID \\ \hline
 \texttt{Pointer}        & \texttt{ptr}          & Opaque memory pointer \\ \hline
 \texttt{Struct(N)}      & \texttt{\%N.struct}   & LLVM structure \\ \hline
 \end{tabular}
 \caption{Mapping of \textit{Coherence} types to LLVM IR}
 \label{table:type_mapping}
 \end{table}
-Note that the reference capabilities are irrelevant at runtime: all pointer types are translated to \texttt{ptr}. As mentioned in section ??, actor-instances are represented by their ID's in the compiled IR. A \textit{Coherence} struct type is translated to an LLVM struct named by appending \texttt{.struct} to its original name.
+Reference capabilities are irrelevant at runtime: all pointer types are translated to \texttt{ptr}. As mentioned in section ??, actor-instances are represented by their ID's in the compiled IR. A \textit{Coherence} struct type is translated to an LLVM struct named by appending \texttt{.struct} to its original name. Structure names are preserved in the IR solely for debugging purposes.
 
 \subsubsection{Translating top-level items}
 \paragraph{Type definitions\\}
 
-Type definitions are generated only for structure types. All other types are used directly in the translated code. This approach remains efficient because the textual representation of all non-structure types are less than 4 characters long, so the source-level benefits of type aliasing (primarily to reducing verbosity) are not relevant to the generated IR. Although structure types are not bounded (the user could give the structure type a very large name, and then alias it using a shorter name), the compiler assumes that this does not happen often in practice. Structure names are preserved in the IR solely for debugging purposes. Production compilers would normally substitute these with short unique identifiers, rendering the issue of name length irrelevant.
+Type definitions are generated only for structure types. All other types are used directly in the translated code.
 \paragraph{Actor definitions\\}
-The members of an actor are stored in an LLVM structure type named \texttt{\%actor\_name.struct}. This does not conflict with user defined structures as actor names start with an upper-case while user defined types start with a lower-case (enforced during the parsing). Member callables are named as follows:
+The members of an actor are stored in an LLVM structure type named \texttt{\%actor\_name.struct}. This does not conflict with user defined structures as actor names start with an upper-case while user defined types start with a lower-case (enforced during parsing). Member callables are named as follows:
 \begin{itemize}
   \item \textbf{Functions}: \texttt{function\_name.actor\_name.func} 
   \item \textbf{Constructors}: \texttt{constructor\_name.actor\_name.constr}
   \item \textbf{Behaviours}: \texttt{behaviour\_name.actor\_name.be}
 \end{itemize}
-As with the compilation of struct types, the only reason to retain the programmer assigned names is for easier debugging.
+As with the compilation of struct types, the only reason to retain the programmer-assigned names is for easier debugging.
 
 \paragraph{Callables\\}
 Unlike \textit{Coherence}, LLVM IR is not mutually recursive by default. To allow for mutual recursion, all LLVM function declarations for the callables are generated before any definition is.
-\subparagraph{Local variables\\}
-LLVM IR models a machine with infinite registers. However, these registers follow SSA (Static Single Assignment) form, meaning each register can only be assigned once—they are effectively immutable. Since local variables in a program can be modified, they cannot be stored directly in these registers. Instead, local variables are explicitly allocated on the stack using the \texttt{alloca} instruction, and their addresses are stored in registers. These addresses can then be used with \texttt{load} (to read the value at the address) and \texttt{store} (to write a new value) instructions to access and modify the local variables.
-\begin{notebox}
-\textbf{Phi nodes}\\
-In simple linear code, working around SSA is straightforward: at each new assignment, define a new register and track which register corresponds to the local variable at any given point. However, issues arise at control flow join points. For example, consider the following code:
-\begin{lstlisting}
-int x;
-if (condition) {
-    x = x + 1;
-} else {
-    x = x + 2;
-}
-// use x here
-\end{lstlisting}
-At the point after the if-else, it is not clear which register holds \texttt{x}. Phi nodes solve this problem by selecting among values based on the predecessor basic block. A phi node takes a list of (value, predecessor block) pairs and evaluates to the value corresponding to the block from which control flow arrived. In fact, phi nodes can be used instead of \texttt{alloca} to compile all \textit{Coherence} constructs, and this approach is more efficient since it avoids memory operations. However, I have chosen to use \texttt{alloca} because the LLVM optimiser is smart enough to convert the generated code to use phi nodes, and it is much easier to generate code this way.
-\end{notebox}
-\subparagraph{Implicit arguments\\}
-For codegen to work, two things must be accessible within a callable: the implicit \texttt{this} argument, which provides access to the current actor-instance, and information about the actor-instance in whose context the callable is executing. These are not necessarily the same. For example, if an actor $A$ calls the constructor of actor $B$, the constructor's \texttt{this} argument refers to the instance of $B$, while the constructor executes in the context of $A$.\\
-To propagate this information, callables receive implicit arguments. The register \texttt{\%this.reg} stores the actor-instance ID for \texttt{this}, and \texttt{\%sync.reg} stores the actor-instance ID of the execution context (needed for suspending operations like acquiring a lock).
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|c|c|l|}
-\hline
-\textbf{Callable Type} & \texttt{\%this.reg} & \texttt{\%sync.reg} & \textbf{Notes} \\ \hline
-Top-level function     & \xmark              & \cmark              & No actor-instance to refer to \\ \hline
-Actor function         & \cmark              & \cmark              & Needs both for member access and suspension \\ \hline
-Constructor            & \cmark              & \cmark              & \texttt{this} is the newly created instance \\ \hline
-Behaviour              & \cmark              & \xmark              & Sets \texttt{\%sync.reg} to \texttt{\%this.reg} \\ \hline
-\end{tabular}
-\caption{Implicit parameters received by each callable type}
-\label{tab:implicit-params}
-\end{table}
-Note that behaviours only receive \texttt{\%this.reg} as a parameter. Since behaviours always execute in the context of their own actor-instance, they set \texttt{\%sync.reg} equal to \texttt{\%this.reg} at the start of execution. This allows for uniform generation of statements within a callable body (when performing a suspension, can simply generate code using \texttt{\%sync.reg} without worrying about whether the statement is in a behaviour). When generating calls to different callable types, the implicit arguments are passed following the convention specified in table \ref{tab:calling-conventions}:
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{6cm}|p{6cm}|}
-\hline
-\textbf{Callable}       & \texttt{\%this.reg}                   & \texttt{\%sync.reg}                 \\ \hline
-Top-level function call & N/A                                   & N/A                                 \\ \hline
-Function call           & Current scope's \texttt{\%this.reg}   & Current scope's \texttt{\%sync.reg} \\ \hline
-Constructor call        & ID of newly created instance          & Current scope's \texttt{\%sync.reg} \\ \hline
-Behaviour call          & Current scope's \texttt{\%this.reg}   & N/A                                 \\ \hline
-\end{tabular}
-\caption{Implicit arguments passed during the invocation of different callables.}
-\label{tab:calling-conventions}
-\end{table}
-
 \subparagraph{Lowering behaviours\\}
+Behaviours are lowered to LLVM functions that accept a single \texttt{ptr} to a message struct. The struct type is named \texttt{be\_name.actor\_name.be.struct}, and stores all the arguments to the behaviour. This single parameter allows the runtime to treat behaviours uniformly without needing information about their parameters. Behaviours end with a call to \texttt{handle\_return}. It does not use the standard LLVM instruction \texttt{ret} as it needs to context-switch back to the runtime.
+\subparagraph{Local variables\\}
+LLVM IR models a machine with infinite registers. However, these registers follow SSA (Static Single Assignment) form, meaning each register can only be assigned once. Since local variables in a program can be modified, they cannot be stored directly in these registers. Instead, local variables are explicitly allocated on the stack using the \texttt{alloca} instruction, and their addresses are stored in registers. These addresses can then be used with \texttt{load} (to read the value at the address) and \texttt{store} (to write a new value) instructions to access and modify the local variables.
 
-behaviours are lowered to LLVM functions that accept a single \texttt{ptr} to a message struct. The struct type is named \texttt{be\_name.actor\_name.be.struct}, and stores all the arguments to the behaviour. This single parameter allows the runtime to treat behaviours uniformly without needing information about their parameters. Behaviours end with a call to \texttt{handle\_return}. It does not use the standard LLVM instruction \texttt{ret} as it needs to context switch back to the runtime.
+\subsubsection{Translating statements}
+This section briefly describes the lowering of \textit{Coherence} statements.
+\paragraph{Local and member variables\\}
+As mentioned in previously, local variables are stored on the stack. Every local variable definition is collected and preallocated on the stack at the start of the callable. Member-variables are stored in the actor's struct (which the callable retrieves using the \texttt{get\_instance\_struct} trap).
+\paragraph{Control flow\\}
+The \texttt{if} and \texttt{while} constructs can be implemented by using labels \texttt{br} to perform conditional or unconditional jumps. The implementation of these constructs is fairly standard, and are not discussed further. \texttt{return} is lowered to use the LLVM instruction \texttt{ret}.
+\paragraph{Statements using runtime traps\\}
+\texttt{OUT} is directly lowered to IR calling the \texttt{print\_int} trap. To invoke a behaviour, the compiler generates code to allocate its corresponding message structure on the heap and initialize its fields with the provided arguments. This pointer is then passed to the \texttt{handle\_behaviour\_call} runtime trap, alongside the target actor's ID and the behaviour's function pointer, and is queued by the scheduler for asynchronous execution.\\
+Atomic-sections are lowered to a sequence of calls to \texttt{handle\_lock} for each required lock, followed by the body statements and a final sequence \texttt{handle\_unlock}. The locks are taken in a fixed order to prevent deadlocks. My implementation takes them in alphabetical order, but any globally agreed upon order works.
 
-\paragraph{Statements\\}
-This section describes the lowering of \textit{Coherence} statements.
-\subparagraph{Local and member variables\\}
-As mentioned in section 1.5.2.3.1, local variables are stored on the stack. Every local variable definition is collected and preallocated on the stack at the start of the callable. Member-variables are stored in the actor's struct (which the callable retrieves using the \texttt{get\_instance\_struct} trap).
-\subparagraph{Control flow\\}
-The \texttt{if} and \texttt{while} constructs can be implemented inserting labels and using the \texttt{br} instruction to either conditionally or unconditionally branch to a label. The implementation of these constructs is fairly standard, and are hence not discussed further. \texttt{return} is lowered to use the LLVM instruction \texttt{ret}.
-\subparagraph{Statements using runtime traps\\}
-\texttt{OUT} is directly lowered to IR calling the \texttt{print\_int} trap. To invoke a behaviour, the compiler generates code to heap-allocate its corresponding message structure and initialize its fields with the provided arguments. This pointer is then passed to the \texttt{handle\_behaviour\_call} runtime trap, alongside the target actor's ID and the behavior's function pointer, and is queued by the scheduler for asynchronous execution.\\
-Atomic-blocks are lowered to a sequence of calls to \texttt{handle\_lock} for each required lock, followed by the body statements and a final sequence \texttt{handle\_unlock}. The locks are taken in a fixed order to prevent deadlocks. My implementation takes them in alphabetical order, but any globally agreed upon order works.
-
-\paragraph{Expressions\\}
-The compilation of expressions in Coherence follows a recursive pattern where each expression is evaluated in terms of its constituent subexpressions. These sub-results are typically stored in temporary LLVM virtual registers and merged or transformed using specific IR instructions (such as \texttt{add}) to produce the final result of the parent expression.\\
-A challenge in this process described above arises from the dual nature of expressions: some represent a location in memory that can be assigned to (L-values), while others represent a transient value that only exists in a register (R-values). This distinction is critical when lowering code to LLVM IR. Consider the variable x, which the Coherence compiler tracks as a pointer to a stack-allocated slot (an \texttt{alloca}). The compiler must decide what the expression $x$ actually evaluates to:
+\subsubsection{Expressions}
+The compilation of expressions in \textit{Coherence} follows a recursive pattern where each expression is evaluated in terms of its constituent subexpressions. These sub-results are stored in LLVM registers and are merged or transformed using specific IR instructions (such as \texttt{add}) to produce the final result of the parent expression.\\
+A challenge in the process described above arises from the dual nature of expressions: some represent a location in memory that can be assigned to (L-values), while others represent a transient value that only exists in a register (R-values). This distinction is critical when lowering code to LLVM IR. Consider the variable $x$, which the \textit{Coherence} compiler tracks as a pointer to a stack-allocated slot. The compiler must decide what the expression $x$ actually evaluates to:
 \begin{itemize}
   \item \textbf{\textit{x} evaluates to its stack pointer}: Expressions like $x + 5$ generate incorrect LLVM IR as the IR tries to add an integer to a pointer.
   \item \textbf{\textit{x} evaluates to its value}: Expressions like $x = 5$ generate incorrect LLVM IR as the IR tries to perform a store on an integer as the destination.
 \end{itemize}
-To resolve this ambiguity, the compiler keeps track of the \textit{value category} (whether it is an L-value or an R-value) of expressions. Every expression returns a pair consisting of an LLVM register and a tag indicating whether that register holds an \texttt{L-value} (a pointer) or an \texttt{R-value} (the data). This allows the generator to be context-aware: it can use the pointer directly for assignments or retrieve the value it via a \texttt{load} instruction whenever the data itself is required for arithmetic or logic operations.
-\subsubsection{Time-complexity}
-The code generation phase operates in linear time relative to the size of the annotated AST. Consequently, the entire \textit{Coherence} compilation pipeline---from source parsing to LLVM IR emission---maintains an overall time complexity of $O(N^2)$, where $N$ is the number of characters in the source file.
+To resolve this ambiguity, the compiler keeps track of the \textit{value category} (whether it is an L-value or an R-value) of expressions. The compilation of every expression returns a pair consisting of an LLVM register and a tag indicating whether that register holds an \texttt{L-value} (a pointer) or an \texttt{R-value} (the data). This allows the generator to be context-aware: it can use the pointer directly for assignments or retrieve its value via a \texttt{load} instruction whenever the data itself is required for arithmetic or logic operations.
+\subsubsection{Time complexity}
+The code generation stage operates in linear time relative to the size of the annotated AST. Consequently, the entire \textit{Coherence} compilation pipeline---from source parsing to LLVM IR emission---maintains an overall time complexity of $O(N^2)$.
 
 \subsection{Extension: Pointers-to-pointers} \label{sec:pointers-to-pointers}
 This extension aims to extend \textit{Coherence1.0} to allow for pointers-to-pointers.
 \subsubsection{Motivation}
 One major limitation of \textit{Coherence1.0} is its inability to represent many useful types.
 \begin{itemize}
-  \item \textbf{Lack of powerful building-blocks}: \texttt{Struct}s are the building-blocks that \textit{Coherence1.0} programmers use to build complex types. These blocks, however, are quite weak as they cannot contain pointers as their members. Because of this, data structures like dynamic arrays (which need to store a pointer to the underlying array) cannot be encapsulated into a single type.
-  \item \textbf{Inability to represent complex unbounded types}: The only type that is unbounded is the standard pointer/array type whose length is not fixed at compile time. However, unbounded types with recursive structure—such as trees or linked lists—cannot be represented. It might seem like a very simple modification to the \textit{Coherence1.0} compiler will allow programmers to represent such structures: simply allow structures structs to contain instances of themselves as members. However, this would lead to the struct having undefined size (the size $s$ must be the solution to the equation $s = s + \text{size of other fields}$). Languages like \texttt{C} get around this by allowing pointers to the structure, as pointers have a fixed size (for e.g. 64 bits).
+  \item \textbf{Lack of powerful building-blocks}: \texttt{Struct}s are the building-blocks that \textit{Coherence1.0} programmers use to build complex types. These blocks, however, are quite weak as they cannot contain pointers as their members. For example, data structures like dynamic arrays (which need to store a pointer to the underlying array) cannot be encapsulated into a single type.
+  \item \textbf{Inability to represent complex unbounded types}: The only type that is unbounded is the standard pointer/array type (its length is not fixed at compile time). However, unbounded types with recursive structure—such as trees or linked lists—cannot be represented. It might seem like a very simple modification to the \textit{Coherence1.0} compiler will allow programmers to represent such structures: simply allow structures to contain instances of themselves as members. However, this would lead to the struct having undefined size (the size $s$ must be the solution to the equation $s = s + \text{size of other fields}$). Languages like \texttt{C} get around this by allowing pointers to the structure, as pointers have a fixed size (for e.g. 64 bits).
 \end{itemize} 
-Many real-world concurrent algorithms involve multiple concurrent entities operating on shared data structures simultaneously. Without adequate support for representing such data structures, \textit{Coherence} would be unable to express a wide range of concurrent algorithms.
+Many real-world concurrent algorithms involve multiple entities operating on shared data structures concurrently. Without adequate support for representing such data structures, \textit{Coherence} would be unable to express a wide range of concurrent algorithms.
 
 \subsubsection{Modifications to the syntax}
-We develop the new syntax by working through examples and carefully considering the requirements of the programmer. Section \ref{??} in the preparation talks about the need for viewpoint adaptation to maintain the invariants of the reference capabilities. As a recap, viewpoint adaptation tells us that if we have a pointer $x$ of type $(B \ \kappa_1) \ \kappa_2$, the type of *$x$ is $B \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $B \ \kappa$ is $\kappa \triangleright B$, where $\kappa \triangleright B$ represents applying the viewpoint adaptation operator to type $B$. Here, $\triangleright$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\triangleright$:
+We develop the new syntax by working through examples and carefully considering the requirements of the programmer. Section \ref{??} talks about the need for viewpoint adaptation to maintain the invariants of the reference capabilities. As a recap, viewpoint adaptation tells us that if we have a pointer $x$ of type $(B \ \kappa_1) \ \kappa_2$, the type of *$x$ is $B \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $B \ \kappa$ is $\kappa \triangleright B$, where $\kappa \triangleright B$ represents applying the viewpoint adaptation operator to type $B$. Here, $\triangleright$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright B$:
 \begin{itemize}
-  \item \textbf{Simple types}: For the primitive types \texttt{int}, \texttt{unit}, and \texttt{bool}, as well as actor types, the operator acts as an identity function and has no effect on the type. This is because these types cannot contain pointers.
-  \item \textbf{Pointers}: As demonstrated in the previous examples, the operator composes the capability on the LHS of $\triangleright$ with the capability of the pointer.
-  \item \textbf{Structures}: Because structures may now contain pointers, dereferencing a pointer to a structure requires a transformation that upholds the safety invariants of every internal member. To satisfy this requirement, the $\triangleright$ operator must distribute over the structure's fields. When a structure is accessed through a capability, the resulting type is a another structure where the viewpoint adaptation has been applied to every field type.
+  \item \textbf{Simple types}: For simple types that do not contain pointers, $\kappa \triangleright \_$ acts as an identity function and has no effect on the type.
+  \item \textbf{Pointers}: As demonstrated in the previous examples, the operator composes $\kappa$ with the capability of the pointer.
+  \item \textbf{Structures}: Because structures may now contain pointers, dereferencing a pointer to a structure requires a transformation that upholds the safety invariants of every internal member. When a structure is accessed through a capability, the resulting type is another structure where $\kappa \triangleright \_$ has been applied to every field type.
 \end{itemize}
-Note that when $\triangleright$ is applied to structure types, we get a structure type without a name. This tells us that it is useful for programmers to have access to $\triangleright$ in the syntax of \textit{Coherence2.0} so that they can name and use the type. These examples give us the following modified syntax of types:
+When $\kappa \triangleright \_$ is applied to structure types, we get a different structure type without a name. Hence, programmers need access to $\triangleright$ in the syntax of \textit{Coherence2.0} so that they can name and use this type.
 \[
 \begin{array}{lcll}
 B & ::= & \mathtt{unit} \mid \mathtt{int} \mid \mathtt{bool} \mid \mathtt{Named}(N) \mid \mathtt{Actor}(A) \mid B\ \kappa & \text{(base type)} \\[0.5em]
@@ -977,8 +749,8 @@ T_N & ::= & T \mid \mathtt{struct}\ \{\ \overline{f : T;}\ \} & \text{(nameable 
 The key changes made are listed below:
 \begin{itemize}
   \item \textit{B} can now contain pointers.
-  \item \textit{T} is either a $B$ or $\triangleright$ applied to a $B$. We only allow $\triangleright$ to appear at the outermost layer. This is because any type where $\triangleright$ appears multiple times is equivalent to a type where it only appears at the outer layer.
-  \item A new reference capability \texttt{tag} is added. This is a capability representing a pointer which no one can read from or write to. As mentioned in the preparation chapter, this is needed for completeness for the definition of $\triangleright$
+  \item \textit{T} is either a $B$ or $\triangleright$ applied to a $B$. We only allow $\triangleright$ to appear at the outermost layer. This is because multiple applications of $\triangleright$ can be reduced to a single application using $\triangleright$.
+  \item A new reference capability \texttt{tag} is added. This is a capability representing a pointer which cannot be read from or written to. This is needed for completeness for the definition of $\triangleright$. The rules for $<:$ in figure \ref{fig:capability_hierarchy} are modified to say that any capability is assignable to \texttt{tag}, and \texttt{tag} is not assignable to any capability except itself.
   \item Structures and named types can now contain pointers.
 \end{itemize}
 The syntax of top-level items and statements remain unchanged. \\
@@ -989,13 +761,13 @@ type list = struct {
     next: list ref;
 }
 \end{lstlisting}
-To create an instance of a pointer to this structure, we need to do something like
+To create an instance of a pointer to this structure, we need to do something like the following:
 \begin{lstlisting}
 new ref[1] list({value = 3; next = <instance of list ref>});
 \end{lstlisting}
-To create an instance of \texttt{list ref}, we need to create an instance of the structs field, which is also of type \texttt{list ref}. There is no bottom-out to this recursion! There are a few approaches to solve this problem:
+To create an instance of \texttt{list ref}, we need to create an instance of the structs field, which is also of type \texttt{list ref}. There is no bottom out to this recursion! There are a few approaches to solve this problem:
 \begin{itemize}
-  \item \textbf{Variants}: One solution is to introduce Variants into the type system. By allowing a field to inhabit a sum type, we maintain the invariant of strict pointers (where every pointer dereference is guaranteed to be defined) while providing a non-recursive base case.
+  \item \textbf{Variants}: By allowing a field to be a sum type, we maintain the invariant of strict pointers (where every pointer-dereference is guaranteed to be defined) while providing a non-recursive base case.
   \begin{lstlisting}
 type list = struct {
     value: int;
@@ -1007,9 +779,9 @@ new ref[1] list({value = 3; next = ()})
   \begin{lstlisting}
 new ref[1] list({value = 3; next = nullptr})
   \end{lstlisting}
-  Dereferencing a \texttt{nullptr} is undefined behaviour, but pointers can be compared for equality with a \texttt{nullptr}. This design pushed the burden of safety on the programmer.
+  Dereferencing a \texttt{nullptr} is undefined behaviour, but pointers can be compared for equality with a \texttt{nullptr}. This design pushes the burden of memory safety on the programmer.
 \end{itemize}
-\textit{Coherence2.0} chooses the \texttt{nullptr} approach. The primary design goal of \textit{Coherence} is to provide robust guarantees against data races and deadlocks. General memory safety issues, such as null-pointer dereferences, fall outside this scope. This choice is consistent with existing language semantics. For instance, array out-of-bounds accesses are already categorized as undefined behavior. Implementing variants would require major changes to the syntax and the code generation stage.
+\textit{Coherence2.0} chose the \texttt{nullptr} approach. The primary design goal of \textit{Coherence} is to provide robust guarantees against data races and deadlocks. General memory safety issues, such as null-pointer dereferences, fall outside this scope. This choice is consistent with existing language semantics. For instance, array out-of-bounds accesses are already categorized as undefined behaviour.
 \[
 \begin{array}{lcll}
 e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
@@ -1018,20 +790,19 @@ e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
 \]
 
 \subsubsection{Modifications to the type-system}
-The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$, the compiler must first verify that the outer capabilities satisfy the standard subtyping relation: $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be aggregate types containing further pointers, we must ensure that the ``effective types'' visible through these references are compatible. This is achieved by applying the viewpoint adaptation operator directly to the types, yielding $\kappa_s \triangleright S$ and $\kappa_t \triangleright T$. The required relationship between these adapted types depends on the access permissions granted by the outer capability $\kappa_s$:
- We also need to make sure that the inner viewpoint-adapted capabilities are compatible.
+The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, we must ensure that the effective types visible through these references are compatible.
 \begin{itemize}
-  \item \textbf{Covariant case}:\\ When $\kappa_{s_2}$ is readable but not writable (e.g. \texttt{val}), then all we need is that the inner dereferenced types be covariant. In this case, it means that $(\kappa_{s_2} \triangleright \kappa_{s_1})$ is covariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. There is a slight difference between covariant and assignability, which will be discussed when discussing the definition of $\triangleright$.
-  \item \textbf{Invariant case}:\\ When $\kappa_{s_2}$ is mutable (e.g. \texttt{ref}), we need $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be invariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. If the system permitted covariance, a source could assign a specific inner pointer to a more generic target pointer, and subsequently, the target could be used to write data into that memory location that is incompatible with the source's original, more restrictive type.
-  \item \textbf{Dealing with tag}:\\ The \texttt{tag} capability permits neither read nor write access. When $\kappa_{s_2}$ is \texttt{tag}, the type-checker enforces a requirement of structural congruence: the source and target types must share the same "shape," possessing identical nesting depths and the same underlying base types. While the system would technically remain memory-safe even without this constraint, without this requirement, the \texttt{tag} would effectively function as a universal, blank capability, losing its identity as representating a specific type structure.
+  \item \textbf{Covariant case}:\\ When $\kappa_{s_2}$ is readable but not writable (e.g. \texttt{val}), then all we need is $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be covariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$.
+  \item \textbf{Invariant case}:\\ When $\kappa_{s_2}$ is mutable (e.g. \texttt{ref}), we need $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be invariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. If the system permitted covariance, a source could assign a specific inner pointer to a more generic target pointer, and subsequently, the target could be used to write data into the memory location that is incompatible with the source's original, more restrictive type.
+  \item \textbf{Dealing with tag}:\\ The \texttt{tag} capability permits neither read nor write access. When $\kappa_{s_2}$ is \texttt{tag}, the type-checker enforces a requirement of structural congruence: the source and target types must share the same shape, possessing identical nesting depths and the same underlying base types. While this restriction is not needed for memory-safety, without this constraint, \texttt{tag} would effectively function as a universal, blank capability, losing its identity of representing a specific type structure.
 \end{itemize}
 
 \begin{notebox}
 \textbf{Invariance and covariance}:\\
-The covariance relation is represented using the symbol \textit{cov}, and invariance using \textit{inv}. $T_1 \ \textit{cov} \ T_2$ says that a variable of type $T_2$ can safely change its type to be $T_1$. These relations' precise semantic interpretation is a bit unclear, and they mainly exist for correct typing. But broadly, covariance talks about subtyping without worrying about single-alias constraints of reference capabilities and invariance talks about when two types are effectively equal. Covariance of reference capabilities have the same rules as assignability, except for the fact that \texttt{iso} is covariant to itself. Invariance of reference capabilities is the same as equality, except for the fact the \texttt{iso} is invariant to \texttt{iso\textasciicircum}. \textit{cov} extend to full types in a similar way to assignability: mutable outer capabilities require their inner types to satisfy the invariance relation, while immutable capabilities permits the dereferenced types to be compared covariantly.
+The precise interpretation of these relations in natural language is a bit unclear, and they mainly exist for correct typing. But broadly, covariance talks about subtyping without worrying about the single-alias constraints of \texttt{iso} and invariance talks about when two types are effectively equal. Covariance of reference capabilities has the same rules as assignability, except for the fact that \texttt{iso} is covariant to itself. Invariance of reference capabilities is the same as equality, except for the fact the \texttt{iso} is invariant to \texttt{iso\textasciicircum}.
 \end{notebox} 
 
-Using the newly defined \texttt{assignable} predicate, the rules below are the modfications to the typing rules in \textit{Coherence1.0}.
+Using the newly defined \texttt{assignable} predicate, the rules below are the modifications to the typing rules in \textit{Coherence1.0}.
 \AxiomC{$\Gamma \tack e_s : \text{Int}$}
 \AxiomC{$\Gamma \tack e_d : T'$}
 \AxiomC{$\Gamma \tack \text{assignable}(\kappa \triangleright T, T')$}
@@ -1046,8 +817,7 @@ Using the newly defined \texttt{assignable} predicate, the rules below are the m
 \end{prooftree}
 
 \subsubsection{Viewpoint adaptation}
-%Need to talk about covariance rules.
-In the preparation section, we described the reason for viewpoint adaptation. However, given the rules above, it seems like these rules should work irrespective of the choice of the viewpoint adaptation operator. It makes us question what is needed of this operator's definition. To answer this question, let us analyse what happens when one tries to derive the assignability rules for a recursive type like \texttt{list}. To figure out for e.g. whether a \texttt{list ref} is assignable to a \texttt{list ref}, we will first check that outer capabilities are assignable, and then look at the assignability of its fields. \texttt{ref} is assignable to \texttt{ref}. Looking at the \texttt{next} fields, we need that $\texttt{list} \ (\text{ref} \triangleright \text{ref})$ is covariant to itself. To verify this, checker will then need to to look at \texttt{list}'s fields again and hence the type-checking will never terminate. This motivates a requirement of $\triangleright$: the choice of $\triangleright$ should ensure that if $\kappa_1$ is assignable to $\kappa_2$, then $T \ \kappa_1$ is assignable to $T \ \kappa_2$ for all types $T$. This should also be true for the invariance and covariance relation on types. The viewpoint adaptation operator is defined below.
+The specific requirements of this operator for safety and their formal verification will be done in Section \ref{??}.
 \begin{table}[H]
 \centering
 \caption{Viewpoint Adaptation Matrix ($\kappa_1 \triangleright \kappa_2$)}
@@ -1064,31 +834,29 @@ $\kappa_1 \triangleright \kappa_2$ & \textbf{Tag} & \textbf{Ref} & \textbf{Val} 
 \end{tabular}
 \end{table}
 
-Formally showing that these capabilities satisfy the requirement mentioned above and do not violate the invariants of the reference capabilities will be done in section \ref{?} in the evaluation chapter. I will justify a few of the interesting choices made with examples:
+A few of the interesting choices made in the definition will be justified with examples:
 
 \begin{itemize}
-  \item \textbf{$\text{ref}\ \triangleright\ \text{iso} = \text{iso}$}: At first, it feels like this should break the invariant of a unique \texttt{iso}. However, note that this does not actually increase the number of memory locations that store this reference (the inner \texttt{iso} is still stored in a single field on the heap). We simply have multiple paths (via the \texttt{ref} aliases of the parent structure) that lead to that single unique location. This is not an issue within a single thread because all accesses to the same \texttt{iso} reference happen sequentially within the actor's execution context, preventing concurrent data races. For the same reason, \texttt{locked<A>} $\triangleright$ \texttt{iso} = \texttt{iso}.
-  \item \textbf{$\text{iso}\ \triangleright\ \text{ref} = \text{ref}$}: One might assume this allows assigning a \texttt{ref} to a field within an \texttt{iso} structure. However, the inner type is irrelevant in isolation. The type-checker deals with the adapted type \texttt{iso} $\triangleright$ \texttt{ref}. \texttt{iso} $\triangleright$ \texttt{ref} is \texttt{iso}, and \texttt{ref} is not assignable to \texttt{iso}.
+  \item \textbf{$\text{ref}\ \triangleright\ \text{iso} = \text{iso}$}: At first, it feels like this should break the invariant of a unique \texttt{iso}. However, note that assigning a $(T \ \texttt{iso}) \ \texttt{ref}$ to another $(T \ \texttt{iso}) \ \texttt{ref}$ does not increase the number of memory locations that store the $T \ \texttt{iso}$ reference (it is still stored in a single field on the heap). We simply have multiple paths (via the \texttt{ref} aliases of the parent structure) that lead to that single unique location. This is not an issue within a single thread because all accesses to the same \texttt{iso} reference happen sequentially within the actor's execution context, preventing concurrent data-races. For the same reason, \texttt{locked<A>} $\triangleright$ \texttt{iso} = \texttt{iso}.
+  \item \textbf{$\text{iso}\ \triangleright\ \text{ref} = \text{ref}$}: One might assume that this allows assigning a \texttt{ref} to a field within an \texttt{iso} structure. However, the inner type is irrelevant in isolation. The type-checker deals with the adapted type \texttt{iso} $\triangleright$ \texttt{ref}. \texttt{iso} $\triangleright$ \texttt{ref} is \texttt{iso}, and \texttt{ref} is not assignable to \texttt{iso}.
 \end{itemize}
 
 \subsubsection{Implementation}
-The primary modification involved the type-checker, where the assignability, covariance, and invariance relations were implemented alongside an early-exit mechanism to prevent infinite recursion when dealing with recursive types. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \texttt{nullptr} abstraction directly to the standard LLVM \texttt{null} constant.
+The primary modifications were in the type-checker, where the assignability, covariance, and invariance relations were implemented. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \texttt{nullptr} abstraction directly to the LLVM \texttt{null} constant.
 
 \subsection{Repository overview}
-The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The implementation comprises the core compiler pipeline—moving from lexing and parsing to AST validation and finally LLVM IR generation—supported by a dedicated C++ runtime and an extensive test suite.
-
-The \textit{Coherence} repository is built following the standard CMake project structure. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, ast-validation and codegen), global utilities, sample programs and integration tests. It also includes a \texttt{Readme.md} file which explains how to setup the compiler.
+The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), generated binary files, and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, AST validation, codegen and the runtime), global utilities, sample programs and integration tests. It also includes a \texttt{Readme.md} file which explains how to build and use the compiler.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Overview of the Coherence repository}
+\caption{Overview of the \textit{Coherence} repository}
 \label{tab:repo-overview}
 \begin{tabular}{l | l | p{7cm}}
 \toprule
 \textbf{Directory} & \textbf{Files and Subdirectories} & \textbf{Description} \\ \midrule
 lexer\_parser/ & lexer.l, parser.y & Frontend code for lexing and parsing. \\ \midrule
-ast/ & expr.hpp, types.hpp,...  & Abstract Syntax Tree node definitions. \\ \midrule
+ast/ & expr.hpp, types.hpp,...  & AST node definitions. \\ \midrule
 ast\_validation/ & ast\_validator.cpp & Main entry point for static analysis. \\ 
  & var\_validity\_checker/ & Variable validity checking. \\ 
  & declaration\_collection/ & Declaration collection. \\
@@ -1096,10 +864,10 @@ ast\_validation/ & ast\_validator.cpp & Main entry point for static analysis. \\
  & compute\_lock\_info/ & Performs lock-inference \\ \midrule
 codegen/ & codegen.cpp, ... & Lowering of the validated AST to LLVM IR. \\ \midrule
 runtime/ & entry\_point.cpp, runtime\_traps.cpp, ... & Implementation of the \textit{Coherence} runtime. \\ \midrule
-global\_utils/ & scoped\_store.cpp,... & Shared helper functions and utility classes. \\ \midrule
+global\_utils/ & pattern\_matching\_boilerplate.hpp, ... & Shared helper functions and utility classes. \\ \midrule
 coherence/ & main.cpp & Integrates all components to produce the binary acting as the \textit{Coherence} compiler. \\ \midrule
 tests/ & e2e\_tests, type\_checking\_tests, ... & Compiler unit and integration tests. \\ \bottomrule
 \end{tabular}
 \end{table}
-
+\printbibliography
 \end{document}

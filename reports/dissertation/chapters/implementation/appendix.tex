@@ -30,8 +30,19 @@
 
 \begin{document}
 \section{\textit{Coherence1.0} typing rules}
+\subsection{Typing context}
+The term \textit{metadata structure} of an object refers to a structure containing all the necessary data about the object. The underlying mathematical representation of these structures are omitted for brevity. $\Gamma$ contains the following:
+\begin{itemize}
+    \item $\Gamma_V$: a mapping from local variable names to their types
+    \item $\Gamma_L$: boolean flag indicating whether the current typing context is scoped within an \texttt{atomic} section
+    \item $\Gamma_A$: a mapping from actor names to their metadata structure.
+    \item $\Gamma_T$: mapping to named types.
+    \item $\Gamma_F$: mapping from top-level function names to their metadata structure.
+    \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
+    \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
+\end{itemize}
 \subsection{Expression typing}
-\begin{tabular}{c@{\qquad}c@{\qquad}c}
+\begin{tabular}{@{\qquad\qquad}c@{\qquad}c@{\qquad}c@{\qquad}c}
     \AxiomC{}
     \RightLabel{(Int)}
     \UnaryInfC{$\Gamma \tack i : \text{int}$}
@@ -64,6 +75,7 @@
     \RightLabel{(Struct)}
     \TrinaryInfC{$\Gamma \tack (\{ \overline{f = e} \} : N) : N$}
 \end{prooftree}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$\Gamma \tack e_s : \text{Int}$}
@@ -72,6 +84,7 @@
     \RightLabel{(Alloc)}
     \TrinaryInfC{$\Gamma \tack \text{new } \kappa[e_s] B(e_d) : \text{unalias}(B \ \kappa)$}
 \end{prooftree}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$A \in \Gamma_A$}
@@ -225,7 +238,7 @@
     \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
 \end{prooftree}
 
-\vspace{2em}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
@@ -236,7 +249,7 @@
     \QuaternaryInfC{$\Gamma \tack \text{func } m(\overline{x : \phi_p}) \Rightarrow \phi_r \{ \overline{s} \} \tackl \Gamma$}
 \end{prooftree}
 
-\vspace{2em}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
@@ -246,7 +259,7 @@
     \TrinaryInfC{$\Gamma \tack \mathtt{new}\ k(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
 \end{prooftree}
 
-\vspace{2em}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
@@ -257,7 +270,7 @@
     \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
 \end{prooftree}
 
-\vspace{2em}
+\vspace{1em}
 
 \begin{prooftree}
     \AxiomC{$\Gamma \tack \overline{T} : \text{valid}$}
@@ -268,44 +281,8 @@
 \end{prooftree}
 \end{center}
 
-\section{\textit{Algorithm pseudocode}}
-\subsection{Return checker}
-\begin{lstlisting}{language=ocaml}
-type status = Returns | DoesNotReturn | Invalid
-
-(* Merges paths for branching logic *)
-let merge s1 s2 = 
-    match (s1, s2) with
-    | (Invalid, _) | (_, Invalid) -> Invalid
-    | (Returns, Returns)          -> Returns
-    | _                           -> DoesNotReturn
-
-(* Evaluates a single statement *)
-let rec stmt_return_status stmt = match stmt with
-    | Return _    -> Returns
-    | Atomic body -> stmt_list_return_status body
-    | If (_, then_b, Some else_b) -> 
-        let s1 = stmt_return_status (last then_b) in
-        let s2 = stmt_return_status (last else_b) in
-        merge s1 s2
-    | While (_, body) -> 
-        (* Loops are never guaranteed to return as the 
-           condition may be false *)
-        merge (stmt_list_return_status body) DoesNotReturn
-    | _ -> DoesNotReturn
-
-(* Evaluates a sequence, detecting dead code *)
-and stmt_list_return_status stmts = match stmts with
-    | [] -> DoesNotReturn
-    | [s] -> stmt_return_status s
-    | s :: rest -> 
-        match stmt_return_status s with
-        (* Error: Dead code follows a return *)
-        | Returns | Invalid -> Invalid 
-        | DoesNotReturn -> stmt_list_return_status rest
-\end{lstlisting}
-\subsection{UserMutex implementation}
-\subsubsection{Locking}
+\section{\textit{UserMutex implementation}}
+\subsection{Locking}
 \begin{algorithmic}[1]
 \Procedure{Lock}{$locker\_id$}
     \State \textbf{acquire} $coord\_lock$
@@ -331,7 +308,7 @@ and stmt_list_return_status stmts = match stmts with
     \State \Return \textbf{false}
 \EndProcedure
 \end{algorithmic}
-\subsubsection{Unlocking}
+\subsection{Unlocking}
 \begin{algorithmic}[1]
 \Procedure{Unlock}{$runtime$}
     \State \textbf{acquire} $mutex.coord\_lock$
