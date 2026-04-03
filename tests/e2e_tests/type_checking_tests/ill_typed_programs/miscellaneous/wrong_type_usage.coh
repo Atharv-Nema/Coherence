@@ -1,0 +1,12 @@
+func random_func() => unit {
+    var a: int = 4;
+    var b: bool = true;
+    if(a == b) {
+        var c: int = 3;
+    }
+    return ();
+}
+
+actor Main {
+    new create(){}
+}

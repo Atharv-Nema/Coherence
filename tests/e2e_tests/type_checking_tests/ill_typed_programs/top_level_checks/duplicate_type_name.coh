@@ -1,0 +1,8 @@
+type t = int ref
+
+type t = bool val
+
+actor Main {
+    new create() {
+    }
+}

@@ -1,0 +1,10 @@
+func random_func(int a_) => int {
+    while(true) {
+        return 3;
+    }
+}
+
+actor Main {
+    new create() {
+    }
+}

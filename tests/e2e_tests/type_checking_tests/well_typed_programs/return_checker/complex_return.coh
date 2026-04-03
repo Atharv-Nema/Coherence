@@ -1,0 +1,33 @@
+func complex_return_success(bool cond_a, bool cond_b) => int {
+    var x: int = 3;
+
+    if (cond_a) {
+        if (cond_b) {
+            return 1;
+        } else {
+            x = x + 10;
+        }
+    } 
+    else {
+        atomic {
+            if (x > 100) {
+                return 100;
+            } else {
+                return 0;  
+            }
+        }
+    }
+
+    while (x < 1000) {
+        x = x * 2;
+        if (x == 500) {
+            return x; 
+        }
+    }
+
+    return x; 
+}
+
+actor Main {
+    new create() {}
+}

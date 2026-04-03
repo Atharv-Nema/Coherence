@@ -1,0 +1,14 @@
+func check_nested(bool a, bool b) => int {
+    if (a) {
+        if (b) {
+            return 1;
+        }
+        // Path failure: a is true, b is false.
+    } else {
+        return 0;
+    }
+}
+
+actor Main {
+    new create() {}
+}

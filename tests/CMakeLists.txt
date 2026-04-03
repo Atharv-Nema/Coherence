@@ -1,3 +1,2 @@
 add_subdirectory(e2e_tests)
-add_subdirectory(type_checking_tests)
 add_subdirectory(lock_filling_tests)

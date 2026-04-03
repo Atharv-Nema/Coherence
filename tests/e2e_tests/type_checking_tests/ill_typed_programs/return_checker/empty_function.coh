@@ -1,0 +1,6 @@
+func return_nothing() => int {
+}
+
+actor Main {
+    new create() {}
+}

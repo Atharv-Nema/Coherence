@@ -1,0 +1,22 @@
+func random_func() => int {
+    var a: int = 3;
+    var b: int = 4;
+    var c: int = 5;
+    if(2 == 3) {
+        unalias(a);
+        unalias(b);
+    }
+    else {
+        unalias(b);
+        unalias(c);
+    }
+    while(true) {
+        return c + 3;
+    }
+    return 0;
+}
+
+actor Main {
+    new create() {
+    }
+}

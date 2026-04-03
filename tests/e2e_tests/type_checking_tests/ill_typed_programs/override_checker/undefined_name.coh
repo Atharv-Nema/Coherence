@@ -1,0 +1,5 @@
+actor Main {
+    new create() {
+        var c: int = c + 3;
+    }
+}

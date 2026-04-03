@@ -23,6 +23,7 @@ bool update_valexpr_validity_info(
             if(*var_status == false) {
                 report_error_location(val_expr->source_span);
                 std::cerr << "Variable " << orig_name(var.name) << " might not be valid here" << std::endl;
+                return false;
             }
             return true;
         },

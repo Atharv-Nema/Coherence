@@ -1,0 +1,22 @@
+actor Main {
+    a: int;
+    b: int;
+    
+    func f() => unit {
+        return ();
+    }
+    new create(bool c1, bool c2) {
+        if (c1) {
+            a := 1;
+        } else {
+            a := 2;
+        }
+
+        if (c2) {
+            b := a + 2;
+        } else {
+            b := a + 3;
+        }
+        f();
+    }
+}

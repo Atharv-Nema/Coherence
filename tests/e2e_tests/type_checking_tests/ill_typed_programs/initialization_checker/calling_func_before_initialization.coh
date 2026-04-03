@@ -2,7 +2,9 @@
 actor Main {
     a: int;
     b: int;
-    func dummy_func() {}
+    func dummy_func() => unit {
+        return ();
+    }
     new create() {
         b := 4;
         dummy_func();

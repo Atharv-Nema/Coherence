@@ -1,0 +1,12 @@
+
+actor Main {
+    a: int;
+    b: int;
+    new create() {
+        if(5 == 5) {
+            a := 3;
+        }
+        b := a + 4;
+        a := 4;
+    }
+}

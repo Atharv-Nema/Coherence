@@ -5,11 +5,10 @@ from e2e_tests.test_utilities import *
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parents[0]
 def get_coh_files(dir: pathlib.Path) -> list[pathlib.Path]:
-    out = []
-    for file in sorted(dir.iterdir()):
-        if file.is_file() and file.suffix == ".coh":
-            out.append(file)
-    return out
+    return sorted([
+        file for file in dir.rglob("*.coh") 
+        if file.is_file()
+    ])
 
 WELL_TYPED_PROGS = get_coh_files(TESTS_ROOT / "well_typed_programs")
 @pytest.mark.parametrize("prog_path", WELL_TYPED_PROGS, ids = [d.name for d in WELL_TYPED_PROGS])

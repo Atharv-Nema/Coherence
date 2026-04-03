@@ -1,0 +1,8 @@
+func random_func(int a_) => int {
+    return ();
+}
+
+actor Main {
+    new create() {
+    }
+}

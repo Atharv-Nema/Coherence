@@ -1,0 +1,13 @@
+
+actor Other {
+    new create{}
+}
+
+actor Other {
+    new create(){}
+}
+
+actor Main {
+    new create() {
+    }
+}

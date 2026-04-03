@@ -1,0 +1,12 @@
+func random_func() => int {
+    var a: int = 3;
+    while(unalias(a) == 4) {
+        a = 3;
+    }
+    return a + 2;
+}
+
+actor Main {
+    new create() {
+    }
+}

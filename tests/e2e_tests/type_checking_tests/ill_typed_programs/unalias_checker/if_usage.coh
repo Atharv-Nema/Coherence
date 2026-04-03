@@ -1,0 +1,14 @@
+func random_func() => int {
+    var a: int = 3;
+    if(3 == 4) {
+        if(3 == 5) {
+            unalias(a);
+        }
+    }
+    return a + 2;
+}
+
+actor Main {
+    new create() {
+    }
+}

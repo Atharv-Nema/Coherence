@@ -1,0 +1,12 @@
+func f(int a) => bool {
+    return true;
+}
+
+func f() => unit {
+    return ();
+}
+
+actor Main {
+    new create() {
+    }
+}
