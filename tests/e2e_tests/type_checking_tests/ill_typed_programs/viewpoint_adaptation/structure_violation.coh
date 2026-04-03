@@ -1,0 +1,7 @@
+actor Main {
+    new create() {
+        var x: (int ref) tag = nullptr;
+        var y: (bool ref) tag = nullptr;
+        y = x; 
+    }
+}

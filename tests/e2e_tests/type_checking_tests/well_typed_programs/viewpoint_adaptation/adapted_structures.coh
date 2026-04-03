@@ -1,0 +1,10 @@
+type t = struct {
+    node: t ref;
+}
+
+actor Main {
+    new create() {
+        var t_ref: t ref = new ref[1] t({node = nullptr;}: t);
+        var t_iso: t iso = new iso[1] t({node = nullptr;}: iso>(t));
+    }
+}

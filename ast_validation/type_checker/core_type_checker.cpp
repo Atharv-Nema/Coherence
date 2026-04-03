@@ -183,7 +183,7 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
             std::string struct_name = std::get<Type::TNamed>(standard_struct_type->t).name;
             NameableType::Struct struct_type = get_struct_type(env.type_env.type_context, struct_name).value();
             if(struct_valid(env, standard_struct_type->viewpoint, struct_type, struct_expr)) {
-                return standard_struct_type;
+                return unaliased_type(standard_struct_type);
             }
             else {
                 report_error_location(val_expr->source_span);

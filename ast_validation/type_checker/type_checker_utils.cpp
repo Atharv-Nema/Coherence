@@ -161,6 +161,13 @@ bool capability_shareable(Cap cap) {
     }, cap.t);
 }
 
+bool capability_opaque(Cap c) {
+    return std::visit(Overload{
+        [](const Cap::Tag&) {return true;},
+        [](const auto&) {return false;}
+    }, c.t);
+}
+
 bool capability_mutable(Cap c) {
     return std::visit(Overload{
         [](const Cap::Tag&) {return false;},
@@ -436,6 +443,19 @@ bool type_invariant(
     return pointer_property_compare_template(type_context, t1, t2, capability_invariant, curried_invariant);
 }
 
+bool type_structurally_same(
+    TypeContext& type_context, 
+    std::shared_ptr<const Type> t1,
+    std::shared_ptr<const Type> t2) {
+    auto curried_structure_check = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
+        return type_structurally_same(type_context, t1, t2);
+    };
+    return pointer_property_compare_template(
+        type_context, t1, t2, 
+        [](Cap c1, Cap c2) {return true;}, 
+        curried_structure_check);
+}
+
 bool type_covariant(
     TypeContext& type_context,
     std::shared_ptr<const Type> t1,
@@ -447,7 +467,10 @@ bool pointer_subtyping_on_dereferenced_types(
     Cap pointer_cap,
     std::shared_ptr<const Type> t1,
     std::shared_ptr<const Type> t2) {
-    if(capability_mutable(pointer_cap)) {
+    if(capability_opaque(pointer_cap)) {
+        return type_structurally_same(type_context, t1, t2);
+    }
+    else if(capability_mutable(pointer_cap)) {
         // Need to be invariant if [pointer_cap] is mutable
         return type_invariant(type_context, t1, t2);
     }

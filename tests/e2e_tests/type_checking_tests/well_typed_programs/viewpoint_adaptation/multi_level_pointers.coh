@@ -1,0 +1,16 @@
+actor Main {
+    new create() {
+        var ref_iso: (int iso) ref = nullptr;
+        ref_iso = ref_iso; // Safe pseudo aliasing of iso
+        var locked_iso: (int iso) locked<A> = nullptr;
+        locked_iso = locked_iso; // Safe pseudo aliasing of iso
+        var tag_ref: (int ref) tag = nullptr;
+        var tag_val: (int val) tag = tag_ref; // Structurally
+        var ref_ref: (int ref) ref = nullptr;
+        ref_ref = ref_ref; // Invariance holds
+        var val_val: (int val) val = nullptr;
+        var val_tag: (int tag) val = val_val; // Covariance holds
+        var iso_iso: (int iso) iso = nullptr;
+        iso_iso = unalias(iso_iso); // iso_cap is invariant to iso
+    }
+}
