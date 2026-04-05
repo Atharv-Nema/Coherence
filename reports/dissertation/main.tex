@@ -1,0 +1,63 @@
+\documentclass[a4paper,12pt,fleqn]{report} % fleqn added here for math alignment
+
+% --- Core Layout & Fonts ---
+\usepackage[margin=2cm]{geometry}
+\usepackage[utf8]{inputenc} % Added from Appendix
+\usepackage[T1]{fontenc}
+\usepackage{libertine}
+\usepackage{xcolor}
+\usepackage{booktabs, float, pifont}
+\usepackage{parskip} % Handles the no-indent style automatically
+\usepackage{comment}
+
+% --- Math & Inference Rules ---
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bussproofs} % For your typing rules
+\setlength{\mathindent}{0pt} % Required for left-aligned math
+
+% --- Diagrams ---
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, backgrounds, fit, calc, shapes.multipart}
+
+% --- Code & Algorithms ---
+\usepackage{listings}
+\usepackage{algorithmicx} % Added from Appendix
+\usepackage{algpseudocode} % Added from Appendix
+
+% --- Custom Boxes ---
+\usepackage[most]{tcolorbox}
+\newtcolorbox{notebox}{
+    enhanced, boxrule=0pt, leftrule=3pt, colframe=gray!50,
+    colback=gray!10, arc=4pt, left=12pt, fontupper=\small, breakable
+}
+
+% --- Bibliography ---
+\usepackage[backend=bibtex]{biblatex}
+\addbibresource{bibliography.bib} 
+
+% --- Global Document Settings ---
+\setcounter{secnumdepth}{4} % Added from Appendix
+\setcounter{tocdepth}{4}    % Added from Appendix
+
+% --- Custom Commands ---
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+\newcommand{\tack}{\vdash}
+\newcommand{\tackl}{\dashv}
+
+\begin{document}
+
+\tableofcontents
+
+% --- Include Chapters ---
+% \include{introduction/introduction}
+% \include{preparation/preparation}
+\include{implementation/implementation}
+% \include{chapters/evaluation/evaluation}
+
+% --- Include Appendix ---
+\appendix 
+\include {appendix/appendix}
+\printbibliography
+
+\end{document}

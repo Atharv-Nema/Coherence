@@ -1,36 +1,5 @@
-\documentclass[a4paper,12pt,fleqn]{article}
-
-% --- Core Packages ---
-\usepackage{titlesec}
-\usepackage[margin=2cm]{geometry}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{libertine} % Font matching Linux Libertine
-\usepackage{listings}
-\usepackage{amsmath, amssymb, amsthm}
-\usepackage{algorithmicx}
-\usepackage{algpseudocode}
-\usepackage{amsmath}      
-\usepackage{amssymb}  
-\setcounter{secnumdepth}{4}
-\setcounter{tocdepth}{4}
-\appendix
-% --- Inference Rules Package ---
-\usepackage{bussproofs}
-
-% --- Left-align display math ---
-\setlength{\mathindent}{0pt}
-
-% --- No paragraph indentation ---
-\setlength{\parindent}{0pt}
-
-% --- Custom Commands ---
-\newcommand{\tack}{\vdash}
-\newcommand{\tackl}{\dashv}
-
-\begin{document}
-\section{\textit{Coherence1.0} typing rules}
-\subsection{Typing context}
+\chapter{\textit{Coherence1.0} typing rules}
+\section{Typing context}
 The term \textit{metadata structure} of an object refers to a structure containing all the necessary data about the object. The underlying mathematical representation of these structures are omitted for brevity. $\Gamma$ contains the following:
 \begin{itemize}
     \item $\Gamma_V$: a mapping from local variable names to their types
@@ -41,7 +10,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
     \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
 \end{itemize}
-\subsection{Expression typing}
+\section{Expression typing}
 \begin{tabular}{@{\qquad\qquad}c@{\qquad}c@{\qquad}c@{\qquad}c}
     \AxiomC{}
     \RightLabel{(Int)}
@@ -142,7 +111,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \UnaryInfC{$\Gamma \tack \mathtt{unalias}(x) : \text{unalias}(T)$}
 \end{prooftree}
 
-\subsection{Statement typing}
+\section{Statement typing}
 \begin{center}
 \begin{tabular}{c@{\qquad\qquad}c}
     \AxiomC{}
@@ -229,7 +198,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \end{prooftree}
 \end{center}
 
-\subsection{Top-level typing}
+\section{Top-level typing}
 
 \begin{center}
 \begin{prooftree}
@@ -281,8 +250,8 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \end{prooftree}
 \end{center}
 
-\section{\textit{UserMutex implementation}}
-\subsection{Locking}
+\chapter{\textit{UserMutex implementation}}
+\section{Locking}
 \begin{algorithmic}[1]
 \Procedure{Lock}{$locker\_id$}
     \State \textbf{acquire} $coord\_lock$
@@ -308,7 +277,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \State \Return \textbf{false}
 \EndProcedure
 \end{algorithmic}
-\subsection{Unlocking}
+\section{Unlocking}
 \begin{algorithmic}[1]
 \Procedure{Unlock}{$runtime$}
     \State \textbf{acquire} $mutex.coord\_lock$
@@ -331,5 +300,3 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \State \textbf{release} $mutex.coord\_lock$
 \EndProcedure
 \end{algorithmic}
-
-\end{document}
