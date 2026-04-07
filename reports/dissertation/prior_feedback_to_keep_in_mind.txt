@@ -1,0 +1,18 @@
+1. Instead of saying behaviour call say behaviour invocations (need to mention this at the start I think)
+2. Maths is written in italics
+3. Just say: These are sketched out in section ... (no need to mention the chapter)
+4. IDs should be capitalised
+5. No semi-colons
+6. Note that... the note that can be removed most of the time
+
+
+Shortened words:
+- "a number of"/"a lot of the" -> "various"
+- "at the same time" -> "concurrently"
+- "this is what allows" -> "they/it allows"
+
+Things that should not be hyphenated:
+- Atomic sections, shared memory, actor instance, actor template.
+
+TODO:
+Factor out words for the time complexity

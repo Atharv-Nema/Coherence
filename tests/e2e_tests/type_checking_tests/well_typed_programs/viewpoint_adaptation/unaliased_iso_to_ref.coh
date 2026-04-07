@@ -1,0 +1,6 @@
+actor Main {
+    new create() {
+        var iso_ref: (int ref) iso = nullptr;
+        var ref_ref: (int ref) ref = unalias(iso_ref); 
+    }
+}

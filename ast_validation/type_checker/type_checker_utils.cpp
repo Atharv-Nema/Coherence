@@ -189,11 +189,11 @@ bool capability_covariant(Cap c1, Cap c2) {
 
 // CR: Make the theory more robust
 bool capability_invariant(Cap c1, Cap c2) {
-    if(std::holds_alternative<Cap::Iso>(c1.t) &&
-       std::holds_alternative<Cap::Iso_cap>(c2.t)) {
+    assert(!std::holds_alternative<Cap::Iso_cap>(c1.t));
+    if(c1.t.index() == c2.t.index()) {
         return true;
     }
-    return capability_covariant(c1, c2) && capability_covariant(c2, c1);
+    return std::holds_alternative<Cap::Iso_cap>(c2.t);
 }
 
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 

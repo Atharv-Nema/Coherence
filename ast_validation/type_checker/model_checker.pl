@@ -1,4 +1,5 @@
-% lock names
+% The maximum occurences of reference capabilities in the predicates 
+below is 3, and hence only 3 different locks are needed.
 lock(a).
 lock(b).
 
@@ -10,7 +11,8 @@ capability(ref).
 capability(tag).
 capability(locked(X)) :- lock(X).
 
-% view(Origin, Field, Result)
+% view(K1, K2, K3) succeeds if K1 > K2 = K3, where > is the viewpoint 
+adaptation operator
 view(iso, ref, iso).
 view(iso, val, val).
 view(iso, tag, tag).
@@ -37,63 +39,110 @@ view(locked(X), val, val) :- lock(X).
 view(locked(X), iso, iso) :- lock(X).
 view(locked(X), locked(Y), locked(Y)) :- lock(X), lock(Y).
 
-% find_nonassociative(X, Y, Z) suceeds if (X |> Y) |> Z is not X |> (Y |> Z)
-find_nonassociative(X, Y, Z) :-
-    view(X, Y, T1), view(T1, Z, L), view(Y, Z, T2), \+ view(X, T2, L).
+% check_nonassociativity(K1, K2, K3): succeeds if (K1 > K2) > K3 is
+% not equal to (K1 > (K2 > K3)).
+check_nonassociativity(K1, K2, K3) :- 
+    view(K1, K2, K1_2), view(K1_2, K3, K1_2_3), 
+    view(K2, K3, K2_3), \+ view(K1, K2_3, K1_2_3).
 
-% assign(Target, Source): Source can be assigned to Target
-assign(iso, iso_cap).
-assign(val, iso_cap).
-assign(val, val).
-assign(ref, iso_cap).
-assign(ref, ref).
-assign(tag, iso).
-assign(tag, iso_cap).
-assign(tag, val).
-assign(tag, ref).
-assign(tag, tag).
-assign(locked(X), locked(X)) :- lock(X).
+% covariant(K1, K2): succeeds if K1 is covariant to K2
+covariant(tag, X) :- capability(X).
+covariant(X, X) :- capability(X), \+ (X = iso_cap).
+covariant(X, iso_cap) :- capability(X), \+ (X = iso_cap).
 
-% subtype(Target, Source): Source capability can be treated as Target capability
-subtype(iso, iso).
-subtype(X, Y) :- assign(X, Y).
+% invariant(K1, K2): succeeds if K1 is invariant to K2
+invariant(X, X) :- capability(X), \+ (X = iso_cap).
+invariant(X, iso_cap) :- capability(X), \+ (X = iso_cap).
+
+% assignable(K1, K2): succeeds if K2 is assignable to K1
+assignable(tag, X) :- capability(X).
+assignable(X, X) :- capability(X), \+ (member(X, [iso, iso_cap])).
+assignable(X, iso_cap) :- capability(X), \+ (X = iso_cap).
+
+% mutable(K): succeeds if K is a mutable capability
+mutable(K) :- capability(K), member(K, [ref, iso, iso_cap, locked(L)]).
+
+% readable(K): succeeds if K can be read but not written
+readable(val).
+
+% opaque(K): succeeds if K can neither be written to nor read from
+opaque(tag).
+
+% ptr_assignable(K, K1, K2): succeeds if the type (T K) K2 is assignable 
+% to (T K) K1
+ptr_assignable(K, K1, K2) :- 
+    assignable(K1, K2), view(K1, K, ViewK1), view(K2, K, ViewK2), mutable(K1), 
+    invariant(ViewK1, ViewK2).
+ptr_assignable(K, K1, K2) :- 
+    assignable(K1, K2), view(K1, K, ViewK1), view(K2, K, ViewK2), readable(K1), 
+    covariant(ViewK1, ViewK2).
+ptr_assignable(K, K1, K2) :- 
+    assignable(K1, K2), capability(K), capability(K2), opaque(K1).
+
+% check_nested_assignment_inconsistencies(K, K1, K2): succeeds if K2 is assignable 
+% to K1, but the pointer type
+% (T K) K2 is not assignable to (T K) K1.
+check_nested_assignment_inconsistencies(K, K1, K2) :- 
+    assignable(K1, K2), \+ ptr_assignable(K, K1, K2).
+
+% ptr_covariant(K, K1, K2): succeeds if the type (T K) K2 is covariant to (T K) K1
+ptr_covariant(K, K1, K2) :- 
+    covariant(K1, K2), view(K1, K, ViewK1), view(K2, K, ViewK2), 
+    mutable(K1), invariant(ViewK1, ViewK2).
+ptr_covariant(K, K1, K2) :- 
+    covariant(K1, K2), view(K1, K, ViewK1), view(K2, K, ViewK2), 
+    readable(K1), covariant(ViewK1, ViewK2).
+ptr_covariant(K, K1, K2) :- 
+    covariant(K1, K2), capability(K), capability(K2), opaque(K1).
+
+% check_nested_covariant_inconsistencies(K, K1, K2): succeeds if K2 is 
+% covariant to K1, but the pointer type
+% (T K) K2 is not covariant to (T K) K1.
+check_nested_covariant_inconsistencies(K, K1, K2) :- 
+    covariant(K1, K2), \+ ptr_covariant(K, K1, K2).
+
+% ptr_invariant(K, K1, K2): succeeds if the type (T K) K2 is 
+% invariant to (T K) K1
+ptr_invariant(K, K1, K2) :- 
+    invariant(K1, K2), capability(K), capability(K2), opaque(K1).
+ptr_invariant(K, K1, K2) :- 
+    invariant(K1, K2), view(K1, K, ViewK1), 
+    view(K2, K, ViewK2), invariant(ViewK1, ViewK2).
+
+% check_nested_invariant_inconsistencies(K, K1, K2): succeeds if 
+% K2 is invariant to K1, but the pointer type (T K) K2 is not invariant
+% to (T K) K1.
+check_nested_invariant_inconsistencies(K, K1, K2) :- 
+    invariant(K1, K2), \+ ptr_invariant(K, K1, K2).
+
+% check_iso_unalias_inconsistencies(K): succeeds if the type iso > K 
+% is not compatible with iso_cap > K as defined in section 4.1.3.
+check_iso_unalias_inconsistencies(K) :- 
+    view(iso, K, iso), view(iso_cap, K, iso_cap), \+ (invariant(IsoK, IsocapK)).
+check_iso_unalias_inconsistencies(K) :-
+    view(iso, K, IsoK), view(iso_cap, K, iso_cap), \+ (covariant(IsocapK, IsoK)).
 
 
-% check_nested_type_inconsistencies(C1, C2, I) succeeds if it can find 
-% capabilities C1, C2 and I such that assign(C1, C2) and not subtype(C1 |> I, C2 |> I)
+% sendable(K): succeeds if K is sendable
+sendable(K) :- capability(K), member(K, [iso, val, locked(L), tag]).
+% iso_holdable(K): succeeds if having an iso reference as a member of a 
+% pointer type protected by K does not break the alias invariant of iso. 
+% The idea is that only synchronized types, or types guaranteeing
+% the single alias invariant are allowed to hold an iso.
+iso_holdable(K) :- capability(K), member(K, [iso, locked(L)]).
 
-check_nested_type_inconsistencies(C1, C2, I) :- 
-    assign(C1, C2), view(C1, I, I1), view(C2, I, I2), \+ subtype(I1, I2).
+% check_sendable_inconsistencies(K1, K2) succeeds if the rule for K1 > K2 
+% is leads to unsoundness when a pointer of type (T K2) K1 is present as a 
+% parameter of a behaviour. 
+check_sendable_inconsistencies(K1, K2) :- sendable(K1), view(K1, K2, ref).
+check_sendable_inconsistencies(K1, K2) :- 
+    sendable(K1), \+ (iso_holdable(K1)), view(K1, K2, iso).
 
-% alias(C1, C2): succeeds if C2 is the alias of C1 with maximal permissions (in the 
-% preorder defined by assign).
-% alias(iso, tag).
-% alias(val, val).
-% alias(ref, ref).
-% alias(tag, tag).
-% alias(locked(X), locked(X)) :- lock(X).
+% Checks all the inconsistencies
 
-% find_invalid_aliasing(C1, C2) 
-
-
-% Things to add:
-% Raw reference capability assignment does not violate the invariants
-
-% Do for each of the capabilities
-% 1. Ref cannot have a mutable reference outside
-% Things that can be done:
-% a) Put it in a "wrapped" structure
-% b) Perform following operations
-% - Consume it: (Eg iso)
-% - Alias the outer guy with a local reference
-% - Send it to another actor, and in the other actor do stuff on it 
-% c) Access the field and get a violation
-% Notice that if each stage is safe for the start and the end reference capabilities, 
-% the entire thing is safe
-
-% The concept of safety needs to be specified properly. I think I just need to make sure that the 
-% invariance/covariance stuff is satisfied. (This should be done instead of the simple compatibility check being done currently).
-% I think that this is great news!
-% 2. Val cannot have a mutable reference
-% 3. Locked cannot be unprotected
-% 4. Iso has to have a unique alias (hardest one to model)
+check_inconsistencies :- check_nonassociativity(K1, K2, K3).
+check_inconsistencies :- check_nested_assignment_inconsistencies(K, K1, K2).
+check_inconsistencies :- check_nested_covariant_inconsistencies(K, K1, K2).
+check_inconsistencies :- check_nested_invariant_inconsistencies(K, K1, K2).
+check_inconsistencies :- check_iso_unalias_inconsistencies(K).
+check_inconsistencies :- check_sendable_inconsistencies(K1, K2).

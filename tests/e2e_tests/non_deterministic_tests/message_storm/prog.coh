@@ -1,14 +1,14 @@
 actor Sink {
     new create() {}
-    be ping() {
+    be send_a() {
         OUT -1;
     }
-    be pong() {
+    be send_b() {
         OUT 1;
     }
 }
 
-actor Ping {
+actor A {
     s_inst: Sink;
     new create(Sink s) {
         s_inst := s;
@@ -16,13 +16,13 @@ actor Ping {
     be start() {
         var i: int = 0;
         while(i < 10000) {
-            s_inst->ping();
+            s_inst->send_a();
             i = i + 1;
         }
     }
 }
 
-actor Pong {
+actor B {
     s_inst: Sink;
     new create(Sink s) {
         s_inst := s;
@@ -30,7 +30,7 @@ actor Pong {
     be start() {
         var i: int = 0;
         while(i < 10000) {
-            s_inst->pong();
+            s_inst->send_b();
             i = i + 1;
         }
     }
@@ -39,9 +39,9 @@ actor Pong {
 actor Main {
     new create() {
         var sink_inst: Sink = new Sink.create(); 
-        var ping_inst: Ping = new Ping.create(sink_inst);
-        var pong_inst: Pong = new Pong.create(sink_inst);
-        ping_inst->start();
-        pong_inst->start();
+        var a_inst: A = new A.create(sink_inst);
+        var b_inst: B = new B.create(sink_inst);
+        a_inst->start();
+        b_inst->start();
     }
 }

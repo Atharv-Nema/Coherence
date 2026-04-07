@@ -659,15 +659,7 @@ To resolve this ambiguity, the compiler keeps track of the \textit{value categor
 The code generation stage operates in linear time relative to the size of the annotated AST. Consequently, the entire \textit{Coherence} compilation pipeline---from source parsing to LLVM IR emission---maintains an overall time complexity of $O(N^2)$.
 
 \section{Extension: Pointers-to-pointers} \label{sec:pointers-to-pointers}
-This extension aims to extend \textit{Coherence1.0} to allow for pointers-to-pointers.
-\subsection{Motivation}
-One major limitation of \textit{Coherence1.0} is its inability to represent many useful types.
-\begin{itemize}
-  \item \textbf{Lack of powerful building-blocks}: \texttt{Struct}s are the building-blocks that \textit{Coherence1.0} programmers use to build complex types. These blocks, however, are quite weak as they cannot contain pointers as their members. For example, data structures like dynamic arrays (which need to store a pointer to the underlying array) cannot be encapsulated into a single type.
-  \item \textbf{Inability to represent complex unbounded types}: The only type that is unbounded is the standard pointer/array type (its length is not fixed at compile time). However, unbounded types with recursive structure—such as trees or linked lists—cannot be represented. It might seem like a very simple modification to the \textit{Coherence1.0} compiler will allow programmers to represent such structures: simply allow structures to contain instances of themselves as members. However, this would lead to the struct having undefined size (the size $s$ must be the solution to the equation $s = s + \text{size of other fields}$). Languages like \texttt{C} get around this by allowing pointers to the structure, as pointers have a fixed size (for e.g. 64 bits).
-\end{itemize} 
-Many real-world concurrent algorithms involve multiple entities operating on shared data structures concurrently. Without adequate support for representing such data structures, \textit{Coherence} would be unable to express a wide range of concurrent algorithms.
-
+This extension adds support for pointers-to-pointers in \textit{Coherence1.0}, addressing a major limitation: the inability to represent many useful types. In \textit{Coherence1.0}, programmers build complex types using structs, but these cannot contain pointers as members. Consequently, data structures like dynamic arrays (which must store a pointer to an underlying buffer) cannot be encapsulated into a single type. Recursive data structures such as trees and linked lists are similarly impossible to represent. Since struct instances in \textit{Coherence} are unboxed (stored directly without pointer indirection), embedding a struct within itself would result in undefined size. The standard workaround—storing pointers to the struct as members instead—is unavailable without this extension.
 \subsection{Modifications to the syntax}
 We develop the new syntax by working through examples and carefully considering the requirements of the programmer. Section \ref{??} talks about the need for viewpoint adaptation to maintain the invariants of the reference capabilities. As a recap, viewpoint adaptation tells us that if we have a pointer $x$ of type $(B \ \kappa_1) \ \kappa_2$, the type of *$x$ is $B \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $B \ \kappa$ is $\kappa \triangleright B$, where $\kappa \triangleright B$ represents applying the viewpoint adaptation operator to type $B$. Here, $\triangleright$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright B$:
 \begin{itemize}
@@ -729,7 +721,8 @@ e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
 \]
 
 \subsection{Modifications to the type-system}
-The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, we must ensure that the effective types visible through these references are compatible.
+The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$ in \textit{Coherence}, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, we must ensure that the effective types visible through these references are compatible. 
+
 \begin{itemize}
   \item \textbf{Covariant case}:\\ When $\kappa_{s_2}$ is readable but not writable (e.g. \texttt{val}), then all we need is $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be covariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$.
   \item \textbf{Invariant case}:\\ When $\kappa_{s_2}$ is mutable (e.g. \texttt{ref}), we need $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be invariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. If the system permitted covariance, a source could assign a specific inner pointer to a more generic target pointer, and subsequently, the target could be used to write data into the memory location that is incompatible with the source's original, more restrictive type.
@@ -738,7 +731,7 @@ The core challenge in supporting nested indirection is extending the \texttt{ass
 
 \begin{notebox}
 \textbf{Invariance and covariance}:\\
-The precise interpretation of these relations in natural language is a bit unclear, and they mainly exist for correct typing. But broadly, covariance talks about subtyping without worrying about the single-alias constraints of \texttt{iso} and invariance talks about when two types are effectively equal. Covariance of reference capabilities has the same rules as assignability, except for the fact that \texttt{iso} is covariant to itself. Invariance of reference capabilities is the same as equality, except for the fact the \texttt{iso} is invariant to \texttt{iso\textasciicircum}.
+The precise interpretation of these relations in natural language is a bit unclear, and they mainly exist for correct typing. But broadly, covariance talks about subtyping without worrying about the single-alias constraints of \texttt{iso} and invariance talks about when two types are effectively equal. Covariance of reference capabilities has the same rules as assignability, except for the fact that \texttt{iso} is covariant to itself. Invariance of reference capabilities is the same as equality, except for the fact that all capabilities are invariant to \texttt{iso\textasciicircum}.
 \end{notebox} 
 
 Using the newly defined \texttt{assignable} predicate, the rules below are the modifications to the typing rules in \textit{Coherence1.0}.
@@ -754,6 +747,31 @@ Using the newly defined \texttt{assignable} predicate, the rules below are the m
 \RightLabel{(Nullptr)}
 \UnaryInfC{$\Gamma \tack \mathtt{nullptr} : B\ \kappa$}  
 \end{prooftree}
+
+This type-checking rule could lead to infinite recursion. Consider type-checking a recursive type like \texttt{list}: to determine whether \texttt{list ref} is assignable to \texttt{list ref}, the type-checker verifies that the outer capabilities are assignable, then examines the fields. Since the fields contain the original type, this process would loop indefinitely. This motivates a key requirement on $\triangleright$: if $\kappa_1 <: \kappa_2$, then $T\ \kappa_1$ must be assignable to $T\ \kappa_2$ for all types $T$, and similarly for invariance and covariance. This allows the type-checker to terminate upon encountering identical base types, avoiding infinite recursion.
+
+\subsection{Deviation from Pony}
+The assignability of \textit{Coherence2.0} deviate from \textit{Pony}. \textit{Coherence2.0} treats reads and writes of fields uniformly, while Pony does not. Consider the following \textit{Pony} code:
+\begin{lstlisting}
+class Node { }
+
+class C {
+    var x: Node ref; 
+    new create(n: Node ref) { x = n }
+}
+
+actor Main {
+    new create(env: Env) {
+        let c_inst: C iso = C(Node)
+        let n_tag: Node tag = Node
+        
+        // This fails in standard Pony
+        c_ins.x = n_tag 
+    }
+}
+\end{lstlisting}
+In Pony, $\text{iso} \ \triangleright \ \text{ref} = \text{tag}$. So, c\_inst.x should have type Node tag. Yet, Pony disallows assignment of a \texttt{tag} to c\_inst.x because the declared capability of \texttt{x} is \texttt{ref}. This design reflects Pony's treatment of classes as encapsulated entities with member functions. The declared capability represents how the member functions views its inner fields, and additional checks are needed to ensure that this internal view remains consistent. In \textit{Coherence}, by contrast, structs are simply a means of bundling data. Hence, it does not make sense for the declared capability to have any bearing on assignability: only the adapted capabilities after viewpoint adaptation matter. 
+
 
 \subsection{Viewpoint adaptation}
 The specific requirements of this operator for safety and their formal verification will be done in Section \ref{??}.
@@ -773,12 +791,7 @@ $\kappa_1 \triangleright \kappa_2$ & \textbf{Tag} & \textbf{Ref} & \textbf{Val} 
 \end{tabular}
 \end{table}
 
-A few of the interesting choices made in the definition will be justified with examples:
-
-\begin{itemize}
-  \item \textbf{$\text{ref}\ \triangleright\ \text{iso} = \text{iso}$}: At first, it feels like this should break the invariant of a unique \texttt{iso}. However, note that assigning a $(T \ \texttt{iso}) \ \texttt{ref}$ to another $(T \ \texttt{iso}) \ \texttt{ref}$ does not increase the number of memory locations that store the $T \ \texttt{iso}$ reference (it is still stored in a single field on the heap). We simply have multiple paths (via the \texttt{ref} aliases of the parent structure) that lead to that single unique location. This is not an issue within a single thread because all accesses to the same \texttt{iso} reference happen sequentially within the actor's execution context, preventing concurrent data-races. For the same reason, \texttt{locked<A>} $\triangleright$ \texttt{iso} = \texttt{iso}.
-  \item \textbf{$\text{iso}\ \triangleright\ \text{ref} = \text{ref}$}: One might assume that this allows assigning a \texttt{ref} to a field within an \texttt{iso} structure. However, the inner type is irrelevant in isolation. The type-checker deals with the adapted type \texttt{iso} $\triangleright$ \texttt{ref}. \texttt{iso} $\triangleright$ \texttt{ref} is \texttt{iso}, and \texttt{ref} is not assignable to \texttt{iso}.
-\end{itemize}
+One notable choice in the definition of $\triangleright$ warrants justification: $\text{ref}\ \triangleright\ \text{iso} = \text{iso}$. This may appear to violate the uniqueness invariant of \texttt{iso}. However, assigning a $(T\ \texttt{iso})\ \texttt{ref}$ to another $(T\ \texttt{iso})\ \texttt{ref}$ does not increase the number of memory locations storing the $T\ \texttt{iso}$ reference (it remains in a single heap location). We simply have multiple paths (via \texttt{ref} aliases of the parent structure) leading to that unique location. This is safe within an actor because all accesses occur sequentially within its execution context, preventing concurrent data races. For the same reason, $\texttt{locked<A>} \triangleright \texttt{iso} = \texttt{iso}$.
 
 \subsection{Implementation}
 The primary modifications were in the type-checker, where the assignability, covariance, and invariance relations were implemented. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \texttt{nullptr} abstraction directly to the LLVM \texttt{null} constant.
