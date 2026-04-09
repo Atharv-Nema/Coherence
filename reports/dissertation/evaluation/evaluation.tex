@@ -25,14 +25,191 @@ For data race safety, we first address \textit{Coherence1.0} which is much simpl
 
 Establishing data-race safety for \textit{Coherence 2.0} is considerably more complex. The interactions involving \texttt{locked} capabilities are more nuanced—for instance, we must now account for \texttt{locked<L>} appearing as a field type within nested pointer structures. Additionally, as discussed in section \ref{...}, the type checking in \textit{Coherence 2.0} differs subtly from Pony. Fortunately, the assignability rules and the definitions of covariance and invariance are designed to ensure that assignments within a local scope do not violate any reference capability invariant, regardless of the specific definition of $\triangleright$. 
 
-However, these rules are not enough to guarantee data race safety for an arbritary $\triangleright$. Sendability is verified by checking that the outer capability is not \texttt{ref}, but this relies on $\triangleright$ being appropriately defined. Consider, for instance, if $\text{val} \triangleright \text{ref} = \text{ref}$. A behaviour could then accept an \texttt{(int ref) val} as an argument, allowing actors to wrap a \texttt{ref} inside a \texttt{val} and share it, thereby violating the invariant of \texttt{ref}. Similarly, these rules do not guarantee safety when unaliasing an \texttt{iso}. For example, suppose $\text{iso} \triangleright \text{ref} = \text{tag}$ while $\text{iso} \ \triangleright \text{ref} = \text{ref}$. This would permit storing a \texttt{tag} to a \texttt{ref} field of an \texttt{iso}, then unaliasing to obtain a \texttt{ref} to what was originally a \texttt{tag}. This effectively allows assignment of a \texttt{tag} to a \texttt{ref}. Since any reference capability can be assigned to \texttt{tag}, this would permit aliasing arbitrary capabilities with \texttt{ref}, potentially violating the invariants of those capabilities. Hence, for safety, we require that $\text{iso\textasciicircum} \ \triangleright\  \kappa$ is covariant with $\text{iso} \triangleright \kappa$ for all capabilities $\kappa$ when $\text{iso} \ \triangleright \ \kappa$ is not iso. If $\text{iso} \ \triangleright \ \kappa$ is iso, we have the flexibility to set $\text{iso\textasciicircum} \ \triangleright \ \kappa$ to be iso\textasciicircum. 
+However, these rules are not enough to guarantee data race safety for an arbritary $\triangleright$. 
+
+As mentioned in section (...), the \textit{Coherence} type-system allows a behaviour to contain any argument that is not a ref pointer. However, for sendability safety, we require that $\triangleright$ is appropriately defined. Consider, for instance, if $\text{val} \triangleright \text{ref} = \text{ref}$. A behaviour could then accept an \texttt{(int ref) val} as an argument (as its outermost capability is not \texttt{ref}). This would allow actors to wrap a \texttt{ref} inside a \texttt{val} and share it, thereby violating the invariant of \texttt{ref}. Similarly, the type-checker do not guarantee safety when unaliasing an \texttt{iso} for an arbritrary $\triangleright$. For example, suppose $\text{iso} \triangleright \text{ref} = \text{tag}$ while $\text{iso} \ \triangleright \text{ref} = \text{ref}$. This would permit storing a \texttt{tag} to a \texttt{ref} field of an \texttt{iso}, then unaliasing to obtain a \texttt{ref} to what was originally a \texttt{tag}. This effectively allows assignment of a \texttt{tag} to a \texttt{ref}, which is not safe. Hence, for safety, we require that $\text{iso\textasciicircum} \ \triangleright\  \kappa$ is covariant with $\text{iso} \triangleright \kappa$ for all capabilities $\kappa$ when $\text{iso} \ \triangleright \ \kappa$ is not iso. If $\text{iso} \ \triangleright \ \kappa$ is iso, we have the flexibility to set $\text{iso\textasciicircum} \ \triangleright \ \kappa$ to be iso\textasciicircum. 
 
 
-Finally, we must verify that the definition of $\triangleright$ satisfies the property mentioned in section \ref{...}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
+Finally, we must also verify that the definition of $\triangleright$ satisfies the property mentioned in section \ref{...}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
 
-If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \texttt{iso} unaliasing, and the property claimed in Section~\ref{...}. This program can be found in section (...).
+If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \texttt{iso} unaliasing, and the property claimed in Section~\ref{...}. This program can be found in section (...). Although these arguments are not completely rigorous, formally verifying that my definition of $\triangleright$ satisfied these key non-trivial properties, and intuitive confidence in the definition by informally reasoning through examples gives an assurance for soundness of \textit{Coherence2.0}.
 
 \section{Expressive power}
-Perhaps can talk about accessing shared data structures (implementation in Pony and kappa). And the corresponding code in pony (take from the preparation).
-Read about rust.
-A talk about reference capabilities
+% Rephrase this below
+A core goal of \textit{Coherence} is to offer high expressive power without sacrificing safety. This section examines this claim. We discuss how \textit{Coherence} can be used to represent concurrent algorithms requiring coordinated access to a shared datastructure. We then look at how to represent more complex coordination pattern involving sleeping and waking up, then talks about the memory model of coherence and how it can be used to write more expressive programs, and then talks about a few limitations of the language.
+
+\subsection{Shared data structures}
+I argue that Coherence proves superior to lock-free languages like Pony when concurrently performing operations on shared data structures. The main pattern in Pony to handle atomic operations across multiple shared data structures is what I call the hot-potato pattern. In this pattern, a requesting actor receives exclusive ownership of the shared data structure via an \texttt{iso} reference. After completing the required operation, the holding actor passes the data to the next actor needing access, typically through a central scheduler. For example, this pattern can be used to manage a shared integer.
+
+\begin{lstlisting}
+// A simple shared container to hold our value
+class IntContainer
+  var value: U64 = 0
+  new create(v: U64) => value = v
+
+actor IntScheduler
+  var _data: (IntContainer iso | None)
+  var _wait_queue: Deque[{(IntContainer iso): None} val]
+
+  be take(cb: {(IntContainer iso): None} val) =>
+    match (_data = None)
+    | let p: IntContainer iso => cb(consume p)
+    | None => _wait_queue.push_back(cb)
+
+  be return(p: IntContainer iso) =>
+    if _wait_queue.size() > 0 then
+      let cb = _wait_queue.pop_front()
+      cb(consume p)
+    else 
+      _data = consume p
+    end
+\end{lstlisting}
+
+The preceding code offers a conceptual representation of the hot-potato pattern used to manage a shared integer, rather than completely syntactically accurate Pony code. Since Coherence lacks first-class functions, further details are omitted (they should be viewed simply as a convenient syntax for the intended operations). The scheduler maintains exclusive ownership of the shared data. When an actor calls \texttt{take}, if the data is available, it either receives it immediately. Else, its callback is queued. When \texttt{return} is called, the scheduler dispatches the data to the next waiter or retains it for future requests.
+
+Now, we consider the problem of performing operations across multiple different shared data structures. For example, consider atomically swapping the values of two shared integers. We can use the hot-potato model.
+\begin{lstlisting}
+actor Swapper2
+  be swap(s1: IntScheduler, s2: IntScheduler) =>
+    // Step 1: Queue a request for the first potato
+    s1.take({(p1: IntContainer iso) val => 
+      // Step 2: Once p1 is received, queue a request for the second
+      s2.take({(p2: IntContainer iso) val =>
+        // Step 3: We now hold both exclusively. 
+        // No other actor can intervene because we possess exclusive access.
+        let temp = p1.value
+        p1.value = p2.value
+        p2.value = temp
+        // Step 4: Return the shared integers to wake up any pending waiters
+        s1.give(consume p1)
+        s2.give(consume p2)
+      } val)
+    } val)
+\end{lstlisting}
+
+This pattern achieves atomicity as the requesting actor holds exclusive access to the data structures, preventing concurrent modifications. However, it introduces some serious flaws. First, the system relies entirely on programmers to return references.  Forgotten returns effectively lose the resource. More fundamentally, this pattern can lead to logical deadlocks: states that are not technically deadlocks from the language's perspective (see Section X), but exhibit identical symptoms from the programmer's viewpoint. Consider two actors attempting to access the same two schedulers, but in a different order:
+\begin{itemize}
+    \item Actor A acquires \texttt{p1} from \texttt{s1}, then calls \texttt{m2.take()} and enters \texttt{m2}'s wait queue.
+    \item Actor B acquires \texttt{p2} from \texttt{s2}, then calls \texttt{m1.take()} and enters \texttt{m1}'s wait queue.
+\end{itemize}
+Each actor waits for the other to call return. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes of the actor instances are empty, there is still work to be done from the perspective of the programmer (the wait queue of \texttt{IntScheduler} is not empty). The compiler cannot prevent this, as it cannot interpret programmer intent encoded in user-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
+
+\textit{Coherence} solves this through the \texttt{locked<L>} capability. Shared data is protected by associating it with a lock, and operations spanning multiple structures are wrapped in an \texttt{atomic} block. The compiler infers the required locks and acquires them in a fixed global order, guaranteeing deadlock freedom.
+
+\begin{lstlisting}
+actor Swapper
+  be swap(ptr1: int locked<A>, ptr2: int locked<B>) =>
+    // The compiler infers that both lock A and lock B are required.
+    // They are acquired in a fixed order (e.g., A then B) before 
+    // the code below executes.
+    atomic {
+      let temp = *ptr1
+      *ptr1 = *ptr2
+      *ptr2 = temp
+    }
+    // Both locks are automatically released here.
+\end{lstlisting}
+
+As shown, swapping two shared integers reduces to straightforward sequential code without nested callbacks, manual \texttt{take}/\texttt{return} or user-managed queues. Locks are acquired and released automatically, eliminating logical deadlocks.
+
+\subsection{Finer coordination patterns}
+Complex concurrent algorithms often require finer-grained coordination beyond basic mutual exclusion. Consider the \textit{sleeping barber problem} (cite), which involves a barber who sleeps when no customers are present and customers who must wake a sleeping barber upon arrival, provided there is space in the waiting room. Unlike simple locking where an entity acquires and releases a lock for mutual exclusion, this problem requires the ability to sleep until woken by another entity. A standard pseudocode solution is as follows:
+
+\begin{algorithmic}[1]
+\Procedure{Barber}{$shop$}
+    \While{\textbf{true}}
+        \State \textbf{acquire} $shop.mutex$
+        
+        \If{$shop.queue$ is empty}
+            \State \text{// Atomically release \textit{shop.mutex} and sleep until signalled}
+            \State \textbf{wait\_on} $shop.cond\_var$ with $shop.mutex$
+            \State \text{// Condition variable ensures that \textit{shop.mutex} is}
+            \State \text{// implicitly re-acquired upon waking up }
+        \EndIf
+        
+        \State $customer \gets shop.queue.pop\_front()$
+        \State \textbf{release} $shop.mutex$
+        
+        \State \Call{PerformHaircut}{$customer$}
+    \EndWhile
+\EndProcedure
+
+\medskip
+\hrule
+\medskip
+
+\Procedure{CustomerVisit}{$shop, customer$}
+    \State \textbf{acquire} $shop.mutex$
+    
+    \If{$shop.queue.size < shop.max\_chairs$}
+        \State $shop.queue.push\_back(customer)$
+        \State \text{// Notify the barber that a customer is ready}
+        \State \textbf{signal} $shop.cond\_var$
+        \State \textbf{release} $shop.mutex$
+    \Else
+        \State \text{// Shop is full. Customer leaves}
+        \State \textbf{release} $shop.mutex$
+        \State \Return
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+
+The solution uses a mutex for data-race free access of \textit{shop.queue}, and a condition variable to sleep until a customer arrives. A condition variable, rather than a simple semaphore, is required because the barber must atomically release and re-acquire \textit{shop.mutex}.
+
+\textit{Coherence} does not provide direct access to synchronization primitives like semaphores or condition variables. However, equivalent patterns can be simulated through message passing combined with shared state. The key insight is that shared data structures and actor fields persist across behaviour invocations. To sleep, an actor simply allows its current behaviour to complete. All necessary state is retained in shared memory or actor members. To wake up, another actor sends a message that triggers a new behaviour invocation, resuming operation. Using this insight, we can solve the sleeping barber's problem as follows.
+
+\begin{lstlisting}
+actor Barber {
+  // A FIFO queue storing customer information
+  queue: customer_queue locked<L>;
+  new create(int num_chairs) {
+    queue := create_queue(num_chairs);
+  }
+
+  be wake_up() {
+    // Process all waiting customers, then implicitly "sleep"
+    // by allowing the behaviour to complete
+    while (!queue_empty(queue)) {
+        atomic {
+            var c: Customer = pop_customer(queue);
+            c.finish_haircut();
+        }
+    }
+    // Barber "sleeps" until the next wake_up message
+  }
+}
+
+actor Customer {
+  be visit_shop(Barber barber, (customer_queue locked<L>) queue) {
+    atomic {
+      if(!queue_full(queue)) {
+        add_customer(queue, this);
+        // Will still work without the check below. However,
+        // many useless wake_up messages will be sent.
+        if(!queue_empty(queue)) {
+          barber.wake_up(); // Wake the barber
+        }
+      }
+      // Otherwise, leave (no space in waiting room)
+    }
+  }
+}
+\end{lstlisting}
+
+When a customer arrives, it atomically checks for space in \texttt{queue}, enqueues itself if space exists, and sends a \texttt{wake\_up} message to the barber if the queue was empty. The barber processes all queued customers within its behaviour. When the queue empties, the behaviour completes and the barber effectively "sleeps" until another \texttt{wake\_up} arrives.
+
+The logical correctness of the wake-up protocol remains the programmer's responsibility. \textit{Coherence} cannot verify that \texttt{wake\_up} is called at appropriate times, and that \texttt{wake\_up} is handled correctly. However, the \texttt{atomic} sections guarantee safe concurrent access to the shared queue, preventing data races and ensuring consistent state. Unlike the standard imperative solution, no explicit mutex management is required. The compiler handles synchronization automatically, allowing the programmer to focus on the coordination logic itself.
+
+\subsection{Memory/structure model}
+Talk about the pointer stuff and how it relates to Pony. Mention that it is not completely memory safe. (like probably only 100 words)
+
+\subsection{Limitations of \textit{Coherence}}
+(100 words)
+Talk about logical deadlocks. Multi-reader single writer. And lock free programming
+
+\section{Performance}
+\subsection{Compiler performance}
+200 words about the time complexity and stuff, and perhaps a graph for the real performance
+\subsection{Runtime performance}
+Perhaps??? Mainly about context switches
+Comparison with Pony for would be nice.
