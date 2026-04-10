@@ -81,14 +81,22 @@ int main(int argc, char* argv[]) {
     }
 
     // 3. LLVM code generation
-    std::filesystem::path out_ll_path = output_dir / "out.ll";
-    ast_codegen(program_root, out_ll_path.string());
+    std::filesystem::path out_raw_ll_path = output_dir / "out_raw.ll";
+    ast_codegen(program_root, out_raw_ll_path.string());
     std::cout << "Compilation successful\n";
     delete program_root;
 
+    // Optimizing the IR
+    std::filesystem::path out_opt_ll_path = output_dir / "out_opt.ll";
+    std::string opt_cmd = std::format("opt -O3 {} -S -o {}", out_raw_ll_path.string(), out_opt_ll_path.string());
+    if(std::system(opt_cmd.c_str()) != 0) {
+        std::cerr << "Error: optimization failed\n";
+        return 1;
+    }
+
     // 4. Compiling to an executable
     std::filesystem::path out_s_path = output_dir / "out.s";
-    std::string obj_compile_cmd = std::format("llc {} -o {}", out_ll_path.string(), out_s_path.string());
+    std::string obj_compile_cmd = std::format("llc -O3 {} -o {}", out_opt_ll_path.string(), out_s_path.string());
     if (std::system(obj_compile_cmd.c_str()) != 0) {
         std::cerr << "Error: llc failed\n";
         return 1;
