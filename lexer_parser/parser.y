@@ -79,7 +79,7 @@
 %token TOK_LEQ TOK_GEQ TOK_LESS TOK_GREATER TOK_EQ TOK_NEQ
 %token TOK_LPAREN TOK_RPAREN TOK_LBRACE TOK_RBRACE TOK_LSQUARE TOK_RSQUARE
 %token TOK_COLON TOK_SEMI TOK_COMMA
-%token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH
+%token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH TOK_MOD
 %token TOK_VAR
 
 %token <int_val>   TOK_INT_LIT
@@ -625,6 +625,20 @@ multiplicative_expr
                 ValExpr::BinOpExpr{
                     std::move(*$1),
                     BinOp::Div,
+                    std::move(*$3)
+                }
+            }
+        ));
+        delete $1; delete $3;
+      }
+    | multiplicative_expr TOK_MOD postfix_expr {
+        $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
+            ValExpr{
+                span_from(@$),
+                nullptr,
+                ValExpr::BinOpExpr{
+                    std::move(*$1),
+                    BinOp::Mod,
                     std::move(*$3)
                 }
             }

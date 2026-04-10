@@ -51,13 +51,13 @@ void thread_loop() {
             std::unique_lock<std::mutex> lock_guard(runtime_ds->schedule_queue_lock);
             while(runtime_ds->schedule_queue.size() == 0) {
                 runtime_ds->threads_asleep++;
-                if(runtime_ds->threads_asleep == 32) {
+                if(runtime_ds->threads_asleep == 16) {
                     runtime_ds->thread_bed.notify_all();
                     return;
                 }
                 else {
                     runtime_ds->thread_bed.wait(lock_guard);
-                    if(runtime_ds->threads_asleep == 32) {
+                    if(runtime_ds->threads_asleep == 16) {
                         return;
                     }
                     runtime_ds->threads_asleep--;
@@ -142,7 +142,7 @@ void thread_loop() {
 int main() {
     runtime_initialize();
 
-    const int NUM_THREADS = 32;
+    const int NUM_THREADS = 16;
     std::vector<std::thread> workers;
     workers.reserve(NUM_THREADS);
 

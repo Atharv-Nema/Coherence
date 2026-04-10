@@ -82,6 +82,7 @@ static int curr_column = 1;
 "-"         return TOK_MINUS;
 "*"         return TOK_STAR;
 "/"         return TOK_SLASH;
+"%"         return TOK_MOD;
 
 "OUT"       return TOK_OUT;
 

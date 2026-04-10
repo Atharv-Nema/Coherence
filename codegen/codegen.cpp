@@ -198,7 +198,7 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             std::string arr_ele_reg = gen_state.reg_label_gen.new_temp_reg();
             gen_state.out_stream << "%" + arr_ele_reg << " = getelementptr " << llvm_type_of_default << ", ptr "
             << "%" + pointer_reg << ", i64 " << "%" + ind_reg << std::endl;
-            gen_state.out_stream << "store " << llvm_type_of_default << " " << "%" + default_val_reg 
+            gen_state.out_stream << "store " << llvm_type_of_default << " " << "%" + default_val_reg_rval 
             << ", ptr " << "%" + arr_ele_reg << std::endl;
             gen_state.out_stream << "%" + next_ind_reg << " = add i64 " << "%" + ind_reg << ", 1" << std::endl;
             branch_label(gen_state, ind_comp_label);
