@@ -70,6 +70,7 @@ void print_binop(BinOp op) {
         case BinOp::Sub: std::cout << "Sub"; break;
         case BinOp::Mul: std::cout << "Mul"; break;
         case BinOp::Div: std::cout << "Div"; break;
+        case BinOp::Mod: std::cout << "Mod"; break;
         case BinOp::Geq: std::cout << "Geq"; break;
         case BinOp::Leq: std::cout << "Leq"; break;
         case BinOp::Eq:  std::cout << "Eq"; break;

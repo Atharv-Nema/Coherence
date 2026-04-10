@@ -385,6 +385,7 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                 case BinOp::Sub:
                 case BinOp::Mul:
                 case BinOp::Div:
+                case BinOp::Mod:
                     if(!(type_is_int(env.type_env.type_context, lhs_t) && type_is_int(env.type_env.type_context, rhs_t))) {
                         report_error_location(val_expr->source_span);
                         std::cerr << "Type not compatible for arithmetic" << std::endl;

@@ -16,7 +16,7 @@ struct SourceSpan {
 
 // Exclusively for statements that represent computation and not control flow (ie, result in a value)
 
-enum class BinOp { Add, Sub, Mul, Div, Geq, Leq, Eq, Neq, Gt, Lt };
+enum class BinOp { Add, Sub, Mul, Div, Mod, Geq, Leq, Eq, Neq, Gt, Lt };
 
 struct ValExpr {
     // Simple values

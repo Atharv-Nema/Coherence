@@ -386,7 +386,10 @@ std::pair<std::string, ValueCategory> emit_valexpr(
                     gen_state.out_stream << " mul i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Div:
-                    gen_state.out_stream << " udiv i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    gen_state.out_stream << " sdiv i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
+                    break;
+                case BinOp::Mod:
+                    gen_state.out_stream << " srem i32 " << "%" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
                     break;
                 case BinOp::Geq:
                     gen_state.out_stream << " icmp sge " << llvm_cmp_type << " %" + lhs_reg << ", " << "%" + rhs_reg << std::endl;
