@@ -20,7 +20,7 @@ actor RingMem {
 
 actor Main {
     new create() {
-        var n_actors: int = 100;
+        var n_actors: int = 1000;
         var m_passes: int = 1000000;
         var ring_mem: RingMem ref = new ref[n_actors] RingMem(new RingMem.create());
         var i: int = 1;

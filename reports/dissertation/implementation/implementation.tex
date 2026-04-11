@@ -583,17 +583,6 @@ Runtime traps provide the interface through which the generated LLVM code invoke
 \caption{Overview of \textit{Coherence} runtime traps}
 \end{table}
 
-\subsection{The start and the end of execution}
-\textcolor{red}{I felt like the content in "execution start" was interesting, but given the word count, I am considering removing this entire subsection. What do you think?}\\
-This section briefly explains how the execution of a complete \textit{Coherence} binary (compiled and linked with the runtime) starts and terminates.
-\subsubsection{Execution start}
-Semantically, \textit{Coherence} programs start from the \texttt{create} constructor of the \texttt{Main} actor template. However, constructors are synchronous callables and therefore do not have their own stack (they use the stack of the behaviour that invoked them). One potential solution is to introduce another actor-instance (say, \texttt{start}) with a behaviour that creates an instance of \texttt{Main} using the \texttt{create} constructor. However, this does not resolve the issue: creating this actor-instance still requires a constructor, which in turn requires an execution context. \\
-To break this loop, we can trick the runtime using a dummy actor. Since \texttt{handle\_actor\_creation} treats its \texttt{llvm\_actor\_object} parameter as a black box, we can simply pass a nullptr and receive an ID for a fake \texttt{start} actor instance in return. Next, we need to send a message to this fake instance. Since any function pointer can be passed to \texttt{handle\_behaviour\_call}, we can pass a pointer to a custom function that instantiates the \texttt{Main} actor using its \texttt{create} constructor. This completes the initialization. When scheduling commences, the runtime executes this dummy behaviour, providing the necessary stack and execution context for the \texttt{Main} constructor to run.\\
-While all of this could be done in a C++ function within the runtime code, it is more convenient to do it directly in LLVM where all the generated code definitions are accessible. Therefore, the bootstrapping logic is placed in an LLVM function called \texttt{coherence\_initialize}, which is generated alongside the user code. The runtime calls this function before scheduling starts.
-
-\subsubsection{Execution end}
-\textit{Coherence} programs end when global quiescence is achieved. This is a state where no actor is currently executing and no messages remain in any mailbox or the global schedule queue. Upon detecting global quiescence, all worker threads return, ending the program execution.
-
 \section{Codegen} \label{sec:codegen}
 \textcolor{red}{This section is a lot of walkthrough of specific implementation details. Do you think that the specific details (expecially those in section 3.5.2 and 3.5.3) are important?}\\
 This section outlines the design decisions involved in implementing this code generation stage.\\
@@ -720,7 +709,7 @@ e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
 \end{array}
 \]
 
-\subsection{Modifications to the type-system}
+\subsection{Modifications to the type-system} \label{sec:extension-typing-rules}
 The core challenge in supporting nested indirection is extending the \texttt{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$ in \textit{Coherence}, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, we must ensure that the effective types visible through these references are compatible. 
 
 \begin{itemize}
@@ -750,7 +739,7 @@ Using the newly defined \texttt{assignable} predicate, the rules below are the m
 
 This type-checking rule could lead to infinite recursion. Consider type-checking a recursive type like \texttt{list}: to determine whether \texttt{list ref} is assignable to \texttt{list ref}, the type-checker verifies that the outer capabilities are assignable, then examines the fields. Since the fields contain the original type, this process would loop indefinitely. This motivates a key requirement on $\triangleright$: if $\kappa_1 <: \kappa_2$, then $T\ \kappa_1$ must be assignable to $T\ \kappa_2$ for all types $T$, and similarly for invariance and covariance. This allows the type-checker to terminate upon encountering identical base types, avoiding infinite recursion.
 
-\subsection{Deviation from Pony}
+\subsection{Deviation from Pony} \label{sec:extension-pony-deviation}
 The assignability of \textit{Coherence2.0} deviate from \textit{Pony}. \textit{Coherence2.0} treats reads and writes of fields uniformly, while Pony does not. Consider the following \textit{Pony} code:
 \begin{lstlisting}
 class Node { }

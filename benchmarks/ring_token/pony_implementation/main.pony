@@ -28,7 +28,7 @@ actor Worker
 actor Main
   new create(env: Env) =>
     // Change n_actors to USize for Array and Range compatibility
-    let n_actors: USize = 100
+    let n_actors: USize = 1000
     let m_passes: U64 = 1_000_000
     
     let workers = Array[Worker](n_actors)

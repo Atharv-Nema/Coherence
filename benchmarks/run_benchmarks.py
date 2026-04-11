@@ -159,12 +159,32 @@ def benchmark_struct_access(config: BenchmarkConfig):
         plt.savefig(config.output_dir / "struct_access_report.png")
         plt.close()
 
+def compile_cpp(source_file: Path, output_file: Path):
+    """Compile a C++ file with C++20 features."""
+    cmd = [
+        "g++",
+        "-std=c++20",
+        "-pthread",
+        str(source_file),
+        "-o", str(output_file)
+    ]
+    result = run(cmd, check=True)
+    
+    if not output_file.exists():
+        print(f"Compilation did not produce expected output: {output_file}")
+        print(f"stdout: {result.stdout}")
+        print(f"stderr: {result.stderr}")
+        sys.exit(1)
+    return result
+
+
 def benchmark_ring_token(config: BenchmarkConfig):
     print("Benchmarking Ring Token")
     
     rt_dir = config.root_dir / "benchmarks" / "ring_token"
     rt_coh = rt_dir / "coherence_implementation" / "prog.coh"
     rt_pony = rt_dir / "pony_implementation"
+    rt_cpp = rt_dir / "cpp_implementation" / "ring_token.cpp"
 
     # Verify source files exist
     if not rt_coh.exists():
@@ -173,29 +193,50 @@ def benchmark_ring_token(config: BenchmarkConfig):
     if not rt_pony.exists():
         print(f"Pony source directory not found: {rt_pony}")
         sys.exit(1)
+    if not rt_cpp.exists():
+        print(f"C++ source not found: {rt_cpp}")
+        sys.exit(1)
 
     bin_dirs = {
         "coh": rt_dir / "bin_coh_o0",
-        "pony": rt_dir / "bin_pony_o0"
+        "pony": rt_dir / "bin_pony_o0",
+        "cpp": rt_dir / "bin_cpp",
     }
 
     with temporary_directories(*bin_dirs.values()):
         # Compile
         compile_coherence(config.compiler, rt_coh, bin_dirs["coh"], optimize=False)
         compile_pony(config.ponyc, rt_pony, bin_dirs["pony"], release=False)
+        compile_cpp(rt_cpp, bin_dirs["cpp"] / "ring_token")
 
         # Time executions
-        t_rt_coh = time_exe([str(bin_dirs["coh"] / "out")])
+        t_rt_coh  = time_exe([str(bin_dirs["coh"] / "out")])
         t_rt_pony = time_exe([str(bin_dirs["pony"] / "main"), "--ponymaxthreads", "16"])
+        t_rt_cpp  = time_exe([str(bin_dirs["cpp"] / "ring_token")])
 
-        print(f"  Results: coh={t_rt_coh:.3f}s, pony={t_rt_pony:.3f}s")
+        print(f"  Results: coh={t_rt_coh:.3f}s, pony={t_rt_pony:.3f}s, cpp={t_rt_cpp:.3f}s")
 
         # Plot
-        plt.figure(figsize=(8, 6))
-        plt.bar(['Coherence', 'Pony'], [t_rt_coh, t_rt_pony], color=['#0000FF', '#FF0000'])
+        labels   = ['Coherence', 'Pony', 'C++']
+        times    = [t_rt_coh, t_rt_pony, t_rt_cpp]
+        colors   = ['#0000FF', '#00FF00', '#FF0000']
+
+        plt.figure(figsize=(10, 6))
+        bars = plt.bar(labels, times, color=colors, width=0.5)
+
+        # Annotate bars with exact times
+        for bar, t in zip(bars, times):
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.05,
+                f'{t:.2f}s',
+                ha='center', va='bottom', fontsize=11, fontweight='bold'
+            )
+
         plt.ylabel('Time (s)')
-        plt.title('Ring Token')
+        plt.title('Ring Token Benchmark\n(m=1,000,000 passes, n=1,000 actors)')
         plt.grid(axis='y', linestyle='--', alpha=0.5)
+        plt.tight_layout()
         plt.savefig(config.output_dir / "ring_token_report.png")
         plt.close()
 

@@ -23,7 +23,7 @@
 % --- Code & Algorithms ---
 \usepackage{listings}
 \usepackage{algorithmicx}
-\algrenewcommand{\algorithmiccomment}[1]{// #1}
+\usepackage{graphicx}
 \usepackage{algpseudocode}
 
 % --- Custom Boxes ---
@@ -38,8 +38,8 @@
 \addbibresource{bibliography.bib} 
 
 % --- Global Document Settings ---
-\setcounter{secnumdepth}{4} % Added from Appendix
-\setcounter{tocdepth}{4}    % Added from Appendix
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{4}
 
 % --- Custom Commands ---
 \newcommand{\cmark}{\ding{51}}
@@ -51,15 +51,18 @@
 
 \tableofcontents
 
-% --- Include Chapters ---
+% Include Chapters
 \include{introduction/introduction}
 \include{preparation/preparation}
 \include{implementation/implementation}
 \include{evaluation/evaluation}
+\include{conclusion/conclusion}
+
+% Bibliography
+\printbibliography
 
 % --- Include Appendix ---
 \appendix 
-\include {appendix/appendix}
-\printbibliography
+% \include {appendix/appendix}
 
 \end{document}

@@ -1,0 +1,37 @@
+\chapter{Conclusion}
+In this project, I have described and developed \textit{Coherence}, an actor-based programming language developed to allow programmers to write safe and expressive concurrent code. This chapter summarizes of the work completed, discusses potential directions for future work, and reflects on the progression of the project.
+
+\section{Work completed}
+I successfully achieved the core objectives established in the project proposal:
+\begin{itemize}
+  \item \textbf{Type-system}: Successfully devised a type system and implemented a type checker that enforces that all accepted programs are data-race and deadlock free. 
+  \item \textbf{Compiler}: Implemented a compiler that translates \textit{Coherence} programs to LLVM IR, along with a runtime system to manage scheduling and actor state.
+  \item \textbf{Core Evaluation}: Developed a comprehensive test suite containing both unit tests and end-to-end tests to empirically verify the implementation. Additionally, qualitatively evaluated \textit{Coherence}'s expressive power by implementing representative concurrent programs that demonstrate the language's expressive power and ergonomics.
+\end{itemize}
+I also went beyond the core goals by extending the core \textit{Coherence} language to allow multi-level pointers, and also performed more evaluations by evaluating the runtime's design choice by performance (did benchmarks) and also did basic formal verification using prolog to make sure that the $\triangleright$ operator of \textit{Coherence} satisfied certain properties required for correctness.
+
+Beyond the core objectives, I pursued several extensions:
+\begin{itemize}
+  \item \textbf{Multi-level Pointers}: Extended the core \textit{Coherence} type system to support nested pointer structures. This involved careful translation of the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
+  
+  \item \textbf{Performance}: Performed time-complexity analysis and ran a benchmark to evaluate the implementation of the runtime.
+  
+  \item \textbf{Formal Verification}: Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
+\end{itemize}
+
+\section{Future work}
+Several directions for future work remain unexplored due to time constraints and their tangential relationship to the core success criteria:
+\begin{itemize}
+  \item \textbf{Richer language features}: 
+  As mentioned in section (...), \textit{Coherence} lacks many features present in a mature language. Introducing parametric polymorphism via generics and first-class functions would enable cleaner representation of common programming patterns.
+  \item \textbf{Richer lock-system}: As discussed in section (...), support for dynamically created locks was not implemented. However, I believe \textit{Coherence} could be extended following the approach of (...) to support dynamic lock allocation while preserving deadlock freedom guarantees, significantly enriching the language's expressiveness.
+
+  \item \textbf{Garbage collector}: Another extension that was abandoned was implementing a garbage collector for the language, as it was deemed to be tangential to the success criteria. Implementing a garbage collector would allow \textit{Coherence} to be used in applications where memory efficiency is important.
+\end{itemize}
+
+\section{Reflections}
+At the outset, this project seemed quite straightforward: I had a clear mental model of the type system and expected implementation to proceed smoothly. However, I discovered that language design is a remarkably broad field, touching upon concurrency theory, compiler construction, formal verification and complexity analysis. Numerous design decisions arose that I had not initially anticipated: What should the memory model of \textit{Coherence} be? How should behaviour stacks be managed? How should lock-inference work for mutually recursive functions? What should the protocol for interactions between the runtime and the generated code be? Each decision required careful consideration of its implications for safety, performance, and usability. 
+
+This project is the largest I have undertaken with full ownership, both in terms of codebase size and the scope of design decisions required. Several lessons emerged from this experience. I gained an appreciation for the importance of upfront design and systematic planning when managing a project of this scale. Decisions made early in the project had far-reaching consequences, and a more deliberate approach to design would have avoided some later refactoring. I also learned the value of thoroughly understanding the intent behind programming constructs, not just their mechanics. This was essential when trying to adapt Pony's viewpoint adaptation rules so that they work with \textit{Coherence}'s memory model.
+
+Overall, this project was a success, achieving all core objectives and several extensions. The experience has deepened my understanding of programming language design and provided valuable lessons in managing complex software projects.
