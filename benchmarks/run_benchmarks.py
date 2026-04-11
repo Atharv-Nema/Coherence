@@ -27,22 +27,24 @@ def time_exe(cmd):
         print(f"Executable not found: {exe_path}")
         sys.exit(1)
     start = time.perf_counter()
-    r = run(cmd)
+    for _ in range(5):
+        r = run(cmd)
     elapsed = time.perf_counter() - start
     if r.returncode != 0:
         print(f"Execution failed: {' '.join(cmd)}")
         print(f"stdout: {r.stdout}")
         print(f"stderr: {r.stderr}")
         sys.exit(1)
-    return elapsed
+    return elapsed / 5
 
 
 def time_compilation(cmd):
     """Time compilation and return elapsed time."""
     start = time.perf_counter()
-    run(cmd, check=True)
+    for _ in range(5):
+        run(cmd, check=True)
     elapsed = time.perf_counter() - start
-    return elapsed
+    return elapsed / 5
 
 
 @contextmanager
@@ -190,9 +192,9 @@ def benchmark_ring_token(config: BenchmarkConfig):
 
         # Plot
         plt.figure(figsize=(8, 6))
-        plt.bar(['Coherence', 'Pony'], [t_rt_coh, t_rt_pony], color=['#3b82f6', '#64748b'])
+        plt.bar(['Coherence', 'Pony'], [t_rt_coh, t_rt_pony], color=['#0000FF', '#FF0000'])
         plt.ylabel('Time (s)')
-        plt.title('Ring Token: Messaging Overhead (Unoptimized)')
+        plt.title('Ring Token')
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         plt.savefig(config.output_dir / "ring_token_report.png")
         plt.close()
@@ -284,14 +286,6 @@ def benchmark_compilation_time(config: BenchmarkConfig, sizes: list[int] = None)
         plt.legend()
         plt.grid(True, linestyle='--', alpha=0.3)
         
-        # Add R² value
-        ss_res = np.sum((np.array(times) - fitted) ** 2)
-        ss_tot = np.sum((np.array(times) - np.mean(times)) ** 2)
-        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
-        plt.text(0.05, 0.95, f'R² = {r_squared:.4f}', transform=plt.gca().transAxes,
-                 fontsize=12, verticalalignment='top',
-                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
         plt.savefig(config.output_dir / "compilation_time_report.png")
         plt.close()
         
@@ -339,8 +333,8 @@ def main():
         sys.exit(1)
     
     # benchmark_struct_access(config)
-    # benchmark_ring_token(config)
-    benchmark_compilation_time(config)
+    benchmark_ring_token(config)
+    # benchmark_compilation_time(config)
     sys.exit(0)
 
 
