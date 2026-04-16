@@ -1,5 +1,5 @@
-\chapter{\textit{Coherence1.0} typing rules}
-\section{Typing context}
+\chapter{\textit{Coherence1.0} typing rules} 
+\section{Typing context} \label{appendix:typing_context}
 The term \textit{metadata structure} of an object refers to a structure containing all the necessary data about the object. The underlying mathematical representation of these structures are omitted for brevity. $\Gamma$ contains the following:
 \begin{itemize}
     \item $\Gamma_V$: a mapping from local variable names to their types
@@ -10,8 +10,8 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
     \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
 \end{itemize}
-\section{Expression typing}
-\begin{tabular}{@{\qquad\qquad}c@{\qquad}c@{\qquad}c@{\qquad}c}
+\section{Expression typing} \label{appendix:expression_typing}
+\begin{tabular}{@{\qquad\qquad}c@{\qquad}c@{\qquad}c@{\qquad}c} 
     \AxiomC{}
     \RightLabel{(Int)}
     \UnaryInfC{$\Gamma \tack i : \text{int}$}
@@ -111,7 +111,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \UnaryInfC{$\Gamma \tack \mathtt{unalias}(x) : \text{unalias}(T)$}
 \end{prooftree}
 
-\section{Statement typing}
+\section{Statement typing} \label{appendix:statement_typing}
 \begin{center}
 \begin{tabular}{c@{\qquad\qquad}c}
     \AxiomC{}
@@ -198,7 +198,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \end{prooftree}
 \end{center}
 
-\section{Top-level typing}
+\section{Top-level typing} \label{appendix:top_level_item_typing}
 
 \begin{center}
 \begin{prooftree}
@@ -250,7 +250,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \end{prooftree}
 \end{center}
 
-\chapter{\textit{UserMutex implementation}}
+\chapter{\textit{UserMutex implementation}} \label{appendix:user_mutex_implementation}
 \section{Locking}
 \begin{algorithmic}[1]
 \Procedure{Lock}{$locker\_id$}
@@ -301,13 +301,14 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \EndProcedure
 \end{algorithmic}
 
-\chapter{Model checker}
+\chapter{Model checker} \label{appendix:prolog}
 \begin{lstlisting}[language = prolog]
 % The maximum occurences of reference capabilities in the 
 % predicates below is 3, and hence only 3 different locks are 
 % needed.
 lock(a).
 lock(b).
+lock(c).
 
 % All valid capabilities
 capability(iso).
@@ -394,8 +395,8 @@ ptr_assignable(K, K1, K2) :-
 check_nested_assignment_inconsistencies(K, K1, K2) :- 
     assignable(K1, K2), \+ ptr_assignable(K, K1, K2).
 
-% ptr_covariant(K, K1, K2): succeeds if the type (T K) K2 is 
-% covariant to (T K) K1
+% ptr_covariant(K, K1, K2): succeeds if the type (T K) K1 is 
+% covariant to (T K) K2
 ptr_covariant(K, K1, K2) :- 
     covariant(K1, K2), view(K1, K, ViewK1), view(K2, K, ViewK2), 
     mutable(K1), invariant(ViewK1, ViewK2).
@@ -406,13 +407,13 @@ ptr_covariant(K, K1, K2) :-
     covariant(K1, K2), capability(K), capability(K2), opaque(K1).
 
 % check_nested_covariant_inconsistencies(K, K1, K2): succeeds if 
-% K2 is covariant to K1, but the pointer type (T K) K2 is not 
-% covariant to (T K) K1.
+% K1 is covariant to K2, but the pointer type (T K) K1 is not 
+% covariant to (T K) K2.
 check_nested_covariant_inconsistencies(K, K1, K2) :- 
     covariant(K1, K2), \+ ptr_covariant(K, K1, K2).
 
-% ptr_invariant(K, K1, K2): succeeds if the type (T K) K2 is 
-% invariant to (T K) K1
+% ptr_invariant(K, K1, K2): succeeds if the type (T K) K1 is 
+% invariant to (T K) K2
 ptr_invariant(K, K1, K2) :- 
     invariant(K1, K2), capability(K), capability(K2), opaque(K1).
 ptr_invariant(K, K1, K2) :- 
@@ -420,14 +421,13 @@ ptr_invariant(K, K1, K2) :-
     view(K2, K, ViewK2), invariant(ViewK1, ViewK2).
 
 % check_nested_invariant_inconsistencies(K, K1, K2): succeeds if 
-% K2 is invariant to K1, but the pointer type (T K) K2 is not 
-% invariant to (T K) K1.
+% K1 is invariant to K2, but the pointer type (T K) K1 is not 
+% invariant to (T K) K2.
 check_nested_invariant_inconsistencies(K, K1, K2) :- 
     invariant(K1, K2), \+ ptr_invariant(K, K1, K2).
 
 % check_iso_unalias_inconsistencies(K): succeeds if the type 
-% iso > K is not compatible with iso_cap > K as defined in
-% section 4.1.3.
+% iso > K is not compatible with iso_cap > K.
 check_iso_unalias_inconsistencies(K) :- 
     view(iso, K, iso), view(iso_cap, K, iso_cap), 
     \+ (invariant(IsoK, IsocapK)).
@@ -443,7 +443,7 @@ sendable(K) :-
 % member of a pointer type protected by K does not break the
 % alias invariant of iso. The idea is that only synchronized 
 % types, or types guaranteeing the single alias invariant are 
-% allowed to an iso.
+% allowed to hold and send an iso.
 iso_holdable(K) :- capability(K), member(K, [iso, locked(L)]).
 
 % check_sendable_inconsistencies(K1, K2) succeeds if the rule 
@@ -465,4 +465,70 @@ check_inconsistencies :-
     check_nested_invariant_inconsistencies(K, K1, K2).
 check_inconsistencies :- check_iso_unalias_inconsistencies(K).
 check_inconsistencies :- check_sendable_inconsistencies(K1, K2).
+\end{lstlisting}
+
+\chapter{Hot-potato pattern in Pony} \label{appendix:hot-potato}
+The following code implements a scheduler that manages access to a shared integer. Actors request access by calling \textsf{take} with a callback. When the resource is available, the callback is invoked with exclusive ownership of the resource. After completing their operation, actors return the resource via \textsf{give}.
+\begin{lstlisting}
+class IntContainer
+  var value: U64 = 0
+  new create(v: U64) => value = v
+
+actor IntScheduler
+  var _data: (IntContainer iso | None) = None
+  var _wait_queue: Array[{(IntContainer iso): None} val]
+   = Array[{(IntContainer iso): None} val]
+
+  be take(cb: {(IntContainer iso): None} val) =>
+    match _data = None
+    | let p: IntContainer iso => cb(consume p)
+    | None => _wait_queue.push(cb)
+    end
+
+  be give(p: IntContainer iso) =>
+    if _wait_queue.size() > 0 then
+      try
+        let cb = _wait_queue.shift()?
+        cb(consume p)
+      end
+    else
+      _data = consume p
+    end
+\end{lstlisting}
+
+The following code demonstrates how the hot-potato pattern can be used to atomically swap the values of two shared integers. Note that the operation must be split across three behaviours (\textsf{swap}, \textsf{receive1}, \textsf{receive2}) because Pony behaviours cannot block. Intermediate state is stored in the actor field \textsf{\_p1}.
+\begin{lstlisting}
+actor Swapper
+  var _s1: IntScheduler
+  var _s2: IntScheduler
+  var _p1: (IntContainer iso | None) = None
+
+  new create(s1: IntScheduler, s2: IntScheduler) =>
+    _s1 = s1
+    _s2 = s2
+
+  be receive2(p2: IntContainer iso) =>
+    // Step 3: Perform the swap
+    match _p1 = None
+    | let p1: IntContainer iso =>
+      let temp = p1.value
+      p1.value = p2.value
+      p2.value = temp
+      // Step 4: Return both
+      _s1.give(consume p1)
+      _s2.give(consume p2)
+    end
+
+  be receive1(p1: IntContainer iso) =>
+    _p1 = consume p1
+    let self: Swapper tag = this
+    _s2.take({(p2: IntContainer iso): None =>
+      self.receive2(consume p2)
+      None} val)
+
+  be swap() =>
+    let self: Swapper tag = this
+    _s1.take({(p1: IntContainer iso): None =>
+      self.receive1(consume p1)
+      None} val)
 \end{lstlisting}

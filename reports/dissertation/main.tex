@@ -1,3 +1,6 @@
+%TC:envir tabular [] word
+%TC:envir algorithmic [] word
+%TC:envir lstlisting [] word
 \documentclass[a4paper,12pt,fleqn]{report} % fleqn added here for math alignment
 
 % --- Core Layout & Fonts ---
@@ -10,6 +13,7 @@
 \usepackage{parskip} % Handles the no-indent style automatically
 \usepackage{comment}
 \usepackage{mathpartir}
+\usepackage{hyperref}
 
 % --- Math & Inference Rules ---
 \usepackage{amsmath, amssymb, amsthm}
@@ -38,8 +42,9 @@
 \addbibresource{bibliography.bib} 
 
 % --- Global Document Settings ---
-\setcounter{secnumdepth}{4}
-\setcounter{tocdepth}{4}
+
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
 
 % --- Custom Commands ---
 \newcommand{\cmark}{\ding{51}}
@@ -63,6 +68,6 @@
 
 % --- Include Appendix ---
 \appendix 
-% \include {appendix/appendix}
+\include {appendix/appendix}
 
 \end{document}
