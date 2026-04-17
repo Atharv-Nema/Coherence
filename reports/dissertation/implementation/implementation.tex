@@ -103,7 +103,7 @@ A program $P$ is a list of top-level items $D$. Top-level items are either type-
 % CR: Make this sentence better or something
 The typing rules presented in this section are intended as a high-level description of the typing rules, rather than an exhaustive formal compiler specification. Several complex validation checks are encapsulated by named procedures or predicates. Most of these are simply explained in words rather than formal notation.\\
 The typing environment $\Gamma$ maintains the contextual state required by the type checker. Its internal structure is not described here. The typing rules simply assume that $\Gamma$ provides all necessary information (see appendix \ref{appendix:typing_context} for more details).
-\subsubsection{Expression typing}
+\subsubsection{Expression typing} \label{sec:implementation_expression_typing}
 Expressions are given types using judgements of form $\Gamma \tack e : T$. The full type checking rules are given in \ref{appendix:expression_typing}. The interesting cases are described below:
 \begin{itemize}
   \item
@@ -603,9 +603,9 @@ Thus, the optimised approach provides an asymptotic speedup from $\Theta(N^3)$ t
 
 
 \section{Extension: Pointers-to-pointers} \label{sec:pointers-to-pointers}
-This extension adds support for pointers-to-pointers in \textit{Coherence1.0}, addressing a major limitation: the inability to represent many useful types. In \textit{Coherence1.0}, programmers build complex types using structs, but these cannot contain pointers as members. Consequently, data structures like dynamic arrays (which must store a pointer to an underlying buffer) cannot be encapsulated into a single type. Recursive data structures such as trees and linked lists are similarly impossible to represent. Since struct instances in \textit{Coherence} are unboxed (stored directly without pointer indirection), embedding a struct within itself would result in undefined size. The standard workaround—storing pointers to the struct as members instead—is unavailable without this extension.
+This extension extends \textit{Coherence1.0} to allow for pointers-to-pointers, creating \textit{Coherence2.0}. This addresses a major limitation of \textit{Coherence1.0}: the inability to represent many useful types. In \textit{Coherence1.0}, programmers build complex types using structs, but these cannot contain pointers as members. Consequently, data structures like dynamic arrays (which must store a pointer to an underlying buffer) cannot be encapsulated into a single type. Recursive data structures such as trees and linked lists are similarly impossible to represent. Since struct instances in \textit{Coherence} are \textit{unboxed} (stored directly without pointer indirection), embedding a struct within itself would result in undefined size. The standard workaround of storing pointers to the struct as members instead is unavailable without this extension.
 \subsection{Modifications to the syntax}
-We develop the new syntax by working through examples and carefully considering the requirements of the programmer. Section \ref{??} talks about the need for viewpoint adaptation to maintain the invariants of the reference capabilities. As a recap, viewpoint adaptation tells us that if we have a pointer $x$ of type $(B \ \kappa_1) \ \kappa_2$, the type of *$x$ is $B \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $B \ \kappa$ is $\kappa \triangleright B$, where $\kappa \triangleright B$ represents applying the viewpoint adaptation operator to type $B$. Here, $\triangleright$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright B$:
+We develop the new syntax by working through examples and carefully considering the requirements of the programmer. Section \ref{sec:preparation_viewpoint_adaptation} talks about the need for viewpoint adaptation to maintain the deny properties of the reference capabilities. As a recap, viewpoint adaptation tells us that if we have a pointer $x$ of type $(B \ \kappa_1) \ \kappa_2$, the type of *$x$ is $B \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $B \ \kappa$ is $\kappa \triangleright B$, where $\kappa \triangleright B$ represents applying the viewpoint adaptation operator to type $B$. Here, $\triangleright$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright B$:
 \begin{itemize}
   \item \textbf{Simple types}: For simple types that do not contain pointers, $\kappa \triangleright \_$ acts as an identity function and has no effect on the type.
   \item \textbf{Pointers}: As demonstrated in the previous examples, the operator composes $\kappa$ with the capability of the pointer.
@@ -625,7 +625,7 @@ The key changes made are listed below:
 \begin{itemize}
   \item \textit{B} can now contain pointers.
   \item \textit{T} is either a $B$ or $\triangleright$ applied to a $B$. We only allow $\triangleright$ to appear at the outermost layer. This is because multiple applications of $\triangleright$ can be reduced to a single application using $\triangleright$.
-  \item A new reference capability \textsf{tag} is added. This is a capability representing a pointer which cannot be read from or written to. This is needed for completeness for the definition of $\triangleright$. The rules for $<:$ in figure \ref{fig:capability_hierarchy} are modified to say that any capability is assignable to \textsf{tag}, and \textsf{tag} is not assignable to any capability except itself.
+  \item A new reference capability \textsf{tag} is added. Just like in Pony, this represents a pointer which cannot be read from or written to. This is needed for completeness for the definition of $\triangleright$. The rules for $<:$ in figure \ref{fig:capability_hierarchy} are modified to say that any capability is assignable to \textsf{tag}, and \textsf{tag} is not assignable to any capability except itself.
   \item Structures and named types can now contain pointers.
 \end{itemize}
 The syntax of top-level items and statements remain unchanged. \\
@@ -638,21 +638,21 @@ type list = struct {
 \end{lstlisting}
 To create an instance of a pointer to this structure, we need to do something like the following:
 \begin{lstlisting}
-new ref[1] list({value = 3; next = <instance of list ref>});
+new ref[1] list({value = 3; next = <instance of list ref>}: list);
 \end{lstlisting}
-To create an instance of \textsf{list ref}, we need to create an instance of the structs field, which is also of type \textsf{list ref}. There is no bottom out to this recursion! There are a few approaches to solve this problem:
+To create an instance of \textsf{list ref}, we need to create an instance of the structs field, which is also of type \textsf{list ref}. There is no end to this recursion! There are a few approaches to solve this problem:
 \begin{itemize}
-  \item \textbf{Variants}: By allowing a field to be a sum type, we maintain the invariant of strict pointers (where every pointer-dereference is guaranteed to be defined) while providing a non-recursive base case.
+  \item \textbf{Variants}: By allowing a field to be a sum type, we maintain the invariant of strict pointers (where every pointer dereference is guaranteed to be defined) while providing a non-recursive base case.
   \begin{lstlisting}
 type list = struct {
     value: int;
     next: (list ref) | unit;
 }
-new ref[1] list({value = 3; next = ()})
+new ref[1] list({value = 3; next = ()}: list)
 \end{lstlisting}
   \item \textbf{Nullptr}: An alternative approach is to relax the strictness of the pointer model by introducing a \textsf{nullptr} value. \textsf{nullptr} acts as default pointer capable of inhabiting any pointer type. This allows the recursive loop to be broken by assigning a \textsf{nullptr} value to the terminal node of a structure:
   \begin{lstlisting}
-new ref[1] list({value = 3; next = nullptr})
+new ref[1] list({value = 3; next = nullptr}: list)
   \end{lstlisting}
   Dereferencing a \textsf{nullptr} is undefined behaviour, but pointers can be compared for equality with a \textsf{nullptr}. This design pushes the burden of memory safety on the programmer.
 \end{itemize}
@@ -665,12 +665,12 @@ e & ::= & \cdots & \text{(same as in \textit{Coherence1.0})} \\
 \]
 
 \subsection{Modifications to the type-system} \label{sec:extension-typing-rules}
-The core challenge in supporting nested indirection is extending the \textsf{assignable} relation to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$ in \textit{Coherence}, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, we must ensure that the effective types visible through these references are compatible. 
+The core challenge in supporting nested indirection is extending the \textsf{assignable} relation described in section \ref{sec:implementation_expression_typing} to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_s$ is assignable to a target type $T\ \kappa_t$ in \textit{Coherence}, the compiler must first verify that the outer capabilities satisfy the $\kappa_s <: \kappa_t$. However, because $S$ and $T$ may themselves be types containing further pointers, the compiler must recursively ensure that the effective types visible through these references are compatible. 
 
 \begin{itemize}
   \item \textbf{Covariant case}:\\ When $\kappa_{s_2}$ is readable but not writable (example \textsf{val}), then all we need is $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be covariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$.
   \item \textbf{Invariant case}:\\ When $\kappa_{s_2}$ is mutable (example \textsf{ref}), we need $(\kappa_{s_2} \triangleright \kappa_{s_1})$ to be invariant with $(\kappa_{t_2} \triangleright \kappa_{t_1})$. If the system permitted covariance, a source could assign a specific inner pointer to a more generic target pointer, and subsequently, the target could be used to write data into the memory location that is incompatible with the source's original, more restrictive type.
-  \item \textbf{Dealing with tag}:\\ The \textsf{tag} capability permits neither read nor write access. When $\kappa_{s_2}$ is \textsf{tag}, the type-checker enforces a requirement of structural congruence: the source and target types must share the same shape, possessing identical nesting depths and the same underlying base types. While this restriction is not needed for memory-safety, without this constraint, \textsf{tag} would effectively function as a universal, blank capability, losing its identity of representing a specific type structure.
+  \item \textbf{Dealing with tag}:\\ The \textsf{tag} capability permits neither read nor write access. When $\kappa_{s_2}$ is \textsf{tag}, the type checker enforces a requirement of structural congruence: the source and target types must share the same shape, possessing identical nesting depths and the same underlying base types. While this restriction is not needed for memory-safety, without this constraint, \textsf{tag} would effectively function as a universal, blank capability, losing its identity of representing a specific type structure (it feels odd for \textsf{int tag} to be assignable to \textsf{bool tag}, for example).
 \end{itemize}
 
 \begin{notebox}
@@ -692,10 +692,10 @@ Using the newly defined \textsf{assignable} predicate, the rules below are the m
 \UnaryInfC{$\Gamma \tack \mathtt{nullptr} : B\ \kappa$}  
 \end{prooftree}
 
-This type-checking rule could lead to infinite recursion. Consider type-checking a recursive type like \textsf{list}: to determine whether \textsf{list ref} is assignable to \textsf{list ref}, the type-checker verifies that the outer capabilities are assignable, then examines the fields. Since the fields contain the original type, this process would loop indefinitely. This motivates a key requirement on $\triangleright$: if $\kappa_1 <: \kappa_2$, then $T\ \kappa_1$ must be assignable to $T\ \kappa_2$ for all types $T$, and similarly for invariance and covariance. This allows the type-checker to terminate upon encountering identical base types, avoiding infinite recursion.
+This rule could lead to infinite recursion. Consider type-checking a recursive type like \textsf{list}: to determine whether \textsf{list ref} is assignable to \textsf{list ref}, the type checker verifies that the outer capabilities are assignable, then examines the fields. Since the fields contain the original type, this process would loop indefinitely. This motivates a key requirement on $\triangleright$: if $\kappa_1 <: \kappa_2$, then $T\ \kappa_1$ must be assignable to $T\ \kappa_2$ for all types $T$, and similarly for invariance and covariance. I call this the \textit{nested consistency} property. This allows the type checker to terminate upon encountering identical base types, avoiding infinite recursion. Section \ref{sec:type_system_soundness} discusses how this property is formally verified for the definition of $\triangleright$.
 
 \subsection{Deviation from Pony} \label{sec:extension-pony-deviation}
-The assignability of \textit{Coherence2.0} deviate from \textit{Pony}. \textit{Coherence2.0} treats reads and writes of fields uniformly, while Pony does not. Consider the following \textit{Pony} code:
+The assignability rules of \textit{Coherence2.0} deviate from Pony's. \textit{Coherence2.0} treats reads and writes of fields uniformly, while Pony does not. Consider the following Pony code:
 \begin{lstlisting}
 class Node { }
 
@@ -714,54 +714,58 @@ actor Main {
     }
 }
 \end{lstlisting}
-In Pony, $\text{iso} \ \triangleright \ \text{ref} = \text{tag}$. So, c\_inst.x should have type Node tag. Yet, Pony disallows assignment of a \textsf{tag} to c\_inst.x because the declared capability of \textsf{x} is \textsf{ref}. This design reflects Pony's treatment of classes as encapsulated entities with member functions. The declared capability represents how the member functions views its inner fields, and additional checks are needed to ensure that this internal view remains consistent. In \textit{Coherence}, by contrast, structs are simply a means of bundling data. Hence, it does not make sense for the declared capability to have any bearing on assignability: only the adapted capabilities after viewpoint adaptation matter. 
+In Pony, $\textsf{iso} \triangleright \textsf{ref} = \textsf{tag}$. So, \textsf{c\_inst.x} should have type \textsf{Node tag}. Yet, Pony disallows assignment of a \textsf{tag} to c\_inst.x because the declared capability of \textsf{x} is \textsf{ref}. This design reflects Pony's treatment of classes as encapsulated entities with member functions. The declared capability represents how the member functions views its inner fields, and additional checks are needed to ensure that this internal view remains consistent. In \textit{Coherence}, by contrast, structs are simply a means of bundling data. Hence, it does not make sense for the declared capability to have any bearing on assignability: only the adapted capabilities after viewpoint adaptation matter. 
 
 
 \subsection{Viewpoint adaptation}
-The specific requirements of this operator for safety and their formal verification will be done in Section \ref{??}.
+The table below gives the definition of the $\triangleright$ operator used in \textit{Coherence2.0}.
 \begin{table}[H]
 \centering
-\caption{Viewpoint Adaptation Matrix ($\kappa_1 \triangleright \kappa_2$)}
 \label{tab:viewpoint-adaptation}
-\begin{tabular}{l|ccccc}
+\begin{tabular}{|l|c|c|c|c|c|}
 \hline
-$\kappa_1 \triangleright \kappa_2$ & \textbf{Tag} & \textbf{Ref} & \textbf{Val} & \textbf{Iso} & \textbf{Locked<B>} \\ \hline
-\textbf{Tag}      & Tag & Tag & Tag & Tag & Tag \\
-\textbf{Ref}      & Tag & Ref & Val & Iso & Locked<B> \\
-\textbf{Val}      & Tag & Val & Val & Val & Locked<B> \\
-\textbf{Iso}      & Tag & Iso & Val & Iso & Locked<B> \\
-\textbf{Iso\textasciicircum} & Tag & Iso\textasciicircum & Val & Iso\textasciicircum & Locked<B> \\
-\textbf{Locked<A>}& Tag & Locked<A> & Val & Iso & Locked<B> \\ \hline
+\rowcolor{gray!20} $\kappa_1 \triangleright \kappa_2$ & \textsf{tag} & \textsf{ref} & \textsf{val} & \textsf{iso} & \textsf{locked<B>} \\ \hline
+\cellcolor{gray!20} \textsf{tag} & \textsf{tag} & \textsf{tag} & \textsf{tag} & \textsf{tag} & \textsf{tag} \\ \hline
+\cellcolor{gray!20} \textsf{ref} & \textsf{tag} & \textsf{ref} & \textsf{val} & \textsf{iso} & \textsf{locked<B>} \\ \hline
+\cellcolor{gray!20} \textsf{val} & \textsf{tag} & \textsf{val} & \textsf{val} & \textsf{val} & \textsf{locked<B>} \\ \hline
+\cellcolor{gray!20} \textsf{iso} & \textsf{tag} & \textsf{iso} & \textsf{val} & \textsf{iso} & \textsf{locked<B>} \\ \hline
+\cellcolor{gray!20} \textsf{iso\textasciicircum} & \textsf{tag} & \textsf{iso\textasciicircum} & \textsf{val} & \textsf{iso\textasciicircum} & \textsf{locked<B>} \\ \hline
+\cellcolor{gray!20} \textsf{locked<A>} & \textsf{tag} & \textsf{locked<A>} & \textsf{val} & \textsf{iso} & \textsf{locked<B>} \\ \hline
 \end{tabular}
+\caption{\textit{Coherence2.0} Viewpoint Adaptation Definition: rows represent $\kappa_1$, columns represent $\kappa_2$}
 \end{table}
 
-One notable choice in the definition of $\triangleright$ warrants justification: $\text{ref}\ \triangleright\ \text{iso} = \text{iso}$. This may appear to violate the uniqueness invariant of \textsf{iso}. However, assigning a $(T\ \textsf{iso})\ \textsf{ref}$ to another $(T\ \textsf{iso})\ \textsf{ref}$ does not increase the number of memory locations storing the $T\ \textsf{iso}$ reference (it remains in a single heap location). We simply have multiple paths (via \textsf{ref} aliases of the parent structure) leading to that unique location. This is safe within an actor because all accesses occur sequentially within its execution context, preventing concurrent data races. For the same reason, $\textsf{locked<A>} \triangleright \textsf{iso} = \textsf{iso}$.
+One notable choice in the definition of $\triangleright$ warrants justification: $\text{ref}\ \triangleright\ \text{iso} = \text{iso}$. This may appear to violate the uniqueness property of \textsf{iso}. However, assigning a $(T\ \textsf{iso})\ \textsf{ref}$ to another $(T\ \textsf{iso})\ \textsf{ref}$ does not increase the number of memory locations storing the $T\ \textsf{iso}$ reference (it remains in a single heap location). We simply have multiple paths (via \textsf{ref} aliases of the parent structure) leading to that unique location. This is safe within an actor because all accesses occur sequentially within its execution context, preventing concurrent data races. For the same reason, $\textsf{locked<A>} \triangleright \textsf{iso} = \textsf{iso}$.
 
 \subsection{Implementation}
-The primary modifications were in the type-checker, where the assignability, covariance, and invariance relations were implemented. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \textsf{nullptr} abstraction directly to the LLVM \textsf{null} constant.
+The primary modifications were in the type checker, where the assignability, covariance, and invariance relations were implemented. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \textsf{nullptr} abstraction directly to the LLVM \textsf{null} constant.
 
 \section{Repository overview}
-The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), generated binary files, and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, AST validation, codegen and the runtime), global utilities, sample programs and integration tests. It also includes a \textsf{Readme.md} file which explains how to build and use the compiler.
+The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), generated binary files, and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, AST validation, codegen and the runtime), global utilities, code to generate benchmarks and tests. It also includes a \textsf{Readme.md} file which explains how to build and use the compiler.
+
+The \textit{Coherence} source code (excluding tests and benchmarks) consists of $5838$ lines. Most of this code is in C++ ($4968$ lines), while the remaining $870$ lines are yacc and lex code used for the lexer and parser generator. Tests are organized around generic test runners that can ingest data (JSON files or \textit{Coherence} programs). Most test runners are written in Python for ease of syntax, and the benchmark-generation code is also written in Python. Excluding test data, the benchmarks and tests together comprise $596$ lines of code: $181$ lines in C++ and $415$ lines in Python.
 
 \begin{table}[H]
 \centering
 \small
 \caption{Overview of the \textit{Coherence} repository}
 \label{tab:repo-overview}
-\begin{tabular}{l | l | p{7cm}}
+\begin{tabular}{l | l | p{6cm} | r}
 \toprule
-\textbf{Directory} & \textbf{Files and Subdirectories} & \textbf{Description} \\ \midrule
-lexer\_parser/ & lexer.l, parser.y & Frontend code for lexing and parsing. \\ \midrule
-ast/ & expr.hpp, types.hpp,...  & AST node definitions. \\ \midrule
-ast\_validation/ & ast\_validator.cpp & Main entry point for static analysis. \\ 
- & var\_validity\_checker/ & Variable validity checking. \\ 
- & declaration\_collection/ & Declaration collection. \\
- & type\_checker/ & Performs type-checking. \\ 
- & compute\_lock\_info/ & Performs lock-inference \\ \midrule
-codegen/ & codegen.cpp, ... & Lowering of the validated AST to LLVM IR. \\ \midrule
-runtime/ & entry\_point.cpp, runtime\_traps.cpp, ... & Implementation of the \textit{Coherence} runtime. \\ \midrule
-global\_utils/ & pattern\_matching\_boilerplate.hpp, ... & Shared helper functions and utility classes. \\ \midrule
-coherence/ & main.cpp & Integrates all components to produce the binary acting as the \textit{Coherence} compiler. \\ \midrule
-tests/ & e2e\_tests, type\_checking\_tests, ... & Compiler unit and integration tests. \\ \bottomrule
+\textbf{Directory} & \textbf{Files and Subdirectories} & \textbf{Description} & \textbf{LoC} \\ \midrule
+lexer\_parser/ & lexer.l, parser.y, ... & Frontend code for lexing and parsing. & 890 \\ \midrule
+ast/ & expr.hpp, types.hpp, ...  & AST node definitions and AST printer for debugging. & 523 \\ \midrule
+ ast\_validation/ & var\_validity\_checker/ & Variable validity checking. & 380 \\ 
+ & declaration\_collection/ & Declaration collection. & 76 \\
+ & type\_checker/ & Performs type-checking. & 1514 \\ 
+ & compute\_lock\_info/ & Performs lock-inference & 402 \\
+ & ast\_validator.cpp, general\_utils/, ... & Validation entry point and shared utilities. & 78 \\ \midrule
+codegen/ & codegen.cpp, ... & Lowering of the validated AST to LLVM IR. & 1131 \\ \midrule
+runtime/ & entry\_point.cpp, runtime\_traps.cpp, ... & Implementation of the \textit{Coherence} runtime. & 334 \\ \midrule
+global\_utils/ & pattern\_matching\_boilerplate.hpp, ... & Shared helper functions and utility classes. & 402 \\ \midrule
+coherence/ & main.cpp & Integrates all components to produce the binary acting as the \textit{Coherence} compiler. & 108 \\ \midrule
+tests/ & e2e\_tests, type\_checking\_tests, ... & Compiler unit and integration tests. & 321 \\
+\midrule
+benchmarks/ & run\_benchmarks.py & Code to generate benchmark results & 275 \\ \bottomrule
 \end{tabular}
 \end{table}

@@ -11,23 +11,19 @@
 
     using namespace std;
 
-    // yyscan_t is defined in lex.yy.h, but we forward-declare it here
     typedef void* yyscan_t;
 }
 
-/* Enable conflict warnings and diagnostics */
 %define parse.error detailed
 %define lr.type ielr
 %define parse.lac full
 %expect 0
 
-/* ---------- BISON CONFIGURATION ---------- */
 %define api.pure full
 %locations
 %lex-param   { yyscan_t yyscanner }
 %parse-param { yyscan_t yyscanner }
 
-/* ---------- IMPLEMENTATION-ONLY SECTION (.cc only) ---------- */
 %code {
     #include <iostream>
     #include "lex.yy.h"   // from Flex; gives yyget_text, yyscan_t, etc.
@@ -43,7 +39,6 @@
     }
 }
 
-/* ---------- SEMANTIC VALUE UNION ---------- */
 %union {
     int int_val;
     double float_val;
@@ -68,7 +63,7 @@
     TopLevelItem::TypeDef* type_def;
 }
 
-/* ---------- TOKENS ---------- */
+// Tokens
 %token TOK_ACTOR TOK_NEW TOK_FUNC TOK_BE TOK_RETURN 
 %token TOK_ATOMIC TOK_IF TOK_ELSE TOK_WHILE TOK_DOT TOK_OUT
 %token TOK_TYPE TOK_STRUCT TOK_INITIALIZE
@@ -85,7 +80,7 @@
 %token <int_val>   TOK_INT_LIT
 %token <str_val>   TOK_IDENT
 
-/* ---------- TYPE DECLARATIONS ---------- */
+// Type declarations
 %type <program>         program
 %type <top_level_list>  top_level_items
 %type <top_item>        top_level_item
@@ -106,10 +101,6 @@
 %type <func>            func_def
 %type <type_def>        type_def
 
-/* ---------- OPERATOR PRECEDENCE ---------- */
-// Not needed for now
-
-/* ---------- HELPER CODE ---------- */
 %code {
     inline SourceSpan span_from(const YYLTYPE& loc) {
         return { {loc.first_line, loc.first_column},
@@ -119,7 +110,7 @@
 
 %%
 
-/* ---------- PROGRAM ---------- */
+// Program
 program
     : top_level_items {
         program_root = new Program();
@@ -128,7 +119,7 @@ program
       }
     ;
 
-/* ---------- TOP LEVEL ITEMS ---------- */
+// Top level items
 top_level_items
     : top_level_item {
         $$ = new vector<TopLevelItem>();
@@ -163,7 +154,7 @@ top_level_item
       }
     ;
 
-/* ---------- TYPE DEFINITIONS ---------- */
+// Type definitions
 type_def
     : TOK_TYPE TOK_IDENT TOK_ASSIGN TOK_STRUCT TOK_LBRACE struct_fields TOK_RBRACE {
         const std::string& name = *$2;
@@ -211,7 +202,7 @@ struct_instance
       }
     ;
 
-/* ---------- ACTOR DEFINITION ---------- */
+// Actor definitions
 actor_def
     : TOK_ACTOR TOK_IDENT TOK_LBRACE actor_fields actor_members TOK_RBRACE {
         const std::string& name = *$2;
@@ -227,7 +218,6 @@ actor_def
       }
     ;
 
-/* ---------- ACTOR FIELDS ---------- */
 actor_fields
     : %empty { $$ = new unordered_map<std::string, std::shared_ptr<const Type>>(); }
     | actor_fields TOK_IDENT TOK_COLON full_type TOK_SEMI {
@@ -237,7 +227,6 @@ actor_fields
       }
     ;
 
-/* ---------- ACTOR MEMBERS ---------- */
 actor_members
     : %empty {
         $$ = new shared_ptr<TopLevelItem::Actor>(make_shared<TopLevelItem::Actor>());
@@ -259,7 +248,6 @@ actor_members
       }
     ;
 
-/* ---------- CONSTRUCTORS ---------- */
 actor_constructor
     : TOK_NEW TOK_IDENT TOK_LPAREN func_params TOK_RPAREN block {
         $$ = new shared_ptr<TopLevelItem::Constructor>(
@@ -272,7 +260,6 @@ actor_constructor
       }
     ;
 
-/* ---------- BEHAVIOURS ---------- */
 actor_behaviour
     : TOK_BE TOK_IDENT TOK_LPAREN func_params TOK_RPAREN block {
         $$ = new shared_ptr<TopLevelItem::Behaviour>(make_shared<TopLevelItem::Behaviour>());
@@ -283,7 +270,6 @@ actor_behaviour
       }
     ;
 
-/* ---------- FUNCTIONS ---------- */
 func_def
     : TOK_FUNC TOK_IDENT TOK_LPAREN func_params TOK_RPAREN TOK_ARROW full_type block {
         $$ = new shared_ptr<TopLevelItem::Func>(make_shared<TopLevelItem::Func>());
@@ -312,7 +298,7 @@ opt_comma
     | TOK_COMMA
     ;
 
-/* ---------- STATEMENTS ---------- */
+// Statements
 block
     : TOK_LBRACE stmt_list TOK_RBRACE { $$ = $2; }
     ;
@@ -327,21 +313,19 @@ stmt_list
     ;
 
 stmt
-    /* var <name> : <type> = <expr>; */
     : TOK_VAR TOK_IDENT TOK_COLON full_type TOK_ASSIGN val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
                 span_from(@$),
                 Stmt::VarDeclWithInit{
-                    std::move(*$2),   // name
-                    std::move(*$4),   // type
-                    std::move(*$6)    // init expr
+                    std::move(*$2), // name
+                    std::move(*$4), // type
+                    std::move(*$6)  // init expr
                 }
             }
         ));
         delete $2; delete $4; delete $6;
       }
-    /* member initialization: field := expr; */
     | TOK_IDENT TOK_INITIALIZE val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -354,7 +338,6 @@ stmt
         ));
         delete $1; delete $3;
       }
-    /* behaviour call: obj->behaviour(args...); */
     | val_expr TOK_SEND TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -368,7 +351,6 @@ stmt
         ));
         delete $1; delete $3; delete $5;
       }
-    /* expression statement */
     | val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -379,7 +361,6 @@ stmt
         delete $1;
       }
     
-    /* print statement */
     | TOK_OUT val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -390,7 +371,6 @@ stmt
         delete $2;
       }
 
-    /* return */
     | TOK_RETURN val_expr TOK_SEMI {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -400,7 +380,6 @@ stmt
         ));
         delete $2;
       }
-    /* atomic block */
     | TOK_ATOMIC block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -412,7 +391,6 @@ stmt
         ));
         delete $2;
       }
-    /* if / if-else */
     | TOK_IF TOK_LPAREN val_expr TOK_RPAREN block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -439,7 +417,6 @@ stmt
         ));
         delete $3; delete $5; delete $7;
       }
-    /* while */
     | TOK_WHILE TOK_LPAREN val_expr TOK_RPAREN block {
         $$ = new shared_ptr<Stmt>(make_shared<Stmt>(
             Stmt{
@@ -454,9 +431,7 @@ stmt
       }
     ;
 
-/* ---------- EXPRESSIONS ---------- */
-
-/* List of val_exprs (used for parameters sent to function calls) */
+// Expressions
 val_expr_list
     : %empty {
         $$ = new vector<shared_ptr<ValExpr>>();
@@ -479,12 +454,11 @@ nonempty_val_expr_list
       }
     ;
 
-/* Top-level expression nonterminal */
 val_expr
     : assignment_expr { $$ = $1; }
     ;
 
-/* Assignment: right-associative, lhs is a postfix_expr */
+// Assignment: right-associative, lhs is a postfix_expr
 assignment_expr
     : comparison_expr { $$ = $1; }
     | postfix_expr TOK_ASSIGN assignment_expr {
@@ -502,7 +476,7 @@ assignment_expr
       }
     ;
 
-/* Boolean comparisons: <, <=, >, >=, ==, != */
+// Boolean comparisons
 comparison_expr
     : additive_expr { $$ = $1; }
     | additive_expr TOK_LESS additive_expr {
@@ -600,7 +574,7 @@ additive_expr
       }
     ;
 
-/* Multiplicative level: * and / */
+// Multiplicative level
 multiplicative_expr
     : unary_expr { $$ = $1; }
     | multiplicative_expr TOK_STAR postfix_expr {
@@ -647,7 +621,7 @@ multiplicative_expr
       }
     ;
 
-/* Unary level: Dereference (*) */
+// Unary level: Dereference (*)
 unary_expr
     : postfix_expr { $$ = $1; }
     | TOK_STAR unary_expr {
@@ -669,7 +643,7 @@ unary_expr
       }
     ;
 
-/* Postfix level: field access and pointer/index access */
+// Postfix level: field access and index access
 postfix_expr
     : primary_expr { $$ = $1; }
     | postfix_expr TOK_LSQUARE val_expr TOK_RSQUARE {
@@ -700,7 +674,7 @@ postfix_expr
       }
     ;
 
-/* Primaries: literals, vars, calls, struct literals, new allocations, actor construction */
+// Primaries: literals, vars, calls, struct literals, new allocations, actor construction
 primary_expr
     : TOK_LPAREN val_expr TOK_RPAREN { $$ = $2; }
     | TOK_LPAREN TOK_RPAREN {
@@ -734,7 +708,6 @@ primary_expr
         ));
         delete $1;
       }
-    /* Struct instance: { ... } : TypeName */
     | TOK_LBRACE struct_instance TOK_RBRACE TOK_COLON full_type {
         $2->struct_type = std::move(*$5);
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
@@ -746,38 +719,35 @@ primary_expr
         ));
         delete $2; delete $5;
       }
-    /* Allocation: new <cap>[size] <type>(default_value) */
     | TOK_NEW cap TOK_LSQUARE val_expr TOK_RSQUARE normal_type TOK_LPAREN val_expr TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
                 nullptr,
                 ValExpr::NewInstance{
-                    std::move(*$6),  // Type
-                    std::move(*$2),  // Cap
-                    std::move(*$8),  // default_value
-                    std::move(*$4)   // size
+                    std::move(*$6), // Type
+                    std::move(*$2), // Cap
+                    std::move(*$8), // default_value
+                    std::move(*$4)  // size
                 }
             }
         ));
         delete $2; delete $4; delete $6; delete $8;
       }
-    /* Actor construction: new Actor.ctor(args...) */
     | TOK_NEW TOK_IDENT TOK_DOT TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
                 span_from(@$),
                 nullptr,
                 ValExpr::ActorConstruction{
-                    std::move(*$2),  // actor_name
-                    std::move(*$4),  // constructor_name
-                    std::move(*$6)   // args
+                    std::move(*$2), // actor_name
+                    std::move(*$4), // constructor_name
+                    std::move(*$6)  // args
                 }
             }
         ));
         delete $2; delete $4; delete $6;
       }
-    /* Function call: f(args...) */
     | TOK_IDENT TOK_LPAREN val_expr_list TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
@@ -791,7 +761,6 @@ primary_expr
         ));
         delete $1; delete $3;
       }
-    /* Consume expression */
     | TOK_CONSUME TOK_LPAREN TOK_IDENT TOK_RPAREN {
         $$ = new shared_ptr<ValExpr>(make_shared<ValExpr>(
             ValExpr{
@@ -804,7 +773,6 @@ primary_expr
       }
     ;
 
-/* ---------- TYPES ---------- */
 // Type with potential viewpoint
 full_type
     : normal_type {

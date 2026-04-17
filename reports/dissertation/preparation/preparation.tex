@@ -81,7 +81,7 @@ actor Main
     acc.balance += 50
 \end{lstlisting}
 
-\subsection{Specific capabilities used in Pony}
+\subsection{Specific capabilities used in Pony} \label{sec:preparation_pony_specific_capabilities}
 
 The main capabilities used in Pony are \textsf{iso}, \textsf{ref}, \textsf{val}, and \textsf{tag}.
 
@@ -168,7 +168,7 @@ other_actor.receive_data(d_val)
 \caption{Pony reference capabilities}
 \end{table}
 
-\subsection{Viewpoint adaptation}
+\subsection{Viewpoint adaptation} \label{sec:preparation_viewpoint_adaptation}
 Viewpoint adaptation is the mechanism Pony uses to correctly handle references to references.
 
 Consider the following code:
@@ -184,7 +184,7 @@ actor Main
     let b: B val = B // We have an immutable reference to B
 \end{lstlisting}
 
-What should the capability of \textsf{b.a} be? Since \textsf{b} has capability \textsf{val}, we are permitted to share it across actor boundaries. If \textsf{b.a} were allowed to retain its original \textsf{ref} capability, a recipient actor could gain mutable access to the object \textsf{a}. This would result in two different actors holding a \textsf{ref} to the same data simultaneously, directly violating the \textsf{ref} invariant and reintroducing data races. The solution to this problem is viewpoint adaptation. Whenever we access a field through a reference, we modify its type using the viewpoint adaptation operator (denoted by the symbol $\triangleright$). $\triangleright$ is a binary operator from $C^2 \rightarrow C$, where $C$ is the set of capabilities. Accessing a field with defined inner capability $F$ through an outer reference with capability $O$ gives a reference with capability $O \triangleright F$. So in the above example, \textsf{b.a} has type \textsf{A val} as $\textsf{val} \triangleright \textsf{ref} = \textsf{val}$.
+What should the capability of \textsf{b.a} be? Since \textsf{b} has capability \textsf{val}, we are permitted to share it across actor boundaries. If \textsf{b.a} were allowed to retain its original \textsf{ref} capability, a recipient actor could gain mutable access to the object \textsf{a}. This would result in two different actors holding a \textsf{ref} to the same data simultaneously, directly violating \textsf{ref}'s deny properties and reintroducing data races. The solution to this problem is viewpoint adaptation. Whenever we access a field through a reference, we modify its type using the viewpoint adaptation operator (denoted by the symbol $\triangleright$). $\triangleright$ is a binary operator from $C^2 \rightarrow C$, where $C$ is the set of capabilities. Accessing a field with defined inner capability $F$ through an outer reference with capability $O$ gives a reference with capability $O \triangleright F$. So in the above example, \textsf{b.a} has type \textsf{A val} as $\textsf{val} \triangleright \textsf{ref} = \textsf{val}$.
 
 The following table defines the result of the adaptation operator $O \triangleright F$ in Pony, where $O$ represents the capability of the originating reference and $F$ represents the capability of the field being accessed.
 % CR: The table needs to be modified to show the row/column stuff

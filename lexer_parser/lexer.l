@@ -5,11 +5,9 @@
 #include <string>
 using namespace std;
 
-/* Our own line/column counters */
 static int curr_line   = 1;
 static int curr_column = 1;
 
-/* Track token location */
 #define YY_USER_ACTION                                                   \
     do {                                                                 \
         yylloc->first_line   = curr_line;                                \
