@@ -131,7 +131,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma \tack e : T_e$}
     \AxiomC{$\Gamma \tack \text{assignable}(T, T_e)$}
     \RightLabel{(Var-Decl)}
-    \BinaryInfC{$\Gamma \tack \text{var } x : T = e; \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
+    \BinaryInfC{$\Gamma \tack \text{var } x : T = e \tackl \Gamma[\Gamma_V \mapsto \Gamma_V[x \mapsto T]]$}
 \end{prooftree}
 
 
@@ -150,19 +150,19 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
     \AxiomC{$\Gamma \tack \text{assignable}(b_{\text{param}}, \overline{T_e})$}
     \RightLabel{[Behv-Call]}
-    \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}); \tackl \Gamma$}
+    \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}) \tackl \Gamma$}
 \end{prooftree}
 
 
 \begin{tabular}{c@{\qquad\qquad}c}
     \AxiomC{$\Gamma \tack e : \text{Int}$}
     \RightLabel{(Out)}
-    \UnaryInfC{$\Gamma \tack \text{OUT } e; \tackl \Gamma$}
+    \UnaryInfC{$\Gamma \tack \text{OUT } e \tackl \Gamma$}
     \DisplayProof
 &
     \AxiomC{$\Gamma \tack e : T$}
     \RightLabel{[Raw expression]}
-    \UnaryInfC{$\Gamma \tack e; \tackl \Gamma$}
+    \UnaryInfC{$\Gamma \tack e \tackl \Gamma$}
     \DisplayProof
 \end{tabular}
 
@@ -194,7 +194,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma_{callable} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
     \AxiomC{$\Gamma \tack e : T_{\text{ret}}$}
     \RightLabel{[Return]}
-    \BinaryInfC{$\Gamma \tack \text{return } e; \tackl \Gamma$}
+    \BinaryInfC{$\Gamma \tack \text{return } e \tackl \Gamma$}
 \end{prooftree}
 \end{center}
 
@@ -246,58 +246,60 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma_{\text{base}} = \Gamma[this \mapsto \text{Actor}(A)]$}
     \AxiomC{$\Gamma_{\text{base}} \tack \overline{M} \tackl \Gamma_{\text{base}}$}
     \RightLabel{[T-Actor]}
-    \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T};\ \overline{M}\ \} \tackl \Gamma$}
+    \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T}\ \overline{M}\ \} \tackl \Gamma$}
 \end{prooftree}
 \end{center}
 
 \chapter{\textit{UserMutex implementation}} \label{appendix:user_mutex_implementation}
+The \textsf{UserMutex} structure contains the following fields:
+\begin{itemize}
+  \item \textbf{\textsf{holding\_instance}}: An optional that stores the ID of the actor instance holding the \textsf{UserMutex} (if any).
+  \item \textbf{\textsf{num\_lock\_called}}: The net lock depth (difference between the number of \textsf{Lock} and \textsf{Unlock} calls).
+  \item \textbf{\textsf{wait\_queue}}: A FIFO queue storing the IDs of waiting actor instances.
+  \item \textbf{\textsf{coord\_lock}}: OS-level mutex for safe concurrent access to internal members of \textsf{UserMutex}.
+\end{itemize} 
 \section{Locking}
 \begin{algorithmic}[1]
 \Procedure{Lock}{$locker\_id$}
-    \State \textbf{acquire} $coord\_lock$
+    \State \textbf{acquire} \textsf{coord\_lock}
     
-    % Path 1: Unowned
-    \If{$holding\_instance = \text{null}$}
-        \State $holding\_instance \gets locker\_id$
-        \State $mutex.num\_lock\_called \gets 1$
-        \State \textbf{release} $mutex.coord\_lock$
+    \If{$\textsf{holding\_instance} = \textsf{null}$}
+        \State $\textsf{holding\_instance} \gets \textsf{locker\_id}$
+        \State $\textsf{num\_lock\_called} \gets 1$
+        \State \textbf{release} \textsf{coord\_lock}
         \State \Return \textbf{true}
-    \EndIf
-
-    % Path 2: Reentrant
-    \If{$holding\_instance = locker\_id$}
-        \State $num\_lock\_called \gets num\_lock\_called + 1$
-        \State \textbf{release} $mutex.coord\_lock$
+    \ElsIf{$\textsf{holding\_instance} = \textsf{locker\_id}$}
+        \State $\textsf{num\_lock\_called} \gets \textsf{num\_lock\_called} + 1$
+        \State \textbf{release} \textsf{coord\_lock}
         \State \Return \textbf{true}
+    \Else
+        \State Set \textsf{locker\_id}'s state to \textbf{WAITING} and add it to \textsf{wait\_queue}
+        \State \textbf{release} \textsf{coord\_lock}
+        \State \Return \textbf{false}
     \EndIf
-
-    % Path 3: Contention
-    \State Set $locker\_id$'s state to \textbf{WAITING} and add it to mutex's $wait\_queue$
-    \State \textbf{release} $mutex.coord\_lock$
-    \State \Return \textbf{false}
 \EndProcedure
 \end{algorithmic}
 \section{Unlocking}
 \begin{algorithmic}[1]
-\Procedure{Unlock}{$runtime$}
-    \State \textbf{acquire} $mutex.coord\_lock$
-    \State $mutex.num\_lock\_called \gets mutex.num\_lock\_called - 1$
+\Procedure{Unlock}{\textsf{runtime}}
+    \State \textbf{acquire} \textsf{coord\_lock}
+    \State $\textsf{num\_lock\_called} \gets \textsf{num\_lock\_called} - 1$
     
-    \If{$mutex.num\_lock\_called > 0$}
-        \State \textbf{release} $mutex.coord\_lock$
+    \If{$\textsf{num\_lock\_called} > 0$}
+        \State \textbf{release} \textsf{coord\_lock}
         \State \Return
     \EndIf
 
-    \If{$mutex.wait\_queue$ is empty}
-        \State $mutex.holding\_instance \gets \text{null}$
+    \If{\textsf{wait\_queue} is empty}
+        \State $\textsf{holding\_instance} \gets \textsf{null}$
     \Else
-        \State $target \gets mutex.wait\_queue.pop\_front()$
-        \State $mutex.holding\_instance \gets target$
-        \State $mutex.num\_lock\_called \gets 1$
+        \State $\textsf{target} \gets \textsf{wait\_queue.pop\_front()}$
+        \State $\textsf{holding\_instance} \gets \textsf{target}$
+        \State $\textsf{num\_lock\_called} \gets 1$
         
-        \State Set $target$'s state to \textbf{RUNNABLE} and add it to the \textit{schedule\_queue}
+        \State Set \textsf{target}'s state to \textbf{RUNNABLE} and add it to the \textit{schedule\_queue}
     \EndIf
-    \State \textbf{release} $mutex.coord\_lock$
+    \State \textbf{release} \textsf{coord\_lock}
 \EndProcedure
 \end{algorithmic}
 

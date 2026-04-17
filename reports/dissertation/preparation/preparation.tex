@@ -3,7 +3,6 @@
 \chapter{Preparation} \label{ch:preparation}
 
 This chapter goes through the foundational concepts required to develop \textit{Coherence}.
-% CR: Rephrase:
 
 \begin{itemize}
   \item We begin with a discussion of the actor model of the Pony programming language\cite{pony_language}, which heavily inspires \textit{Coherence} (section \ref{sec:actor_model_pony}).
@@ -24,7 +23,7 @@ In Pony, an \textit{actor} is a template to create actor instances (just like a 
 
 \textbf{Constructors (\textsf{new}):} These are special functions used to initialize the state of an actor instance upon creation.
 
-\textbf{Behaviours (\textsf{be}):} These are the asynchronous interface through which actors communicate. Each actor instance maintains a \textit{mailbox} for incoming messages. A behaviour invocation does not execute synchronously within the caller's execution context. Instead, the invocation is internally converted into a message and added to the recipient actor instance's mailbox for future processing. %CR: Perhaps a footnote about invocation vs calling
+\textbf{Behaviours (\textsf{be}):} These are the asynchronous interface through which actors communicate. Each actor instance maintains a \textit{mailbox} for incoming messages. A behaviour invocation\footnote{Asynchronous behaviours are \textit{invoked}, while synchronous functions and constructors are \textit{called}.} does not execute synchronously within the caller's execution context. Instead, the invocation is internally converted into a message and added to the recipient actor instance's mailbox for future processing. %CR: Perhaps a footnote about invocation vs calling
 
 Let us consider a sample program to illustrate these ideas.
 
@@ -185,21 +184,6 @@ actor Main
 \end{lstlisting}
 
 What should the capability of \textsf{b.a} be? Since \textsf{b} has capability \textsf{val}, we are permitted to share it across actor boundaries. If \textsf{b.a} were allowed to retain its original \textsf{ref} capability, a recipient actor could gain mutable access to the object \textsf{a}. This would result in two different actors holding a \textsf{ref} to the same data simultaneously, directly violating \textsf{ref}'s deny properties and reintroducing data races. The solution to this problem is viewpoint adaptation. Whenever we access a field through a reference, we modify its type using the viewpoint adaptation operator (denoted by the symbol $\triangleright$). $\triangleright$ is a binary operator from $C^2 \rightarrow C$, where $C$ is the set of capabilities. Accessing a field with defined inner capability $F$ through an outer reference with capability $O$ gives a reference with capability $O \triangleright F$. So in the above example, \textsf{b.a} has type \textsf{A val} as $\textsf{val} \triangleright \textsf{ref} = \textsf{val}$.
-
-The following table defines the result of the adaptation operator $O \triangleright F$ in Pony, where $O$ represents the capability of the originating reference and $F$ represents the capability of the field being accessed.
-% CR: The table needs to be modified to show the row/column stuff
-\begin{table}[H]
-\centering
-\label{tab:viewpoint_adaptation}
-\begin{tabular}{|l|c|c|c|c|}
-\hline
-\rowcolor{gray!20} $O \triangleright F$ & \textsf{iso} & \textsf{ref} & \textsf{val} & \textsf{tag} \\ \hline
-\cellcolor{gray!20} \textsf{iso} & \textsf{iso} & \textsf{tag} & \textsf{val} & \textsf{tag} \\ \hline
-\cellcolor{gray!20} \textsf{ref} & \textsf{iso} & \textsf{ref} & \textsf{val} & \textsf{tag} \\ \hline
-\cellcolor{gray!20} \textsf{val} & \textsf{val} & \textsf{val} & \textsf{val} & \textsf{tag} \\ \hline
-\end{tabular}
-\caption{Viewpoint Adaptation Table ($O \triangleright F$)}
-\end{table}
 
 
 \section{Safe locking} \label{sec:safe_locking}

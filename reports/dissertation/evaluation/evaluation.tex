@@ -1,4 +1,5 @@
 % !TeX root = ../main.tex
+%TC:envir tabular [] word
 \chapter{Evaluation}
 Following the project proposal, the evaluation of \textit{Coherence} focuses on correctness, expressive power and performance.
 
@@ -6,18 +7,15 @@ Following the project proposal, the evaluation of \textit{Coherence} focuses on 
 There are a wide range of potential risks in this project. The compilation pipeline might contain bugs, the runtime could suffer from heisenbugs, and the type system may be unsound. This section discusses the methods used to mitigate these issues.
 
 \subsection{Testing}
-% (92 words)
 To detect bugs in the compilation pipeline, a test suite consisting of $62$ tests was developed. The largest portion of this suite consists of $47$ type-checking tests. They were designed to cover a wide range of programming constructs and target distinct components of the type-checking stage. The suite includes both positive and negative tests. Additionally, $4$ unit tests were created to verify the correct implementation of the lock-inference algorithm. The remaining $11$ tests perform end-to-end verification of the entire compilation pipeline (from parsing to codegen and linking with the runtime). Of these, $6$ are small, deterministic programs intended to confirm that core language constructs of \textit{Coherence} compile and run as expected. The other $5$ are concurrency-focused. These tests target potential runtime bugs. Most of these tests are large in scale, involving the creation of numerous actor instances and the transmission of many messages. This approach was necessary because heisenbugs were difficult to detect in short programs.
 
 \subsection{Programming principles}
-% 204 words
 In addition to testing, to prevent bugs, the compiler extensively utilizes defensive programming. Assertions are integrated throughout the compilation pipeline to verify internal invariants. These checks act as an immediate signal for logic bugs.
 
 Implementing the runtime correctly proved challenging due to frequent encounters with heisenbugs. To ensure correctness beyond standard testing, a structured programming paradigm was introduced. Shared runtime data structures were protected with locks to prevent data races. However, this alone was insufficient to guarantee correct behaviour.  Many operations needed to be performed atomically---for example, adding an actor instance to a lock's wait queue while simultaneously changing its state to \textsf{WAITING}. To address this, all such atomic operations were identified and wrapped in logical atomic sections. These sections were implemented by acquiring all necessary locks at the start of the section and releasing them at the end. To prevent deadlocks, the runtime was designed to always acquire locks in a fixed global order.
 
 
 \subsection{Soundness of type system} \label{sec:type_system_soundness}
-% 647 words
 In the context of \textit{Coherence}, soundness is defined to be the absence of data races and deadlocks in programs which type check.
 
 Deadlock in \textit{Coherence} is defined as a state where no actor instance is runnable or currently running, yet some actor instances have work left (their mailboxes are not empty). This can only occur when actor instances enter a cyclic wait within lock queues. This is prevented by \textit{Coherence} as the generated code takes locks in a globally fixed order, preventing cyclic dependencies. 

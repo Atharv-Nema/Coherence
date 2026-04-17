@@ -2,14 +2,15 @@
 %TC:envir tabular [] word
 \chapter{Implementation}
 This chapter describes the theory and code needed for the implementation of the \textit{Coherence} language.
-% CR: Correct this introduction.
 \begin{itemize}
-    \item Section \ref{sec:theory} introduces the formal syntax and type-checking rules of \textit{Coherence}.
-    \item Section \ref{sec:frontend} provides an overview of the frontend, covering the lexer, parser, and abstract syntax tree (AST).
-    \item Section \ref{sec:ast-validation} discusses the AST validation stage, which includes the implementation of the type-checking rules and some processing for proper handover to the code generation stage.
-    \item Section \ref{sec:runtime} discusses the implementation of the runtime system.
-    \item Section \ref{sec:codegen} discusses the lowering to LLVM.
-    \item Section \ref{sec:pointers-to-pointers} presents an extension to the language, which allows pointers to point to other pointers.
+    \item We begin by introducing the formal syntax and type-checking rules of \textit{Coherence} (section \ref{sec:theory}).
+    \item We then describe the compiler frontend (section \ref{sec:frontend}).
+    \item Section \ref{sec:ast-validation} discusses the AST validation stage, where the typing rules are implemented and inferences required for code generation are performed.
+    \item We then discuss the implementation of the runtime system (section \ref{sec:runtime}).
+    \item Section \ref{sec:codegen} discusses the lowering to LLVM IR.
+    \item We then analyse the time complexity of the compilation pipeline (section \ref{sec:time-complexity-analysis}).
+    \item Section \ref{sec:pointers-to-pointers} presents an extension to the core language, allowing multi-level pointers.
+    \item Finally, we conclude with an overview of the repository structure (section \ref{sec:repository_overview}).
 \end{itemize}
 
 \section{Formal theory} \label{sec:theory}
@@ -68,15 +69,15 @@ While most constructs are fairly standard, several specific features of the synt
 In the syntax below, $b$ refers to the name of the behaviour being invoked, and $\overline{X}$ refers to a list of $X$.
 \[
 \begin{array}{lcll}
-s & ::= & \mathtt{var}\ x : T = e\ ; & \text{(local declaration)} \\
-  & \mid & f := e\ ; & \text{(member initialization)} \\
-  & \mid & e \to b(\overline{e})\ ; & \text{(behaviour call)} \\
-  & \mid & \mathtt{OUT}\ e\ ; & \text{(print statement)} \\
-  & \mid & \mathtt{if}\ (e)\ \{\ \overline{s}; \}\ \mathtt{else}\ \{\ \overline{s}\ \} & \text{(if-else statement)} \\
-  & \mid & \mathtt{while}\ (e)\ \{\ \overline{s}; \} & \text{(while statement)} \\
+s & ::= & \mathtt{var}\ x : T = e\ & \text{(local declaration)} \\
+  & \mid & f := e\ & \text{(member initialization)} \\
+  & \mid & e \to b(\overline{e})\ & \text{(behaviour call)} \\
+  & \mid & \mathtt{OUT}\ e\ & \text{(print statement)} \\
+  & \mid & \mathtt{if}\ (e)\ \{\ \overline{s}\ \}\ \mathtt{else}\ \{\ \overline{s}\ \} & \text{(if-else statement)} \\
+  & \mid & \mathtt{while}\ (e)\ \{\ \overline{s}\ \} & \text{(while statement)} \\
   & \mid & \mathtt{atomic}\ \{\ \overline{s}\ \} & \text{(atomic section)}\\
-  & \mid & \mathtt{return}\ e\ ; & \text{(return)}\\
-  & \mid & e\ ; & \text{(expression whose value is discarded)}
+  & \mid & \mathtt{return}\ e\ & \text{(return)}\\
+  & \mid & e\ & \text{(expression whose value is discarded)}
 \end{array}
 \]
 Some interesting features of the syntax are explained below:
@@ -100,7 +101,6 @@ M & ::= & \mathtt{new}\ k(\overline{T\ \mathit{arg}})\ \{\ \overline{s}\ \} & \t
 A program $P$ is a list of top-level items $D$. Top-level items are either type-definitions, function definitions, or actor-definitions. An actor contains a list of member fields, and a list of constructors, private functions, and behaviours.
 
 \subsection{Typing rules}
-% CR: Make this sentence better or something
 The typing rules presented in this section are intended as a high-level description of the typing rules, rather than an exhaustive formal compiler specification. Several complex validation checks are encapsulated by named procedures or predicates. Most of these are simply explained in words rather than formal notation.\\
 The typing environment $\Gamma$ maintains the contextual state required by the type checker. Its internal structure is not described here. The typing rules simply assume that $\Gamma$ provides all necessary information (see appendix \ref{appendix:typing_context} for more details).
 \subsubsection{Expression typing} \label{sec:implementation_expression_typing}
@@ -511,7 +511,6 @@ Inferred locks propagate through calls: if \(\textsf{f()}\) requires locks A and
 The runtime implements this via the \textsf{UserMutex} class. At a high level, \textsf{UserMutex} tracks the current holding instance, counts reentrant acquisitions, and maintains a FIFO queue for waiting actors. It also contains a coordination lock to ensures thread-safe access to its internal state. The pseudocode for \textsf{lock} and \textsf{unlock} is presented in section \ref{appendix:user_mutex_implementation}.
 
 \subsection{Runtime traps}
-% CR: more background about runtime traps and stuff
 \textit{Runtime traps} in \textit{Coherence} are functions exposed by the runtime to the compiled IR. These provide the interface through which the generated LLVM code invokes runtime services. \textit{Non-switching} traps execute on the current behaviour's stack, while \textit{switching} traps may suspend execution and return control to the runtime by performing a user-level context switch using \textsf{fcontext\_t} (see section \ref{sec:preparation_runtime}).
 \begin{table}[H]
 \centering
@@ -740,7 +739,7 @@ One notable choice in the definition of $\triangleright$ warrants justification:
 \subsection{Implementation}
 The primary modifications were in the type checker, where the assignability, covariance, and invariance relations were implemented. Minimal frontend adjustments were made to correctly parse the new syntax, and the codegen was updated to lower the \textsf{nullptr} abstraction directly to the LLVM \textsf{null} constant.
 
-\section{Repository overview}
+\section{Repository overview} \ref{sec:repository_overview}
 The \textit{Coherence} repository is built from scratch and follows a modular compiler structure. The root directory contains the source implementation, build configurations (CMake), generated binary files, and documentation. A high-level breakdown of the repository's organization is provided in Table 3.1. The root directory contains subdirectories corresponding to the different stages of the compiler (frontend, runtime, AST validation, codegen and the runtime), global utilities, code to generate benchmarks and tests. It also includes a \textsf{Readme.md} file which explains how to build and use the compiler.
 
 The \textit{Coherence} source code (excluding tests and benchmarks) consists of $5838$ lines. Most of this code is in C++ ($4968$ lines), while the remaining $870$ lines are yacc and lex code used for the lexer and parser generator. Tests are organized around generic test runners that can ingest data (JSON files or \textit{Coherence} programs). Most test runners are written in Python for ease of syntax, and the benchmark-generation code is also written in Python. Excluding test data, the benchmarks and tests together comprise $596$ lines of code: $181$ lines in C++ and $415$ lines in Python.
