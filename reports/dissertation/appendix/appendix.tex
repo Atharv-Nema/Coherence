@@ -149,7 +149,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
     \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
     \AxiomC{$\Gamma \tack \text{assignable}(b_{\text{param}}, \overline{T_e})$}
-    \RightLabel{[Behv-Call]}
+    \RightLabel{(Behv-Call)}
     \QuaternaryInfC{$\Gamma \tack e_a \to b(\overline{e}) \tackl \Gamma$}
 \end{prooftree}
 
@@ -161,7 +161,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \DisplayProof
 &
     \AxiomC{$\Gamma \tack e : T$}
-    \RightLabel{[Raw expression]}
+    \RightLabel{(Raw expression)}
     \UnaryInfC{$\Gamma \tack e \tackl \Gamma$}
     \DisplayProof
 \end{tabular}
@@ -177,7 +177,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 
 \begin{prooftree}
     \AxiomC{$\Gamma[L \mapsto \text{true}] \tack \overline{s} \tackl \Gamma'$}
-    \RightLabel{[Atomic]}
+    \RightLabel{(Atomic)}
     \UnaryInfC{$\Gamma \tack \text{atomic } \{ \overline{s} \} \tackl \Gamma$}
 \end{prooftree}
 
@@ -185,7 +185,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \begin{prooftree}
     \AxiomC{$\Gamma \tack e : \text{Bool}$}
     \AxiomC{$\Gamma \tack \overline{s} \tackl \Gamma'$}
-    \RightLabel{[While]}
+    \RightLabel{(While)}
     \BinaryInfC{$\Gamma \tack \text{while } (e) \{ \overline{s} \} \tackl \Gamma$}
 \end{prooftree}
 
@@ -193,7 +193,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \begin{prooftree}
     \AxiomC{$\Gamma_{callable} = (\overline{T_{\text{param}}} \Rightarrow T_{\text{ret}})$}
     \AxiomC{$\Gamma \tack e : T_{\text{ret}}$}
-    \RightLabel{[Return]}
+    \RightLabel{(Return)}
     \BinaryInfC{$\Gamma \tack \text{return } e \tackl \Gamma$}
 \end{prooftree}
 \end{center}
@@ -203,7 +203,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
 \begin{center}
 \begin{prooftree}
     \AxiomC{$\Gamma \tack \text{valid}(T_N)$}
-    \RightLabel{[TypeDef]}
+    \RightLabel{(TypeDef)}
     \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
 \end{prooftree}
 
@@ -214,7 +214,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma' \tack \text{returns}(\overline{s}, \phi_r)$}
     \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
     \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
-    \RightLabel{[T-Func]}
+    \RightLabel{(T-Func)}
     \QuaternaryInfC{$\Gamma \tack \text{func } m(\overline{x : \phi_p}) \Rightarrow \phi_r \{ \overline{s} \} \tackl \Gamma$}
 \end{prooftree}
 
@@ -224,7 +224,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
     \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
     \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
-    \RightLabel{[T-Constructor]}
+    \RightLabel{(T-Constructor)}
     \TrinaryInfC{$\Gamma \tack \mathtt{new}\ k(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
 \end{prooftree}
 
@@ -235,7 +235,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
     \AxiomC{$\Gamma' \tack \text{valid\_var\_usage}(\overline{s})$}
     \AxiomC{$\Gamma' \tack \overline{s} \tackl \Gamma''$}
-    \RightLabel{[T-Be]}
+    \RightLabel{(T-Be)}
     \QuaternaryInfC{$\Gamma \tack \mathtt{be}\ b(\overline{x : \phi_p})\ \{\ \overline{s}\ \} \tackl \Gamma$}
 \end{prooftree}
 
@@ -245,7 +245,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \AxiomC{$\Gamma \tack \overline{T} : \text{valid}$}
     \AxiomC{$\Gamma_{\text{base}} = \Gamma[this \mapsto \text{Actor}(A)]$}
     \AxiomC{$\Gamma_{\text{base}} \tack \overline{M} \tackl \Gamma_{\text{base}}$}
-    \RightLabel{[T-Actor]}
+    \RightLabel{(T-Actor)}
     \TrinaryInfC{$\Gamma \tack \mathtt{actor}\ A\ \{\ \overline{f : T}\ \overline{M}\ \} \tackl \Gamma$}
 \end{prooftree}
 \end{center}

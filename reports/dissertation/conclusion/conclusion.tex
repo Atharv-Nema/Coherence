@@ -1,5 +1,6 @@
 % !TeX root = ../main.tex
 %TC:envir tabular [] word
+%TC:envir table [] word
 \chapter{Conclusion}
 In this project, I developed \textit{Coherence}, an actor-based programming language that combines ideas from Pony, Kappa and Lockguard to create a novel language suited for writing expressive and safe concurrent code.
 
@@ -30,8 +31,9 @@ Several directions for future work remain unexplored due to time constraints and
 \end{itemize}
 
 \section{Reflections}
-This project began with a review of literature on actor models and Pony's reference capabilities. Analysing Pony's coordination patterns revealed that certain patterns were cumbersome to express. I believed this could be solved by introducing locks. This idea became the foundation of \textit{Coherence}. Further research, drawing on work by Castegren and Gudka, refined this idea into the design of \textit{Coherence}.
 
-Several lessons emerged from this experience. I gained an appreciation for upfront design and systematic planning. Decisions made early in the project had far-reaching consequences, and a more deliberate approach to design would have avoided some later refactoring. I also learned the value of thoroughly understanding the intent behind programming constructs, not just their mechanics. This was essential when trying to adapt Pony's viewpoint adaptation rules so that they work with \textit{Coherence}'s memory model.
+Reflecting on the engineering process, the most consequential early decision was selecting C++ over OCaml for the compiler implementation. While C++ is standard for systems programming, its lack of native algebraic data types and pattern matching introduced significant syntactic overhead. Because the compiler relies heavily on recursive tree traversals, in hindsight, a functional language like OCaml would have allowed for a much cleaner and more succinct implementation.
 
-Overall, this project was a success. I achieved all core objectives and several extensions, successfully combining ideas from prior work into a safe and expressive language for concurrent programming.
+Additionally, I gained a practical appreciation for upfront architectural planning. A more rigorous initial design for the AST validation pipeline and the runtime system would have prevented substantial refactoring and debugging later in the project. On the theoretical side, I learned the importance of understanding the fundamental intent behind language semantics rather than just their mechanical rules. This deeper understanding was essential when adapting Pony's viewpoint adaptation rules to safely support \textit{Coherence}'s memory model.
+
+Overall, this project successfully achieved all core objectives and several extensions, combining ideas from Pony, Kappa, and Lockguard into a safe and expressive language for concurrent programming.

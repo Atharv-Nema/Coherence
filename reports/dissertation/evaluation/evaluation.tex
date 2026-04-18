@@ -1,5 +1,6 @@
 % !TeX root = ../main.tex
 %TC:envir tabular [] word
+%TC:envir table [] word
 \chapter{Evaluation}
 Following the project proposal, the evaluation of \textit{Coherence} focuses on correctness, expressive power and performance.
 
@@ -32,7 +33,7 @@ Similarly, the typing rules do not guarantee safety when unaliasing an \textsf{i
 
 Finally, we must also verify that the definition of $\triangleright$ satisfies the nested consistency property mentioned at the end of section \ref{sec:extension-typing-rules}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
 
-If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \textsf{iso} unaliasing, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. While these arguments are not completely rigorous, exhaustively verifying that my definition of $\triangleright$ satisfied these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
+If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \textsf{iso} unaliasing, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. The mechanical verification of these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
 
 \section{Expressive power}
 A core goal of \textit{Coherence} is to offer high expressive power without sacrificing safety. This section examines this claim. We begin by demonstrating how \textit{Coherence} handles coordinated access to shared data structures, comparing its approach with that of Pony. We then explore finer-grained coordination patterns, using the \textit{sleeping barber problem}\cite{sleeping_barber} as a case study. Following this, section \ref{sec:memory_model} evaluates the memory model of \textit{Coherence} in terms of safety and flexibility. Finally, we discuss the limitations of \textit{Coherence}.
@@ -44,17 +45,15 @@ In Pony, shared mutable state is managed by passing exclusive ownership between 
 
 This pattern works adequately for operations on a single shared resource. However, difficulties arise when an operation must atomically operate on multiple shared resources. Consider the problem of atomically swapping the values of two shared integers. Conceptually, the swapping actor must first request the first integer, wait to receive it, request the second integer, wait again, perform the swap and finally return the integers. Since Pony behaviours cannot block, this operation must be fragmented across multiple behaviours, with intermediate state stored in actor fields. A complete implementation is provided in appendix \ref{appendix:hot-potato}.
 
-This pattern is also quite error-prone. Programmers must manually return resources. A forgotten return permanently loses the resource with no compile-time safeguard. This pattern is also susceptible to logical deadlocks: states that are technically not deadlocks from the language's perspective but exhibit identical symptoms from the programmer's viewpoint. Consider two actors attempting to access the same two schedulers (\textsf{s1} and \textsf{s2}), but in a different order:
+This pattern is also quite error-prone. Programmers must manually return resources. A forgotten return permanently loses the resource with no compile-time safeguard. This pattern is also susceptible to logical deadlocks: states that are technically not deadlocks from the language's perspective but exhibit identical symptoms from the programmer's viewpoint. Consider two actors (\textsf{A} and \textsf{B}) attempting to access the same two schedulers (\textsf{s1} and \textsf{s2}), but in a different order:
 \begin{itemize}
-  \item Actor \textsf{A} acquires the resource from \textsf{s1}
-  \item Actor \textsf{B} acquires the resource from \textsf{s2}
-  \item Actor \textsf{A} tries to acquire resource from \textsf{s2}. It is not available, and hence actor \textsf{A} enters the wait queue of \textsf{s2}.
-  \item Similarly, \textsf{B} tries to acquire the resource from \textsf{s1} and enters its wait queue.
+  \item \textsf{A} acquires the resource from \textsf{s1}, and \textsf{B} from \textsf{s2}.
+  \item \textsf{A} requests \textsf{s2} and enters its wait queue. \textsf{B} requests \textsf{s1} and enters its wait queue.
 \end{itemize}
 
 Each actor waits for the other to return the resource. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes of the actor instances are empty, there is still work to be done from the perspective of the programmer (the wait queues of the scheduler actors are not empty). Compilers cannot be expected to catch such bugs as they cannot interpret programmer intent encoded in programmer-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
 
-\textit{Coherence} solves this through the \textsf{locked<L>} capability. Shared data is protected by associating it with a lock, and operations spanning multiple shared structures are wrapped in an \textsf{atomic} block. As shown below, swapping two shared integers reduces to a straightforward sequential program without fragmented code, manual \textsf{take}/\textsf{return} or user-managed queues. Locks are acquired and released automatically and safely, eliminating the need for patterns prone to logical deadlocks.
+\textit{Coherence} solves this through the \textsf{locked<L>} capability. Shared data is protected by associating it with a lock, and operations spanning multiple shared structures are wrapped in an \textsf{atomic} block. As shown below, swapping two shared integers reduces to a straightforward sequential program. Locks are acquired and released automatically and safely, eliminating the need for patterns prone to logical deadlocks.
 
 \begin{lstlisting}
 actor Swapper
@@ -114,7 +113,7 @@ Complex concurrent algorithms often require finer-grained coordination beyond ba
 \EndProcedure
 \end{algorithmic}
 
-The solution uses a mutex for data-race free access of \textsf{shop.queue} and a condition variable to sleep until a customer arrives. A condition variable, rather than a simple semaphore, is required because the barber must atomically release and re-acquire \textsf{shop.mutex}.
+The solution uses a mutex for data-race free access of \textsf{shop.queue} and a condition variable to sleep until a customer arrives.
 
 \textit{Coherence} does not provide direct access to synchronization primitives like semaphores or condition variables. However, equivalent patterns can be simulated through message passing combined with shared state. The key insight is that shared data structures and actor fields persist across behaviour invocations. To sleep, an actor simply allows its current behaviour to complete. All necessary state is retained in actor members. To wake up, another actor sends a message that triggers a new behaviour invocation, resuming operation. Using this insight, we can solve the \textit{sleeping barber problem} as follows.
 

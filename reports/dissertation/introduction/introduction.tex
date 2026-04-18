@@ -1,5 +1,6 @@
 % !TeX root = ../main.tex
 %TC:envir tabular [] word
+%TC:envir table [] word
 \chapter{Introduction}
 The trajectory of processor development has shifted fundamentally in recent decades. Due to physical limitations, the era of rapid single-core performance gains effectively ended. In response, manufacturers pivoted towards multi-core architectures. Software performance is no longer a "free lunch" provided by hardware improvements. To utilize modern processors to their greatest extent, writing concurrent code is essential.
 
@@ -8,13 +9,13 @@ However, moving from a sequential to a concurrent execution model introduces a s
 This project implements and evaluates a compiler for a language named \textit{Coherence}. \textit{Coherence} presents a novel combination of ideas from Pony, Kappa and Gudka's lockguard (described in section \ref{sec:related_work}) to create a language suited for writing expressive and safe concurrent programs.
 
 \section{Motivation} \label{sec:intro_motivation}
-Concurrent code carries the risk of two types of errors: \textit{data-races} and \textit{deadlocks}.
+Concurrent code carries the risk of two types of errors: \textit{data races} and \textit{deadlocks}.
 
-A data-race occurs when two or more threads attempt to access the same memory location simultaneously, and at least one of those accesses is a write. Without synchronization, the final state of the memory becomes dependent on the unpredictable timing of the processor's scheduler. This results in \textit{undefined behaviour}---a state where the program's output is no longer predictable. 
+A data race occurs when two or more threads attempt to access the same memory location simultaneously, and at least one of those accesses is a write. Without synchronization, the final state of the memory becomes dependent on the unpredictable timing of the processor's scheduler. 
 
-The most common defence against data races is using \textit{locks}. Lock are synchronization primitives that grants a thread exclusive access to a resource. By locking a piece of data, a thread ensures that no other thread can modify it until the lock is released. However, without a robust locking paradigm, programmers can encounter \textit{deadlocks}. Deadlocks occur when two or more threads enter a circular dependency, where each thread holds a lock that another thread needs to proceed. As no thread can move forward or release its currently held lock, the entire system reaches a state of permanent stagnation.
+The most common defence against data races are \textit{locks}. Locks are synchronization primitives that grant a thread exclusive access to a resource. By locking a piece of data, a thread ensures that no other thread can modify it until the lock is released. However, without a robust locking paradigm, programmers can encounter \textit{deadlocks}. Deadlocks occur when two or more threads enter a circular dependency, where each thread holds a lock that another thread needs to proceed. As no thread can move forward or release its currently held lock, the entire system reaches a state of permanent stagnation.
 
-One programming model that circumvents these problems is the \textit{actor model}. In this paradigm, the \textit{actor} is the fundamental unit of concurrency. Unlike traditional threads, actors do not share memory with each other. Instead, each actor manages a private state and communicates with other actors exclusively through asynchronous message passing. Each actor possesses an internal \textit{mailbox} that stores incoming messages. These messages are processed sequentially. Because there is no interleaving of execution within an individual actor and no state is shared between them, the model avoids both data races and deadlocks.
+One programming model that circumvents these problems is the \textit{actor model}. In this paradigm, the \textit{actor} is the fundamental unit of concurrency. Unlike traditional threads, actors do not share memory with each other. Instead, each actor manages a private state and communicates with other actors exclusively through asynchronous message passing. Each actor possesses an internal \textit{mailbox} that stores incoming messages. These messages are processed sequentially. Because there is no interleaving of execution within an individual actor and no memory is shared between them, the model avoids both data races and deadlocks.
 
 However, this pure actor model has several real costs. Copying data between actors can be expensive, and coordination patterns that are naturally expressed with locks become awkward or incur extra latency. In short, forbidding shared memory and locks entirely simplifies correctness but can hinder performance and expressiveness.
 
@@ -22,26 +23,19 @@ This project aims to demonstrate that safety does not need to come at the cost o
 
 \section{Related Work} \label{sec:related_work}
 
-\textit{Coherence} builds upon several related works.
+This section briefly introduces three prior works that \textit{Coherence} synthesises. A more detailed technical treatment of each is in Chapter 2.
 
 \subsection{The Pony Programming Language}
-The \textit{Pony} programming language\cite{pony_language} safely added shared-memory into the actor model. The core innovation of Pony was its system of \textit{reference capabilities}. 
-
-In Pony, every \textit{reference}\footnote{The terms \textit{pointer} and \textit{reference} will be used interchangeably throughout this document.} type has an associated capability that restricts how the reference can be shared between actors. For example, the isolated (\textsf{iso}) reference capability guarantees that if a variable holds an address to a memory location, no other variable in the entire program holds that same address. This allows a reference to be safely transferred between actors without the overhead of copying, provided that the sending actor relinquishes access to the variable originally storing the reference to maintain the single-pointer guarantee. The programmer assigns these capabilities to references they use, and the Pony compiler uses these capabilities to statically forbid programs that may lead to data-races.
+The \textit{Pony} programming language\cite{pony_language} safely added shared-memory into the actor model. The core innovation of Pony was its system of \textit{reference capabilities}. In Pony, every \textit{reference}\footnote{The terms \textit{pointer} and \textit{reference} will be used interchangeably throughout this document.} type has an associated capability that restricts how the reference can be shared between actors The programmer assigns these capabilities to references they use, and the Pony compiler uses these capabilities to statically forbid programs that may lead to data-races.
 
 \subsection{Castegren's Kappa}
 Castegren introduced a new reference capability called \textsf{locked} in his work on Kappa\cite{kappa_system}. A reference guarded by this capability is equipped with an implicit lock and every access to the reference automatically acquires and releases the lock, preventing data-races.
 
 \subsection{Gudka's Lock Inference for Java}
-\textit{Lock inference} refers to program analysis techniques that automatically determine which locks must be acquired to ensure a block of code executes safely. By shifting the responsibility of locking from the developer to the compiler, lock inference eliminates human errors that typically lead to data races and deadlocks.
-
-In his work on Lockguard\cite{gudka_thesis}, Gudka developed a system of lock-inference for Java. Under his model, developers do not manage individual locks. Instead, they wrap sensitive code in \textit{atomic sections}---logical units of code that the system guarantees will execute without interference from other threads. Gudka's system statically analyses these sections to compute the \textit{lock-set}, which is the collection of locks required to protect the data being accessed. To prevent deadlocks, the system uses a try-and-back-off strategy, ensuring that if all locks cannot be acquired safely, the current ones are released before retrying.
-
-
+\textit{Lock inference} refers to program analysis techniques that automatically determine which locks must be acquired to ensure a block of code executes safely. Gudka\cite{gudka_thesis} introduced lock-set inference for Java via \textit{atomic sections}, shifting the responsibility of taking locks safely from the programmer to the compiler. 
 
 \section{Project Objectives}
-
-The primary objective of this project is to design and implement a compiler for \textit{Coherence}. This involves the following:
+The project objectives are mentioned below:
 
 \begin{enumerate}
     \item Implement a \textit{type-checker} that enforces that all accepted programs are data race and deadlock free.
