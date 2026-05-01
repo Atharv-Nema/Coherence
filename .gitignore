@@ -23,3 +23,7 @@ pony_trial
 *.pyg
 *.bib
 *.xml
+*.pygtex
+*.pygstyle
+
+agent_review

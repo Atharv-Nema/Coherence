@@ -6,13 +6,12 @@
 #include <memory>
 
 struct Cap {
-    struct Tag {};
     struct Ref {};
     struct Val {};
     struct Iso {};
     struct Iso_cap {};
     struct Locked {std::string lock_name; };
-    std::variant<Tag, Ref, Val, Iso, Iso_cap, Locked> t;
+    std::variant<Ref, Val, Iso, Iso_cap, Locked> t;
 };
 
 

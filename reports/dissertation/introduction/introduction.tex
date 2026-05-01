@@ -11,15 +11,15 @@ This project implements and evaluates a compiler for a language named \textit{Co
 \section{Motivation} \label{sec:intro_motivation}
 Concurrent code carries the risk of two types of errors: \textit{data races} and \textit{deadlocks}.
 
-A data race occurs when two or more threads attempt to access the same memory location simultaneously, and at least one of those accesses is a write. Without synchronization, the final state of the memory becomes dependent on the unpredictable timing of the processor's scheduler. 
+Data races occur when two or more threads attempt to access the same memory location simultaneously, and at least one of those accesses is a write. Without synchronization, the final state of the memory becomes dependent on the unpredictable timing of the processor's scheduler. 
 
-The most common defence against data races are \textit{locks}. Locks are synchronization primitives that grant a thread exclusive access to a resource. By locking a piece of data, a thread ensures that no other thread can modify it until the lock is released. However, without a robust locking paradigm, programmers can encounter \textit{deadlocks}. Deadlocks occur when two or more threads enter a circular dependency, where each thread holds a lock that another thread needs to proceed. As no thread can move forward or release its currently held lock, the entire system reaches a state of permanent stagnation.
+The most common defence against data races are \textit{locks}. Locks are synchronization primitives that grant a thread exclusive access to a resource. By locking a piece of data, a thread ensures that no other thread can modify it until the lock is released. However, without a robust locking paradigm, programmers can encounter \textit{deadlocks}. Deadlocks occur when two or more threads enter a circular dependency, where each thread holds a lock that another thread needs to proceed. As no thread can move forward or release its currently held lock, the system reaches a state of permanent stagnation.
 
 One programming model that circumvents these problems is the \textit{actor model}. In this paradigm, the \textit{actor} is the fundamental unit of concurrency. Unlike traditional threads, actors do not share memory with each other. Instead, each actor manages a private state and communicates with other actors exclusively through asynchronous message passing. Each actor possesses an internal \textit{mailbox} that stores incoming messages. These messages are processed sequentially. Because there is no interleaving of execution within an individual actor and no memory is shared between them, the model avoids both data races and deadlocks.
 
 However, this pure actor model has several real costs. Copying data between actors can be expensive, and coordination patterns that are naturally expressed with locks become awkward or incur extra latency. In short, forbidding shared memory and locks entirely simplifies correctness but can hinder performance and expressiveness.
 
-This project aims to demonstrate that safety does not need to come at the cost of performance and expressiveness. \textit{Coherence} is designed to bridge this gap, aiming to retain the safety and simplicity of the actor model while safely reintroducing shared memory and locks.
+This project aims to demonstrate that safety does not need to come at the cost of performance and expressiveness. \textit{Coherence} is designed to retain the safety and simplicity of the actor model while safely reintroducing shared memory and locks.
 
 \section{Related Work} \label{sec:related_work}
 

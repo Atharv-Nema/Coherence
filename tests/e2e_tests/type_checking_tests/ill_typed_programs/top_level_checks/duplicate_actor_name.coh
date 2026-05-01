@@ -1,6 +1,6 @@
 
 actor Other {
-    new create{}
+    new create(){}
 }
 
 actor Other {

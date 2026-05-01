@@ -2,13 +2,13 @@
 %TC:envir tabular [] word
 %TC:envir table [] word
 \chapter{Evaluation}
-Following the project proposal, the evaluation of \textit{Coherence} focuses on correctness, expressive power and performance.
+Following the project proposal, \textit{Coherence}'s evaluation focuses on correctness, expressive power and performance.
 
 \section{Correctness}
-There are a wide range of potential risks in this project. The compilation pipeline might contain bugs, the runtime could suffer from heisenbugs, and the type system may be unsound. This section discusses the methods used to mitigate these issues.
+There project faces several risks: compilation pipeline bugs, runtime heisenbugs, and type system unsoundness. This section discusses the methods used to mitigate these issues.
 
 \subsection{Testing}
-To detect bugs in the compilation pipeline, a test suite consisting of $62$ tests was developed. The largest portion of this suite consists of $47$ type-checking tests. They were designed to cover a wide range of programming constructs and target distinct components of the type-checking stage. The suite includes both positive and negative tests. Additionally, $4$ unit tests were created to verify the correct implementation of the lock-inference algorithm. The remaining $11$ tests perform end-to-end verification of the entire compilation pipeline (from parsing to codegen and linking with the runtime). Of these, $6$ are small, deterministic programs intended to confirm that core language constructs of \textit{Coherence} compile and run as expected. The other $5$ are concurrency-focused. These tests target potential runtime bugs. Most of these tests are large in scale, involving the creation of numerous actor instances and the transmission of many messages. This approach was necessary because heisenbugs were difficult to detect in short programs.
+To detect compilation pipeline bugs, a test suite containing $62$ tests was developed. The largest portion of this suite consists of $47$ type-checking tests. They were designed to cover a wide range of programming constructs and target distinct components of the type-checking stage. The suite includes both positive and negative tests. Additionally, $4$ unit tests were created to verify the correct implementation of the lock-inference algorithm. The remaining $11$ tests perform end-to-end verification of the entire compilation pipeline (from parsing to codegen and linking with the runtime). Of these, $6$ are small, deterministic programs intended to confirm \textit{Coherence}'s core language constructs compile and run as expected. The other $5$ are concurrency-focused. These tests target potential runtime bugs. Most of these tests are large in scale, involving creating numerous actor instances and transmitting many messages. This approach was necessary because heisenbugs were difficult to detect in short programs.
 
 \subsection{Programming principles}
 In addition to testing, to prevent bugs, the compiler extensively utilizes defensive programming. Assertions are integrated throughout the compilation pipeline to verify internal invariants. These checks act as an immediate signal for logic bugs.
@@ -17,7 +17,7 @@ Implementing the runtime correctly proved challenging due to frequent encounters
 
 
 \subsection{Soundness of type system} \label{sec:type_system_soundness}
-In the context of \textit{Coherence}, soundness is defined to be the absence of data races and deadlocks in programs which type check.
+\textit{Coherence} defines soundness as data-races and deadlocks freedom in programs which type check.
 
 Deadlock in \textit{Coherence} is defined as a state where no actor instance is runnable or currently running, yet some actor instances have work left (their mailboxes are not empty). This can only occur when actor instances enter a cyclic wait within lock queues. This is prevented by \textit{Coherence} as the generated code takes locks in a globally fixed order, preventing cyclic dependencies. 
 
@@ -31,19 +31,19 @@ As mentioned in section \ref{sec:top-level-typing}, the \textit{Coherence} type 
 
 Similarly, the typing rules do not guarantee safety when unaliasing an \textsf{iso} for an ill-defined $\triangleright$. Suppose $\textsf{iso} \triangleright \textsf{ref} = \textsf{tag}$ and $\textsf{iso\textasciicircum} \triangleright \textsf{ref} = \textsf{ref}$. This would permit storing a \textsf{tag} to a \textsf{ref} field of an \textsf{iso}, then unaliasing to obtain a \textsf{ref} to what was originally a \textsf{tag}. This effectively allows assignment of a \textsf{tag} to a \textsf{ref}, which is unsafe. 
 
-Finally, we must also verify that the definition of $\triangleright$ satisfies the nested consistency property mentioned at the end of section \ref{sec:extension-typing-rules}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
+Finally, we must also verify that $\triangleright$'s definition satisfies the nested consistency property mentioned at the end of section \ref{sec:extension-typing-rules}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
 
-If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \textsf{iso} unaliasing, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. The mechanical verification of these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
+If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \textsf{iso} unaliasing, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. Mechanically verifying these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
 
 \section{Expressive power}
-A core goal of \textit{Coherence} is to offer high expressive power without sacrificing safety. This section examines this claim. We begin by demonstrating how \textit{Coherence} handles coordinated access to shared data structures, comparing its approach with that of Pony. We then explore finer-grained coordination patterns, using the \textit{sleeping barber problem}\cite{sleeping_barber} as a case study. Following this, section \ref{sec:memory_model} evaluates the memory model of \textit{Coherence} in terms of safety and flexibility. Finally, we discuss the limitations of \textit{Coherence}.
+A core goal of \textit{Coherence} is to offer high expressive power without sacrificing safety. This section examines this claim.
 
 \subsection{Shared data structures} \label{sec:pony_expressive_power}
 I argue that \textit{Coherence} is better suited than lock-free languages like Pony for expressing concurrent operations on shared data structures. 
 
 In Pony, shared mutable state is managed by passing exclusive ownership between actors via \textsf{iso} references. When multiple actors need access to a shared resource, a common approach (which I call the \textit{hot-potato pattern}) uses a central scheduler actor to coordinate access. Actors request the resource from the scheduler. If the resource is not available, the scheduler puts the requesting actor in a wait queue. When the resource becomes available, the scheduler transfers ownership of the resource to the requesting actor. After completing its operation, the actor returns the resource to the scheduler.
 
-This pattern works adequately for operations on a single shared resource. However, difficulties arise when an operation must atomically operate on multiple shared resources. Consider the problem of atomically swapping the values of two shared integers. Conceptually, the swapping actor must first request the first integer, wait to receive it, request the second integer, wait again, perform the swap and finally return the integers. Since Pony behaviours cannot block, this operation must be fragmented across multiple behaviours, with intermediate state stored in actor fields. A complete implementation is provided in appendix \ref{appendix:hot-potato}.
+This pattern works adequately for operations on a single shared resource. However, difficulties arise when an operation must atomically operate on multiple shared resources. Consider the problem of atomically swapping the values of two shared integers. Conceptually, the swapping actor must first request the first integer, wait to receive it, request the second integer, wait again, perform the swap and finally return the integers. Since Pony behaviours cannot block, this operation must be fragmented across multiple behaviours, with intermediate state stored in actor fields. Appendix \ref{appendix:hot-potato} provides the complete implementation.
 
 This pattern is also quite error-prone. Programmers must manually return resources. A forgotten return permanently loses the resource with no compile-time safeguard. This pattern is also susceptible to logical deadlocks: states that are technically not deadlocks from the language's perspective but exhibit identical symptoms from the programmer's viewpoint. Consider two actors (\textsf{A} and \textsf{B}) attempting to access the same two schedulers (\textsf{s1} and \textsf{s2}), but in a different order:
 \begin{itemize}
@@ -51,23 +51,21 @@ This pattern is also quite error-prone. Programmers must manually return resourc
   \item \textsf{A} requests \textsf{s2} and enters its wait queue. \textsf{B} requests \textsf{s1} and enters its wait queue.
 \end{itemize}
 
-Each actor waits for the other to return the resource. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes of the actor instances are empty, there is still work to be done from the perspective of the programmer (the wait queues of the scheduler actors are not empty). Compilers cannot be expected to catch such bugs as they cannot interpret programmer intent encoded in programmer-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
+Each actor waits for the other to return the resource. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes are empty, there is still work to be done from the perspective of the programmer (the wait queues of the scheduler actors are not empty). Compilers cannot be expected to catch such bugs as they cannot interpret programmer intent encoded in programmer-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
 
 \textit{Coherence} solves this through the \textsf{locked<L>} capability. Shared data is protected by associating it with a lock, and operations spanning multiple shared structures are wrapped in an \textsf{atomic} block. As shown below, swapping two shared integers reduces to a straightforward sequential program. Locks are acquired and released automatically and safely, eliminating the need for patterns prone to logical deadlocks.
 
-\begin{lstlisting}
-actor Swapper
-  be swap(ptr1: int locked<A>, ptr2: int locked<B>) =>
+\begin{minted}{pony}
+actor Swapper {
+  be swap(ptr1: int locked<A>, ptr2: int locked<B>) {
     atomic {
-      // The compiler infers that both lock A and lock B 
-      // are required. They are acquired in a fixed order
-      // (e.g., A then B) before the code below executes.
       let temp = *ptr1
       *ptr1 = *ptr2
       *ptr2 = temp
     }
-    // Both locks are automatically released here.
-\end{lstlisting}
+  }
+}
+\end{minted}
 
 
 
@@ -170,12 +168,12 @@ We evaluate \textit{Coherence}'s memory model in terms of safety and expressive 
 
 Regarding safety, \textit{Coherence} is not memory safe: it permits null pointers and does not perform bounds checking on array accesses. This contrasts with Pony, which guarantees memory safety by ensuring all pointers are initialized and performs runtime bounds checking. The null pointer---famously described as "the billion dollar mistake" by its inventor Tony Hoare\cite{hoare_null}---is a well-known source of bugs. \textit{Coherence} could get rid of null pointers by introducing variants, requiring no changes to the core type system. However, fixing unsafe array accesses would require runtime bounds checking, conflicting with \textit{Coherence}'s principle of zero runtime overhead. Whether this modest performance cost is worth the safety guarantees remains a design trade-off.
 
-Regarding expressive power, the \textit{Coherence} memory model offers greater flexibility than Pony through its support for \textit{value semantics}. Structures in \textit{Coherence} are true values that can be stored directly on the stack or inlined within other structures, enabling copy-on-assignment and cache-friendly memory layouts without pointer indirection. Pony, by contrast, is built on reference semantics: user-defined structures are stored on the heap and accessed via references. This precludes the flexible stack allocation and explicit copying patterns available in \textit{Coherence}.
+Regarding expressive power, the \textit{Coherence} memory model offers greater flexibility than Pony through its support for \textit{value semantics}. Structures in \textit{Coherence} are true values that can be stored directly on the stack or inlined within other structures, enabling copy-on-assignment and cache-friendly memory layouts without pointer indirection. Pony, by contrast, is built on \textit{reference semantics}: user-defined structures are stored on the heap and accessed via references. This precludes the flexible stack allocation and explicit copying patterns available in \textit{Coherence}.
 
 \subsection{Limitations of \textit{Coherence}} \label{sec:coherence-limitations}
 We analyse the limitations from the perspective of concurrent programming and general code style.
 
-\paragraph{Concurrent programming} \textit{Coherence}'s type system cannot capture lock-free programming patterns (for example, compare and swap). While lock-free operations are not more expressive (any such operation can be simulated by acquiring a lock, performing the operation, and then releasing the lock), they are significantly more efficient in practice. Additionally, the \textsf{locked<L>} capability lacks the granularity to support multiple-reader single-writer patterns. Another major limitation of \textit{Coherence} is that the number of locks is fixed at compile time, with each protected object tied to a statically known lock type. Consequently, patterns such as a shared linked list where each node is protected by a distinct lock cannot be expressed:
+\paragraph{Concurrent programming} \textit{Coherence}'s type system cannot capture lock-free programming patterns (for example, compare and swap). While lock-free operations are not more expressive (any such operation can be simulated by acquiring a lock, performing the operation, and then releasing the lock), they are significantly more efficient in practice. Additionally, the \textsf{locked<L>} capability lacks the granularity to support multiple-reader single-writer patterns. Another major limitation of \textit{Coherence} is that the number of locks is fixed at compile time, with each protected object tied to a statically known lock. Consequently, patterns such as a shared linked list where each node is protected by a distinct lock cannot be expressed:
 \begin{lstlisting}
 type linked_list = struct {
   value: int;
@@ -191,7 +189,7 @@ Type systems exist that guarantee deadlock freedom while allowing for dynamic cr
 \section{Performance}
 This section briefly examines some performance characteristics of \textit{Coherence}, examining whether the performance-oriented design choices discussed throughout this dissertation deliver their intended benefits.
 \subsection{Compiler performance}
-As discussed in section \ref{sec:time-complexity-analysis}, the compiler guarantees a worst-case time complexity of $\Theta(N^2)$, where $N$ represents the size of the input program. This bound ensures that compilation times remain predictable and manageable for typical programs. Achieving this complexity required devising an optimized lock-inference algorithm, as discussed in section \ref{sec:optimised-inference}.
+As discussed in section \ref{sec:time-complexity-analysis}, the compiler guarantees a worst-case time complexity of $\Theta(N^2)$, where $N$ is the input program size. This bound ensures that compilation times remain predictable and manageable for typical programs. Achieving this complexity required devising an optimized lock-inference algorithm, as discussed in section \ref{sec:optimised-inference}.
 
 To empirically verify this bound, we measure the compilation time of the adversarial program $\Phi_n$ (described in section \ref{sec:time-complexity-analysis}). Figure \ref{fig:compilation_time} plots compilation time against $n$, which serves as a proxy for the size of $\Phi_n$. The results confirm that the observed time complexity is quadratic, consistent with our theoretical analysis. It is worth noting that $\Phi_n$ is a specifically constructed adversial program: typical program's compilation times are expected to be closer to linear.
 \begin{figure}[H]
@@ -208,7 +206,7 @@ I compared three implementations: \textit{Coherence}, Pony, and a C++ implementa
 
 The results, shown in figure~\ref{fig:ring-token}, demonstrate that \textit{Coherence} (4.49s) outperforms the C++ implementation (4.98s) despite the latter's simplified implementation. This supports the claim that efficiently managing thousands of actor instances requires lighter-weight abstractions than OS threads.
 
-However, \textit{Coherence} is slower than Pony (2.97s), which is expected for two reasons. First, Pony is a more mature language that benefits from various of runtime optimization. Second, Pony's runtime behaviours directly on worker thread stacks. In contrast, the \textit{Coherence} runtime must allocate and deallocate a separate stack for each behaviour invocation and perform explicit user-space context switches as explained in section \ref{sec:preparation_runtime}, introducing additional overhead.
+However, \textit{Coherence} is slower than Pony (2.97s), which is expected for two reasons. First, Pony is a more mature language that benefits from various of runtime optimization. Second, Pony's runtime runs behaviours directly on worker thread stacks. In contrast, as \textit{Coherence} behaviours might suspend mid-execution, the \textit{Coherence} runtime must allocate and deallocate a separate stack for each behaviour invocation and perform explicit user-space context switches (see section \ref{sec:preparation_runtime}), introducing additional overhead.
 
 \begin{figure}[H]
     \centering

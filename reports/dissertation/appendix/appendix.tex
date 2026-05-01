@@ -8,7 +8,7 @@ The term \textit{metadata structure} of an object refers to a structure containi
     \item $\Gamma_T$: mapping to named types.
     \item $\Gamma_F$: mapping from top-level function names to their metadata structure.
     \item $\Gamma_{\text{this}}$: an optional metadata structure of the current actor.
-    \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behavior) being type-checked
+    \item $\Gamma_{callable}$: a metadata structure of the current callable (function, constructor, or behaviour) being type-checked
 \end{itemize}
 \section{Expression typing} \label{appendix:expression_typing}
 \begin{tabular}{@{\qquad\qquad}c@{\qquad}c@{\qquad}c@{\qquad}c} 
@@ -304,7 +304,7 @@ The \textsf{UserMutex} structure contains the following fields:
 \end{algorithmic}
 
 \chapter{Model checker} \label{appendix:prolog}
-\begin{lstlisting}[language = prolog]
+\begin{minted}{prolog}
 % The maximum occurences of reference capabilities in the 
 % predicates below is 3, and hence only 3 different locks are 
 % needed.
@@ -449,8 +449,8 @@ sendable(K) :-
 iso_holdable(K) :- capability(K), member(K, [iso, locked(L)]).
 
 % check_sendable_inconsistencies(K1, K2) succeeds if the rule 
-% for K1 > K2 is leads to unsoundness when a pointer of type (T 
-% K2) K1 is present as a parameter of a behaviour. 
+% for K1 > K2 is leads to unsoundness when a pointer of type 
+% (T K2) K1 is present as a parameter of a behaviour. 
 check_sendable_inconsistencies(K1, K2) :- 
     sendable(K1), view(K1, K2, ref).
 check_sendable_inconsistencies(K1, K2) :- 
@@ -467,11 +467,11 @@ check_inconsistencies :-
     check_nested_invariant_inconsistencies(K, K1, K2).
 check_inconsistencies :- check_iso_unalias_inconsistencies(K).
 check_inconsistencies :- check_sendable_inconsistencies(K1, K2).
-\end{lstlisting}
+\end{minted}
 
 \chapter{Hot-potato pattern in Pony} \label{appendix:hot-potato}
 The following code implements a scheduler that manages access to a shared integer. Actors request access by calling \textsf{take} with a callback. When the resource is available, the callback is invoked with exclusive ownership of the resource. After completing their operation, actors return the resource via \textsf{give}.
-\begin{lstlisting}
+\begin{minted}{pony}
 class IntContainer
   var value: U64 = 0
   new create(v: U64) => value = v
@@ -496,10 +496,10 @@ actor IntScheduler
     else
       _data = consume p
     end
-\end{lstlisting}
+\end{minted}
 
 The following code demonstrates how the hot-potato pattern can be used to atomically swap the values of two shared integers. Note that the operation must be split across three behaviours (\textsf{swap}, \textsf{receive1}, \textsf{receive2}) because Pony behaviours cannot block. Intermediate state is stored in the actor field \textsf{\_p1}.
-\begin{lstlisting}
+\begin{minted}{pony}
 actor Swapper
   var _s1: IntScheduler
   var _s2: IntScheduler
@@ -533,4 +533,4 @@ actor Swapper
     _s1.take({(p1: IntContainer iso): None =>
       self.receive1(consume p1)
       None} val)
-\end{lstlisting}
+\end{minted}

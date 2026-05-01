@@ -9,15 +9,15 @@ This chapter summarizes the work completed, discusses potential directions for f
 \section{Work completed}
 I successfully achieved the core objectives established in the project proposal:
 \begin{itemize}
-  \item \textbf{Type-system}: Successfully devised a type system and implemented a type checker that enforces that all accepted programs are data-race and deadlock free. 
-  \item \textbf{Compiler}: Implemented a compiler that translates \textit{Coherence} programs to LLVM IR, along with a runtime to manage scheduling and actor state.
-  \item \textbf{Core Evaluation}: Developed a comprehensive test suite containing both unit and end-to-end tests to empirically verify the correctness of the implementation. Evaluated \textit{Coherence}'s expressive power by implementing representative concurrent programs that demonstrate the language's expressive power and ergonomics.
+  \item Successfully devised a type system and implemented a type checker that ensures all accepted programs are data-race and deadlock free. 
+  \item Implemented a compiler that translates \textit{Coherence} programs to LLVM IR, along with a runtime to manage scheduling and actor state.
+  \item Developed a test suite containing both unit and end-to-end tests to empirically verify implementation correctness. Evaluated \textit{Coherence}'s expressive power by implementing representative concurrent programs that demonstrate the language's expressive power and ergonomics.
 \end{itemize}
 Beyond the core objectives, I pursued several extensions:
 \begin{itemize}
-  \item \textbf{Multi-level Pointers}: Extended the core \textit{Coherence} type system to support nested pointer structures. This involved careful translation of the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
-  \item \textbf{Performance}: Performed time-complexity analysis and ran a benchmark to evaluate the implementation of the runtime.
-  \item \textbf{Formal Verification}: Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
+  \item Extended the core \textit{Coherence} type system to support nested pointer structures. This involved careful translating the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
+  \item Performed time-complexity analysis and ran a benchmark to evaluate the runtime implementation.
+  \item Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
 \end{itemize}
 In its present form, \textit{Coherence} successfully incorporates locks and atomic sections into a reference-capability based actor model, supporting a wider range of concurrent algorithms without sacrificing data-race and deadlock freedom.
 
@@ -34,6 +34,6 @@ Several directions for future work remain unexplored due to time constraints and
 
 Reflecting on the engineering process, the most consequential early decision was selecting C++ over OCaml for the compiler implementation. While C++ is standard for systems programming, its lack of native algebraic data types and pattern matching introduced significant syntactic overhead. Because the compiler relies heavily on recursive tree traversals, in hindsight, a functional language like OCaml would have allowed for a much cleaner and more succinct implementation.
 
-Additionally, I gained a practical appreciation for upfront architectural planning. A more rigorous initial design for the AST validation pipeline and the runtime system would have prevented substantial refactoring and debugging later in the project. On the theoretical side, I learned the importance of understanding the fundamental intent behind language semantics rather than just their mechanical rules. This deeper understanding was essential when adapting Pony's viewpoint adaptation rules to safely support \textit{Coherence}'s memory model.
+By working on \textit{Coherence}, I gained a practical appreciation for upfront architectural planning. A more rigorous initial design for the AST validation pipeline and the runtime system would have prevented substantial refactoring and debugging later in the project. On the theoretical side, I learned the importance of understanding the fundamental intent behind language semantics rather than just their mechanical rules. This deeper understanding was essential when adapting Pony's viewpoint adaptation rules to safely support \textit{Coherence}'s memory model.
 
 Overall, this project successfully achieved all core objectives and several extensions, combining ideas from Pony, Kappa, and Lockguard into a safe and expressive language for concurrent programming.

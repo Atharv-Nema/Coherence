@@ -26,29 +26,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
         // Nonsensical case: Viewing an iso_cap
         [](const auto&, const Cap::Iso_cap&) -> std::optional<Cap> { 
             assert(false); 
-            // return Cap{Cap::Tag{}};
-        },
-        
-        // Tag
-        [](const Cap::Tag&, const Cap::Tag&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
-        [](const Cap::Tag&, const Cap::Ref&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
-        [](const Cap::Tag&, const Cap::Val&) -> std::optional<Cap> {
-            return Cap{Cap::Tag{}};
-        },
-        [](const Cap::Tag&, const Cap::Iso&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
-        [](const Cap::Tag&, const Cap::Locked&) -> std::optional<Cap> {
-             return Cap{Cap::Tag{}}; 
-        },
-
-        // Viewing through ref
-        [](const Cap::Ref&, const Cap::Tag&) -> std::optional<Cap> {
-            return Cap{Cap::Tag{}}; 
         },
         [](const Cap::Ref&, const Cap::Ref&) -> std::optional<Cap> { 
             return Cap{Cap::Ref{}}; 
@@ -64,9 +41,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
         },
 
         // Viewing through val
-        [](const Cap::Val&, const Cap::Tag&) -> std::optional<Cap> {
-            return Cap{Cap::Tag{}}; 
-        },
         [](const Cap::Val&, const Cap::Ref&) -> std::optional<Cap> {
             return Cap{Cap::Val{}}; 
         },
@@ -81,9 +55,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
         },
 
         // Viewing through iso
-        [](const Cap::Iso&, const Cap::Tag&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
         [](const Cap::Iso&, const Cap::Ref&) -> std::optional<Cap> { 
             // CR: Potentially [Iso]???
             return Cap{Cap::Iso{}}; 
@@ -99,9 +70,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
         },
 
         // Viewing through unaliased reference
-        [](const Cap::Iso_cap&, const Cap::Tag&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
         [](const Cap::Iso_cap&, const Cap::Ref&) -> std::optional<Cap> { 
             return Cap{Cap::Iso_cap{}}; 
         },
@@ -115,9 +83,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
             return inner_view; 
         },
 
-        [](const Cap::Locked&, const Cap::Tag&) -> std::optional<Cap> { 
-            return Cap{Cap::Tag{}}; 
-        },
         [&](const Cap::Locked&, const Cap::Ref&) -> std::optional<Cap> { 
             return outer_view; 
         },
@@ -145,38 +110,28 @@ bool capabilities_assignable(Cap c1, Cap c2) {
             return l1.lock_name == l2.lock_name;
         },
         [](const Cap::Locked&, const Cap::Iso_cap&) {return true;},
-        [](const Cap::Tag&, const auto&) {return true;},
         [](const auto&, const auto&) { return false; }
     }, c1.t, c2.t);
 }
 
 bool capability_shareable(Cap cap) {
     return std::visit(Overload{
-        [](const Cap::Tag&) {return true;},
         [](const Cap::Ref&) {return false;},
         [](const Cap::Val&) {return true;},
         [](const Cap::Iso&) {return true;},
-        [](const Cap::Iso_cap&) {assert(false); return false;},
+        [](const Cap::Iso_cap&) -> bool {assert(false);},
         [](const Cap::Locked&) {return true;}
     }, cap.t);
 }
 
-bool capability_opaque(Cap c) {
-    return std::visit(Overload{
-        [](const Cap::Tag&) {return true;},
-        [](const auto&) {return false;}
-    }, c.t);
-}
-
 bool capability_mutable(Cap c) {
     return std::visit(Overload{
-        [](const Cap::Tag&) {return false;},
         [](const Cap::Val&) {return false;},
         [](const auto&) {return true;}
     }, c.t);
 }
 
-bool capability_covariant(Cap c1, Cap c2) {
+bool capability_compatible(Cap c1, Cap c2) {
     if(capabilities_assignable(c1, c2)) {
         return true;
     }
@@ -185,15 +140,6 @@ bool capability_covariant(Cap c1, Cap c2) {
         return true;
     }
     return false;
-}
-
-// CR: Make the theory more robust
-bool capability_invariant(Cap c1, Cap c2) {
-    assert(!std::holds_alternative<Cap::Iso_cap>(c1.t));
-    if(c1.t.index() == c2.t.index()) {
-        return true;
-    }
-    return std::holds_alternative<Cap::Iso_cap>(c2.t);
 }
 
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 
@@ -216,9 +162,6 @@ std::shared_ptr<const Type> apply_viewpoint_to_type(std::optional<Cap> viewpoint
         type->t, adapted_viewpoint});
 }
 
-
-
-// !!!New stuff!!!
 std::shared_ptr<const Type> get_type_of_nameable(std::shared_ptr<NameableType> nameable_type) {
     assert(nameable_type != nullptr);
     if(!std::holds_alternative<std::shared_ptr<const Type>>(nameable_type->t)) {
@@ -264,9 +207,6 @@ std::shared_ptr<const Type> get_standardized_type(
     }, type->t);
 }
 
-
-
-// CR: Think carefully about the copying going on
 std::optional<NameableType::Struct> get_struct_type(TypeContext& type_context, const std::string& struct_type_name) {
     std::shared_ptr<const Type> standard_struct_type = 
         get_standardized_type_from_name(type_context, std::nullopt, struct_type_name);
@@ -340,17 +280,13 @@ bool type_equality_comparable(
 }
 
 // This function compares [lhs] and [rhs]. Whenever it reaches pointer types, it applies the
-// [cap_compare] on it, and then recursively applies [type_compare] with the lhs_cap on the
-// dereferenced types (so that it can apply different [cap_compare] if needed). The interpretation
-// of it independently is not that clear. But the point of this is to factor out the common/recursive
-// part of covariance, invariance and assignable checkers.
+// [cap_compare] on it, and then recursively applies [pointer_property_compare_template]. It allows
+// writing a single function for assignability and compatibility checking (just pass in different cap_compares).
 bool pointer_property_compare_template(
     TypeContext& type_context,
     std::shared_ptr<const Type> lhs,
     std::shared_ptr<const Type> rhs,
-    std::function<bool(Cap, Cap)> cap_compare,
-    std::function<bool(
-        Cap, std::shared_ptr<const Type>, std::shared_ptr<const Type>)> type_compare) {
+    std::function<bool(Cap, Cap)> cap_compare) {
     lhs = get_standardized_type(type_context, lhs);
     rhs = get_standardized_type(type_context, rhs);
     return std::visit(Overload{
@@ -377,7 +313,7 @@ bool pointer_property_compare_template(
                     apply_viewpoint_to_type(lhs->viewpoint, mem_type);
                 std::shared_ptr<const Type> viewed_rhs_type =
                     apply_viewpoint_to_type(rhs->viewpoint, mem_type);
-                if(!pointer_property_compare_template(type_context, viewed_lhs_type, viewed_rhs_type, cap_compare, type_compare)) {
+                if(!pointer_property_compare_template(type_context, viewed_lhs_type, viewed_rhs_type, cap_compare)) {
                     return false;
                 }
             }
@@ -404,28 +340,22 @@ bool pointer_property_compare_template(
             // named with the same viewpoint. If so, we can simply return true. Note that this
             // is only true for the pointer assignment case. It is questionable whether I should
             // be doing this check here, but it seems like the cleanest solution at the moment.
-            bool viewpoint_equal = 
-            ((ptr_lhs.base_type->viewpoint == std::nullopt) && (ptr_rhs.base_type->viewpoint == std::nullopt)) || 
-            (ref_cap_equal(ptr_lhs.base_type->viewpoint.value(), ptr_lhs.base_type->viewpoint.value()));
-            bool recursive_case = viewpoint_equal && std::visit(Overload{
-                    [](const Type::TNamed& lhs_named, const Type::TNamed& rhs_named) {
-                        return lhs_named.name == rhs_named.name;
-                    },
-                    [](const auto&, const auto&) { return false; }
-                }, ptr_lhs.base_type->t, ptr_rhs.base_type->t);
-            if(recursive_case) {
+            bool inner_type_equal = std::visit(Overload{
+                [](const Type::TNamed& lhs_named, const Type::TNamed& rhs_named) {
+                    return lhs_named.name == rhs_named.name;
+                },
+                [](const auto&, const auto&) { return false; }
+            }, ptr_lhs.base_type->t, ptr_rhs.base_type->t);
+            if(inner_type_equal) {
                 return true;
             }
 
-            // 3. Checking whether the dereferenced type make sense. If the outer capability
-            // is mutable, the dereferenced type needs to be invariant. Else, it can just be
-            // covariant.
-            
+            // 3. Checking whether the dereferenced types are compatible.
             auto lhs_deref_type = get_dereferenced_type(lhs);
             auto rhs_deref_type = get_dereferenced_type(rhs);
             assert(lhs_deref_type != nullptr);
             assert(rhs_deref_type != nullptr);
-            return type_compare(lhs_cap, lhs_deref_type, rhs_deref_type);
+            return pointer_property_compare_template(type_context, lhs_deref_type, rhs_deref_type, capability_compatible);
         },
         [&](const auto&, const auto&) {
             return false;
@@ -433,70 +363,11 @@ bool pointer_property_compare_template(
     }, lhs->t, rhs->t);
 }
 
-bool type_invariant(
-    TypeContext& type_context, 
-    std::shared_ptr<const Type> t1,
-    std::shared_ptr<const Type> t2) {
-    auto curried_invariant = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
-        return type_invariant(type_context, t1, t2);
-    };
-    return pointer_property_compare_template(type_context, t1, t2, capability_invariant, curried_invariant);
-}
-
-bool type_structurally_same(
-    TypeContext& type_context, 
-    std::shared_ptr<const Type> t1,
-    std::shared_ptr<const Type> t2) {
-    auto curried_structure_check = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
-        return type_structurally_same(type_context, t1, t2);
-    };
-    return pointer_property_compare_template(
-        type_context, t1, t2, 
-        [](Cap c1, Cap c2) {return true;}, 
-        curried_structure_check);
-}
-
-bool type_covariant(
-    TypeContext& type_context,
-    std::shared_ptr<const Type> t1,
-    std::shared_ptr<const Type> t2);
-
-// Rules for when to allow assigning of pointers. t1 and t2 are the types of the dereference of the two pointer
-bool pointer_subtyping_on_dereferenced_types(
-    TypeContext& type_context,
-    Cap pointer_cap,
-    std::shared_ptr<const Type> t1,
-    std::shared_ptr<const Type> t2) {
-    if(capability_opaque(pointer_cap)) {
-        return type_structurally_same(type_context, t1, t2);
-    }
-    else if(capability_mutable(pointer_cap)) {
-        // Need to be invariant if [pointer_cap] is mutable
-        return type_invariant(type_context, t1, t2);
-    }
-    else {
-        return type_covariant(type_context, t1, t2);
-    }
-}
-
-bool type_covariant(
-    TypeContext& type_context,
-    std::shared_ptr<const Type> t1,
-    std::shared_ptr<const Type> t2) {
-    auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
-        return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
-    };
-    return pointer_property_compare_template(type_context, t1, t2, capability_covariant, curried_action);
-}
-
 bool type_assignable(
     TypeContext& type_context,
     std::shared_ptr<const Type> t1,
     std::shared_ptr<const Type> t2) {
-    auto curried_action = [&](Cap c, std::shared_ptr<const Type> t1, std::shared_ptr<const Type> t2) {
-        return pointer_subtyping_on_dereferenced_types(type_context, c, t1, t2);
-    };
-    return pointer_property_compare_template(type_context, t1, t2, capabilities_assignable, curried_action);
+    return pointer_property_compare_template(type_context, t1, t2, capabilities_assignable);
 }
 
 

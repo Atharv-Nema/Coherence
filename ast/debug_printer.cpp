@@ -5,9 +5,6 @@
 // Types
 void print_cap(const Cap& c) {
     std::visit(Overload{
-        [&](const Cap::Tag&) {
-            std::cout << "Tag";
-        },
         [&](const Cap::Ref&) {
             std::cout << "Ref";
         },

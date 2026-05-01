@@ -21,7 +21,7 @@ This pattern encapsulates data within a "Manager" actor. All other actors intera
 actor IntManager
   var _data: U64 = 0
 
-  // The 'get' behavior takes in a callback
+  // The 'get' behaviour takes in a callback
   be get(cb: {(U64): None} val) =>
     cb(_data)
 
@@ -104,7 +104,7 @@ actor Swapper
 ```
 
 While this queued hot-potato achieves atomic swaps, this approach is also flawed.
-- The system relies entirely on the requester to return the reference via the `give` behavior. If a programmer forgets to return the "potato", the resource is effectively lost, and all other actors in the queue are blocked indefinitely.
+- The system relies entirely on the requester to return the reference via the `give` behaviour. If a programmer forgets to return the "potato", the resource is effectively lost, and all other actors in the queue are blocked indefinitely.
 - A more fundamental flaw is the indirect introduction of deadlocks. Because ownership is acquired sequentially across multiple actors, the system is susceptible to the "circular wait" condition.
 
 Consider two actors attempting to access the same two managers simultaneously:

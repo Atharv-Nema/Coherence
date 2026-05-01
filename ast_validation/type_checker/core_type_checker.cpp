@@ -278,11 +278,6 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
             }
             Cap ptr_cap = viewpoint_adaptation_op(internal_type->viewpoint, pointer_type->cap).value();
             return std::visit(Overload{
-                [&](const Cap::Tag&) -> std::shared_ptr<const Type> {
-                    report_error_location(val_expr->source_span);
-                    std::cerr << "Cannot dereference a tag pointer" << std::endl;
-                    return nullptr;
-                },
                 [&](const Cap::Locked&) -> std::shared_ptr<const Type> {
                     if(env.atomic_nest_level == 0) {
                         report_error_location(val_expr->source_span);

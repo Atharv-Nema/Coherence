@@ -1,0 +1,6 @@
+actor Main {
+    new create() {
+        var a: (((int iso) locked<A>) val) = nullptr;
+        var b: (((int ref) locked<A>) val) = a;
+    }
+}

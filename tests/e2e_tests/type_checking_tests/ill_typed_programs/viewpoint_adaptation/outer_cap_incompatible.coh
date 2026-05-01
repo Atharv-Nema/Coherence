@@ -1,0 +1,6 @@
+actor Main {
+    new create() {
+        var x: (int val) ref = nullptr;
+        var y: (int val) val = x; 
+    }
+}

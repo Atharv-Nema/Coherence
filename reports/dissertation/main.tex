@@ -1,3 +1,4 @@
+% !TEX options = -shell-escape
 %TC:envir tabular [] word
 %TC:envir algorithmic [] word
 %TC:envir lstlisting [] word
@@ -18,7 +19,7 @@
 \usepackage{comment}
 \usepackage{mathpartir}
 \usepackage{hyperref}
-
+\usepackage{minted}
 % --- Math & Inference Rules ---
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{bussproofs} % For your typing rules
@@ -55,11 +56,81 @@
 \newcommand{\xmark}{\ding{55}}
 \newcommand{\tack}{\vdash}
 \newcommand{\tackl}{\dashv}
+\newcommand{\myBGN}{9874K}
+\newcommand{\myTitle}{An actor-based programming language for safe concurrent programming}
+\newcommand{\myExam}{Computer Science Tripos --- Part II}
+\newcommand{\myYear}{2026}
+\newcommand{\myWordCount}{11991}
+\newcommand{\myLinesOfCode}{6434}
+\newcommand{\myOriginator}{The Candidate} % or the name of the originator
+\newcommand{\mySupervisor}{Prof. Alan Mycroft}
+\newcommand{\myEthicsStatus}{No ethics approval was requested} % Or "None required"
 
 \begin{document}
 
+\begin{titlepage}
+    % BGN in extreme top right
+    \begin{flushright}
+        \large \textbf{\myBGN}
+    \end{flushright}
+    
+    \vspace{4cm}
+    
+    \begin{center}
+        {\huge \textbf{\myTitle} \par}
+        
+        \vspace{3cm}
+        
+        {\large \myExam \par}
+        
+        \vspace{1cm}
+        
+        {\large \myYear \par}
+    \end{center}
+\end{titlepage}
+
+\newpage
+\pagenumbering{roman}
+\section*{Declaration}
+\thispagestyle{plain}
+
+I, the candidate for Part II of the Computer Science Tripos with Blind Grading Number \textbf{\myBGN}, hereby declare that this report and the work described in it are my own work, unaided except as may be specified below, and that the report does not contain material that has already been used to any substantial extent for a comparable purpose. In preparation of this report, I adhered to the Department of Computer Science and Technology AI Policy. I am content for my report to be made available to the students and staff of the University.
+
+\vspace{1.5cm}
+
+\noindent Date: \today
+
+\newpage
+
+\section*{Proforma}
+\thispagestyle{plain}
+
+\begin{description}
+    \item[Candidate Number:] \myBGN
+    \item[Project Title:] \myTitle
+    \item[Examination and Year:] \myExam, \myYear
+    \item[Word Count:] \myWordCount
+    \item[Code Line Count:] \myLinesOfCode
+    \item[Project Originator:] \myOriginator
+    \item[Supervisors:] \mySupervisor~(Day-to-Day and Marking)
+    \item[Ethics Approval:] \myEthicsStatus
+\end{description}
+
+\subsection*{Original Aims of the Project}
+The aim of this project was to design and implement a compiler for an expressive concurrent language that statically guarantees data-race and deadlock freedom. To achieve this, the project extends the actor model with shared memory and locks, while drawing on ideas from prior work to preserve safety. 
+
+\subsection*{Work Completed}
+This project successfully achieved all core objectives and several extensions. I successfully designed and implemented \textit{Coherence}, which is an actor-based programming language that uses reference capabilities and lock-inference using atomic sections to use shared memory and locks while providing safety against data-races and deadlocks. 
+
+\subsection*{Special Difficulties}
+% Max 100 words
+None. % Or describe your difficulties here.
+
+
 \tableofcontents
 
+\newpage
+\pagenumbering{arabic}
 % Include Chapters
 \include{introduction/introduction}
 \include{preparation/preparation}

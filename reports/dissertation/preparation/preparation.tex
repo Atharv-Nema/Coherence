@@ -7,10 +7,10 @@
 This chapter goes through the foundational concepts required to develop \textit{Coherence}.
 
 \begin{itemize}
-  \item We begin with a discussion of the actor model of the Pony programming language\cite{pony_language}, which heavily inspires \textit{Coherence} (section \ref{sec:actor_model_pony}).
+  \item We first introduce Pony's actor model \cite{pony_language}, which heavily inspires \textit{Coherence} (section \ref{sec:actor_model_pony}).
   \item We then introduce reference capabilities, a concept \textit{Coherence} uses to prevent data races (section \ref{sec:ref_cap_pony}). 
   \item Section \ref{sec:safe_locking} introduces concepts required to safely integrate locks into \textit{Coherence}.
-  \item We then present an overview of the compilation pipeline alongside the runtime components necessary for \textit{Coherence} (section \ref{sec:compiler_prep}).
+  \item We then describe the compilation pipeline alongside the runtime components necessary for \textit{Coherence} (section \ref{sec:compiler_prep}).
   \item Finally, I mention the project requirements (section \ref{sec:requirement_analysis}), briefly discuss the software engineering techniques employed (section \ref{sec:software_techniques}), and outline the starting point (section \ref{sec:starting_point}).
 \end{itemize}
 
@@ -21,15 +21,15 @@ The Pony programming language \cite{pony_language} is built following the actor 
 \subsection{Basic syntax and semantics}
 In Pony, an \textit{actor} is a template to create actor instances (just like a \textit{class} is a template to create \textit{objects}). When ambiguous, I use the terms \textit{actor template} and \textit{actor instance} instead of \textit{actor}. A Pony actor consists of three primary components:
 
-\textbf{State:} This is the private data stored within the actor instance. This data cannot be accessed directly by other actor instances.
+\textbf{State:} Actor-encapsulate private data that cannot be accessed by other actor instances
 
-\textbf{Constructors (\textsf{new}):} These are special functions used to initialize the state of an actor instance upon creation.
+\textbf{Constructors (\textsf{new}):} Special functions used to initialize the state of an actor instance upon creation.
 
-\textbf{Behaviours (\textsf{be}):} These are the asynchronous interface through which actors communicate. Each actor instance maintains a \textit{mailbox} for incoming messages. A behaviour invocation\footnote{Under the collective umbrella of callables, we distinguish between synchronous members that are called (functions and constructors) and asynchronous behaviours that are invoked.} does not execute synchronously within the caller's execution context. Instead, the invocation is converted into a message and added to the recipient actor instance's mailbox for future processing.
+\textbf{Behaviours (\textsf{be}):} The asynchronous interface through which actors communicate. Each actor instance maintains a \textit{mailbox} for incoming messages. A behaviour invocation\footnote{Under the collective umbrella of callables, we distinguish between synchronous members that are called (functions and constructors) and asynchronous behaviours that are invoked.} does not execute synchronously within the caller's execution context. Instead, the invocation is converted into a message and added to the recipient actor instance's mailbox for future processing.
 
 Let us consider a sample program to illustrate these ideas.
 
-\begin{lstlisting}
+\begin{minted}{pony}
 actor Counter
   // Encapsulated private state
   var _count: U32
@@ -40,15 +40,15 @@ actor Counter
   be increment() =>
     _count = _count + 1
   be display(env: Env) =>
-    env.out.print("Current count: " + _count.string())
+    env.out.print("Count: " + _count.string())
 
 actor Main
   new create(env: Env) =>
     let c = Counter.create(1) // actor instance creation
-    // Invocation of behaviours
+    // Invoking behaviours
     c.increment()
     c.display(env)
-\end{lstlisting}
+\end{minted}
 
 This example demonstrates creating an actor instance and sending messages to it. Notably, the invocation \textsf{c.increment()} is non-blocking: the \textsf{Main} actor does not stall to wait for the counter to be updated. Despite this asynchronous nature, it is strictly guaranteed that the \textsf{display} behaviour invocation will be processed after the increment. This is ensured by \textit{causal ordering}, a property of the Pony mailbox system which guarantees that messages arrive in causal order (which in this case means the order they were invoked in).
 
@@ -58,28 +58,10 @@ Execution in Pony starts from the \textsf{create()} constructor of the \textsf{M
 The Pony runtime maintains a pool of \textit{worker threads}, which are OS-level threads that execute actor behaviours. When an actor instance has pending messages, a worker thread is assigned to process and run the behaviour associated with the message. Messages of an actor instance are processed sequentially. This ensures that behaviours have data-race free access to the encapsulated state of the actor.
 
 \section{Reference capabilities} \label{sec:ref_cap_pony}
-Reference capabilities are a novel concept introduced in Pony that enable shared-memory concurrency while statically preventing data races. They are a part of a reference's type and govern how the reference can be used. Each capability specifies both the operations the holder may perform (\textit{permissions}) and the restrictions imposed on other aliases (\textit{deny properties}). These deny properties are enforced at compile time, and reference capabilities carry no runtime overheads.
+Reference capabilities are a novel concept introduced in Pony that enable shared-memory concurrency while statically preventing data races. They are a part of a reference's type and govern how the reference can be used. Each capability specifies both the allowed operations (\textit{permissions}) and the restrictions imposed on aliases\footnote{An alias is any other reference to the same object.} (\textit{deny properties}). These deny properties are enforced at compile time, and reference capabilities carry no runtime overheads.
 
 \subsection{Pony's memory model}
 Unlike C or C++, Pony does not have raw pointers. It follows an object-oriented model similar to Java: data is encapsulated within classes, instances are heap-allocated, and access is via stack-stored references. Pony classes are not actors: they do not have mailboxes and behaviours, and serve purely to encapsulate state and functionality.
-
-To illustrate this, consider the simple account class in Pony.
-
-\begin{lstlisting}
-class Account
-  var balance: U64
-  new create(opening_balance: U64) =>
-    balance = opening_balance
-
-actor Main
-  new create(env: Env) =>
-    // 'acc' is a reference pointing to an Account 
-    // object on the heap. Each reference comes with
-    // a capability, and acc's capability is 'ref'
-    let acc: Account ref = Account(100)
-    // Members are accessed via the reference
-    acc.balance += 50
-\end{lstlisting}
 
 \subsection{Specific capabilities used in Pony} \label{sec:preparation_pony_specific_capabilities}
 
@@ -90,9 +72,9 @@ actor Main
     \begin{itemize}
         \item \textbf{Permissions:} Read and Write.
         \item \textbf{Deny Properties:} Denies both read and write access to all other aliases, both \textit{locally} (within the same actor instance) and \textit{globally} (across all actor instances).
-        \item \textbf{Use Case:} An \textsf{iso} reference provides exclusive access to an object. Because the compiler guarantees that no other alias capable of reading or writing to the object exists, the holder can safely mutate the data without worrying about data races. An \textsf{iso} reference can be sent across actor boundaries, provided the sender \textit{consumes} the alias during the transfer. The compiler prevents the use of a consumed alias.
+        \item \textbf{Use Case:} \textsf{iso} references provide exclusive access to an object. Because the compiler guarantees that no other alias capable of reading or writing to the object exists, the holder can safely mutate the data without worrying about data races. An \textsf{iso} reference can be sent across actor boundaries, provided the sender \textit{consumes} the alias during the transfer. The compiler prevents the use of a consumed alias.
         \item \textbf{Code example:}
-\begin{lstlisting}
+\begin{minted}{pony}
 class Data
     var value: String = "Secret"
 
@@ -104,10 +86,7 @@ new create(env: Env) =>
     // To send it to another actor, we must consume it
     let other = OtherActor.create()
     other.receive_data(consume d_iso)
-    // d_iso is now invalid. The following line would be a 
-    // compile error:
-    // env.out.print(d_iso.value)
-\end{lstlisting}
+\end{minted}
     \end{itemize}
     \item \textbf{\textsf{ref} (Reference)}
     \begin{itemize}
@@ -115,14 +94,14 @@ new create(env: Env) =>
         \item \textbf{Deny Properties:} Denies nothing to local aliases, but denies all access to aliases in other actors.
         \item \textbf{Use Case:} This is the standard mutable reference for data confined to a single actor. Multiple \textsf{ref} aliases can exist and interact with the same object, but they are prohibited from crossing actor boundaries.
         \item \textbf{Code example:}
-\begin{lstlisting}
+\begin{minted}{pony}
 let d_ref: Data ref = Data
 // Can create multiple local aliases
 let d_alias: Data ref = d_ref
 d_alias.value = "Local Change" 
 // Fails to compile because ref is not sendable:
 // other.receive_data(d_ref)
-\end{lstlisting}
+\end{minted}
     \end{itemize}
     
     \item \textbf{\textsf{val} (Value)}
@@ -144,7 +123,7 @@ d_alias.value = "Local Change"
 Viewpoint adaptation is the mechanism Pony uses to correctly handle references to references.
 
 Consider the following code:
-\begin{lstlisting}
+\begin{minted}{pony}
 class A
   var x: U64 = 0
 
@@ -154,10 +133,9 @@ class B
 actor Main
   new create(env: Env) =>
     let b: B val = B // We have an immutable reference to B
-\end{lstlisting}
+\end{minted}
 
-What should the capability of \textsf{b.a} be? Since \textsf{b} has capability \textsf{val}, we are permitted to share it across actor boundaries. If \textsf{b.a} were allowed to retain its original \textsf{ref} capability, a recipient actor could gain mutable access to the object \textsf{a}. This would result in two different actors holding a \textsf{ref} to the same data simultaneously, directly violating \textsf{ref}'s deny properties and reintroducing data races. The solution to this problem is viewpoint adaptation. Whenever we access a field through a reference, we modify its type using the viewpoint adaptation operator (denoted by the symbol $\triangleright$). $\triangleright$ is a binary operator from $C^2 \rightarrow C$, where $C$ is the set of capabilities. Accessing a field with defined inner capability $F$ through an outer reference with capability $O$ gives a reference with capability $O \triangleright F$. So in the above example, \textsf{b.a} has type \textsf{A val} as $\textsf{val} \triangleright \textsf{ref} = \textsf{val}$.
-
+What should the capability of \textsf{b.a} be? Since \textsf{b} has capability \textsf{val}, we are permitted to share it across actor boundaries. If \textsf{b.a} were allowed to retain its original \textsf{ref} capability, a recipient actor could gain mutable access to the object \textsf{a}. This would result in two different actors holding a \textsf{ref} to the same data simultaneously, directly violating \textsf{ref}'s deny properties and reintroducing data races. The solution to this problem is viewpoint adaptation. Whenever we access a field through a reference, we modify its type using the viewpoint adaptation operator (denoted by the symbol $\triangleright$). $\triangleright$ is a binary operator from $C^2 \rightarrow C$, where $C$ is the set of capabilities. Accessing a field with defined inner capability $F$ through an outer reference with capability $O$ gives a reference with capability $O \triangleright F$. So in the above example, \textsf{b.a} has type \textsf{A val} as $\textsf{val} \triangleright \textsf{ref} = \textsf{val}$. In some cases, the only reasonable thing to do is to 
 
 \section{Safe locking} \label{sec:safe_locking}
 Pony safely introduces \textit{shared memory} using reference capabilities. However, representing patterns where multiple actors frequently modify a shared data structure remains awkward without locks (see section \ref{sec:pony_expressive_power}). \textit{Coherence} aims to reintroduce locks while maintaining deadlock-freedom. This section describes some concepts needed for this.
@@ -189,7 +167,7 @@ For the purpose of this project, a compiler consists of a frontend (lexer and pa
     \caption{The \textit{Coherence} Compiler Pipeline}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[H]
     \centering
     \begin{tikzpicture}[
         node distance=20pt,
@@ -216,23 +194,12 @@ For the purpose of this project, a compiler consists of a frontend (lexer and pa
 \end{figure}
 
 \subsection{Intermediate representation}
-\textit{Coherence} compiles down to LLVM IR. By targeting LLVM, the \textit{Coherence} compiler remains platform-agnostic (the lowering to machine-specific assembly is handled by the LLVM backend). LLVM also implements a vast amount of Optimisation passes. Compiling down to LLVM means that the \textit{Coherence} compiler gets these Optimisations for free.
+\textit{Coherence} compiles down to LLVM IR. By targeting LLVM, the \textit{Coherence} compiler remains platform-agnostic. LLVM also implements a vast amount of optimisation passes. Compiling down to LLVM means that the \textit{Coherence} compiler gets these optimisations for free.
 
 \subsection{Runtime} \label{sec:preparation_runtime}
 The \textit{Coherence} runtime is implemented in C++20, chosen for its support for fine-grained concurrency primitives and C ABI compatibility, which enables seamless integration with LLVM. We spend the rest of this section talking about some design choices of the \textit{Coherence} runtime, and the necessary tools needed for them. %CR: rephrase this
 
-Unlike Pony, \textit{Coherence} behaviours might pause execution before completion.
-
-\begin{lstlisting}
-be dummy_behaviour {
-  var a: int locked<A>;
-  atomic {
-    *a; // Dereferencing [a] requires access to lock [A].
-  }
-}
-\end{lstlisting}
-
-In the code above, if \textsf{dummy\_behaviour} reaches the atomic section and the required lock \textsf{A} is held by another actor instance, \textsf{dummy\_behaviour} must wait until \textsf{A} is available. The runtime should not be idle until the lock is available. It should be able to move on to running other actor instances. When the lock is available again, the runtime should be able to resume the execution of the behaviour seamlessly.
+Unlike Pony, \textit{Coherence} behaviours can suspend mid-execution while waiting on a lock. The runtime should not be idle until the lock is available. It should be able to move on to running other actor instances. When the lock is available again, the runtime should be able to resume the execution of the behaviour seamlessly.
 
 A naive solution is \textit{1:1 scheduling}, where each running behaviour maps directly to an OS-level thread. While this would allow standard OS-level mutexes to handle lock suspension and resumption automatically, OS-level threads are ill-suited for \textit{Coherence}'s goal of supporting thousands of lightweight actor instances (kernel scheduling and context switching are too costly at this scale).
 
@@ -242,7 +209,7 @@ Hence, the \textit{Coherence} runtime uses \textit{M:N scheduling}, where a fixe
 I chose C++20 as the primary language for developing the \textit{Coherence} compiler. The initial decision was driven by my familiarity with the language and its robust support for generating LLVM IR. However, I eventually decided not to use the LLVM API (see section \ref{sec:codegen}).
 
 \section{Requirement analysis} \label{sec:requirement_analysis}
-The development of \textit{Coherence} is guided by the following requirements.
+The following requirements guide \textit{Coherence}'s development.
 
 \begin{itemize}
     \item \textbf{Static Safety}: Devise a type system and implement a type checker that strictly enforces data-race and deadlock freedom.

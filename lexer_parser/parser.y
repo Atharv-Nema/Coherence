@@ -834,10 +834,6 @@ cap
         $$ = new Cap();
         $$->t = Cap::Ref{};
       }
-    | TOK_TAG {
-        $$ = new Cap();
-        $$->t = Cap::Tag{};
-      }
     | TOK_VAL {
         $$ = new Cap();
         $$->t = Cap::Val{};

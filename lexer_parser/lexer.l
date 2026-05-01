@@ -44,7 +44,6 @@ static int curr_column = 1;
 "bool"      return TOK_BOOL;
 
 "ref"       return TOK_REF;
-"tag"       return TOK_TAG;
 "iso"       return TOK_ISO;
 "val"       return TOK_VAL;
 "locked"    return TOK_LOCKED;
