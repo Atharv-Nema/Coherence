@@ -218,7 +218,7 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     // This is a bit hacky, but it should not be too bad
 ) {
     // Returns the variables that will be consumed from the upper scopes after control exits this scope
-    std::optional<ScopeGuard<std::string, bool, std::monostate>> g = std::nullopt;
+    std::optional<ScopeGuard<std::string, bool>> g = std::nullopt;
     if(create_new_scope) {
         g.emplace(var_valid);
     }

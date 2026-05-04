@@ -1,21 +1,16 @@
 #pragma once
 #include <unordered_map>
-#include <variant>
 #include <unordered_set>
 #include <vector>
 #include <assert.h>
 #include <optional>
 
 
-// CR: Potentially, the metadata is not really needed here
-template <typename K, typename V, typename Metadata = std::monostate>
+template <typename K, typename V>
 class ScopedStore {
 private:
     struct Scope {
         std::unordered_set<K> scope_keys;
-        Metadata scope_metadata;
-        template <typename... Args>
-        explicit Scope(Args&&... args): scope_metadata(std::forward<Args>(args)...) {}
     };
     struct ValEntry {
         V val;
@@ -27,9 +22,8 @@ private:
     std::unordered_map<K, std::vector<ValEntry>> key_val_map;
 public:
     ScopedStore() {}
-    template <typename... Args>
-    void create_new_scope(Args&&... meta_args) {
-        scope_list.emplace_back(std::forward<Args>(meta_args)...);
+    void create_new_scope() {
+        scope_list.emplace_back();
     }
     // creates a copy and stores it in the map
     void insert(const K& key, const V& value) {
@@ -68,16 +62,6 @@ public:
         return scope_list.back().scope_keys.find(key) != scope_list.back().scope_keys.end();
     }
 
-    Metadata& get_current_scope_metadata() {
-        assert(!scope_list.empty());
-        return scope_list.back().scope_metadata;
-    }
-
-    Metadata& get_scope_metadata(size_t scope_ind) {
-        assert(scope_ind < scope_list.size());
-        return scope_list[scope_ind].scope_metadata;
-    }
-
     std::unordered_set<K> get_scope_keys(size_t ind) {
         assert(ind < scope_list.size());
         return scope_list[ind].scope_keys;
@@ -107,15 +91,14 @@ public:
     }
 };
 
-template <typename K, typename V, typename Metadata>
+template <typename K, typename V>
 class ScopeGuard {
 private:
-    ScopedStore<K, V, Metadata>& scoped_context;
+    ScopedStore<K, V>& scoped_context;
 public:
-    template <typename... Args>
-    explicit ScopeGuard(ScopedStore<K, V, Metadata>& scoped_context, Args&&... scope_args)
+    explicit ScopeGuard(ScopedStore<K, V>& scoped_context)
     : scoped_context(scoped_context) {
-        scoped_context.create_new_scope(std::forward<Args>(scope_args)...);
+        scoped_context.create_new_scope();
     }
     ~ScopeGuard() {
         scoped_context.pop_scope();

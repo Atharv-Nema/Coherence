@@ -21,19 +21,25 @@ Implementing the runtime correctly proved challenging due to frequent encounters
 
 Deadlock in \textit{Coherence} is defined as a state where no actor instance is runnable or currently running, yet some actor instances have work left (their mailboxes are not empty). This can only occur when actor instances enter a cyclic wait within lock queues. This is prevented by \textit{Coherence} as the generated code takes locks in a globally fixed order, preventing cyclic dependencies. 
 
-For data-race safety, we first consider \textit{Coherence1.0} which is much simpler as it does not have to deal with the complexities of viewpoint adaptation. Since \textsf{ref}, \textsf{val}, and \textsf{iso} are inherited directly from Pony, their data race freedom is already formally established\cite{pony_language}. The soundness argument for \textit{Coherence1.0} therefore focuses on the \textsf{locked<L>} capability and how it interacts with existing capabilities. The argument relies on two lemmas. The first states that if the deny properties of all reference capabilities hold (see section \ref{sec:preparation_pony_specific_capabilities}), memory accesses cannot result in a data race. The deny property of \textsf{locked<L>} requires that any read or write to the reference can only occur when the accessing actor holds lock \textsf{L}. Since mutual exclusion ensures that only one actor can hold \textsf{L} at a time, all accesses are synchronized, preventing data races. The second lemma states that all execution steps (aliasing, message passing, and so on) preserve these invariants. This holds because \textsf{locked<L>} can only be assigned to references of the same capability, and assignment from a different capability is only permitted when the source has no existing aliases. Together, these lemmas show that the reference capability invariants hold at every execution step, which implies safety throughout execution.
+For data-race safety, we first consider \textit{Coherence1.0}. Since \textsf{ref}, \textsf{val}, and \textsf{iso} are inherited directly from Pony, their data race freedom is already formally established\cite{pony_language}. The soundness argument for \textit{Coherence1.0} therefore focuses on the \textsf{locked<L>} capability and how it interacts with existing capabilities. The argument relies on two lemmas. 
 
-Establishing data-race safety for \textit{Coherence2.0} is considerably more complex. The interactions involving the \textsf{locked<L>} capability are more nuanced. For instance, we must now account for \textsf{locked<L>} appearing as a field type within nested pointer structures, requiring careful reasoning about aliasing across multiple levels of indirection. Additionally, as discussed in section \ref{sec:extension-pony-deviation}, the type checking rules of \textit{Coherence2.0} differ subtly from Pony. Fortunately, the assignability rules and the definitions of covariance and invariance presented in section \ref{sec:extension-typing-rules} are designed to ensure that assignments within a local scope preserve the invariants of reference capabilities, regardless of the concrete definition of the $\triangleright$ operator.
+\begin{description}
+  \item[Safety:] If the deny-properties of all reference capabilities hold (see section \ref{sec:preparation_pony_specific_capabilities}), memory accesses cannot result in a data race. 
+  \item[Preservation:] All execution steps (aliasing, message passing, unaliasing and so on) preserve the deny-properties of references.
+\end{description}
 
-However, \textit{Coherence} has operations beyond simple local assignments. For these operations, the specific definition of $\triangleright$ plays a critical role in ensuring safety and must satisfy certain constraints. The remainder of this section discusses these constraints and how they are verified.
+For showing safety, the deny property of \textsf{locked<L>} requires that any read or write to the reference can only occur when the accessing actor holds lock \textsf{L}. Mutual exclusion ensures only one actor holds \textsf{L} at a time, preventing data races. For showing preservation, \textsf{locked<L>} can only be assigned to references of the same capability, and assignment from a different capability is only permitted when the source has no existing aliases. Together, these lemmas show that the deny-properties hold at every execution step, which implies safety throughout execution.
 
-As mentioned in section \ref{sec:top-level-typing}, the \textit{Coherence} type system allows a behaviour to contain any argument whose outermost capability is not \textsf{ref}. However, an inappropriate definition of $\triangleright$ can undermine this simple check. Consider, for instance, if $\textsf{val} \triangleright \textsf{ref} = \textsf{ref}$. A behaviour could then accept an \textsf{(int ref) val} as an argument (as its outermost capability is not \textsf{ref}). This would allow actors to wrap a \textsf{ref} inside a \textsf{val} and send it to another actor, violating the invariant of \textsf{ref}. 
+Establishing data-race safety for \textit{Coherence2.0} is considerably more complex. The interactions involving the \textsf{locked<L>} capability are more nuanced. For instance, we must now account for \textsf{locked<L>} appearing as a field type within nested pointer structures, requiring careful reasoning about aliasing across multiple levels of indirection. Additionally, as discussed in section \ref{sec:extension-pony-deviation}, the type checking rules of \textit{Coherence2.0} differ subtly from Pony. Fortunately, the assignability rules presented in section \ref{sec:extension-typing-rules} are designed to ensure that assignments within a local scope preserve the invariants of reference capabilities, regardless of the concrete definition of the $\triangleright$ operator.
 
-Similarly, the typing rules do not guarantee safety when unaliasing an \textsf{iso} for an ill-defined $\triangleright$. Suppose $\textsf{iso} \triangleright \textsf{ref} = \textsf{tag}$ and $\textsf{iso\textasciicircum} \triangleright \textsf{ref} = \textsf{ref}$. This would permit storing a \textsf{tag} to a \textsf{ref} field of an \textsf{iso}, then unaliasing to obtain a \textsf{ref} to what was originally a \textsf{tag}. This effectively allows assignment of a \textsf{tag} to a \textsf{ref}, which is unsafe. 
+However, \textit{Coherence} has operations beyond simple local assignments. For these operations, the specific definition of $\triangleright$ plays a critical role in ensuring safety and must satisfy certain constraints. 
+\begin{description}
+  \item[Sendability safety:] As mentioned in section \ref{sec:top-level-typing}, the \textit{Coherence} type system allows a behaviour to contain any argument whose outermost capability is not \textsf{ref}. However, an inappropriate definition of $\triangleright$ can undermine this simple check. Consider if $\textsf{val} \triangleright \textsf{ref} = \textsf{ref}$. A behaviour could accept an \textsf{(int ref) val} as an argument (as its outermost capability is not \textsf{ref}). This would allow actors to wrap a \textsf{ref} inside a \textsf{val} and send it to another actor, violating the invariant of \textsf{ref}.
+  \item[Unaliasing safety:] An ill-defined $\triangleright$ can make unaliasing an \textsf{iso} unsafe. Suppose $\textsf{iso} \triangleright \textsf{ref} = \textsf{ref}$ and $\textsf{iso\textasciicircum} \triangleright \textsf{ref} = \textsf{iso\textasciicircum}$. This would permit storing a \textsf{ref} to a \textsf{ref} field of an \textsf{iso}, then unaliasing to obtain a \textsf{iso\textasciicircum}, unsafely upgrading a potentially aliased \textsf{ref} into an \textsf{iso\textasciicircum}.
+  \item[Nested consistency:] $\triangleright$ must satisfy the nested consistency property mentioned in section \ref{sec:extension-typing-rules}: when base types are identical, assignability and compatibility reduce to checking only the outer capabilities.
+\end{description}
 
-Finally, we must also verify that $\triangleright$'s definition satisfies the nested consistency property mentioned at the end of section \ref{sec:extension-typing-rules}: when base types are identical, assignability, covariance, and invariance reduce to checking only the outer capabilities.
-
-If the $\triangleright$ operator is associative, the above claims (which are quantified over all types with unbounded pointer nesting) reduce to checking only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies associativity of $\triangleright$, soundness of sendability, soundness of \textsf{iso} unaliasing, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. Mechanically verifying these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
+Although these safety claims are quantified over types with unbounded pointer nesting, the recursive definition of the type-checking rules ensures that they can be verified by considering only two levels of indirection (a pointer to a pointer to a base type). This makes exhaustive verification feasible. To this end, I wrote a Prolog program that verifies sendability safety, unaliasing safety, and nested consistency. This program can be found in appendix \ref{appendix:prolog}. Mechanically verifying these key non-trivial properties and intuitive confidence in the definition by reasoning through examples gives an assurance for the soundness of \textit{Coherence2.0}.
 
 \section{Expressive power}
 A core goal of \textit{Coherence} is to offer high expressive power without sacrificing safety. This section examines this claim.
@@ -51,7 +57,7 @@ This pattern is also quite error-prone. Programmers must manually return resourc
   \item \textsf{A} requests \textsf{s2} and enters its wait queue. \textsf{B} requests \textsf{s1} and enters its wait queue.
 \end{itemize}
 
-Each actor waits for the other to return the resource. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes are empty, there is still work to be done from the perspective of the programmer (the wait queues of the scheduler actors are not empty). Compilers cannot be expected to catch such bugs as they cannot interpret programmer intent encoded in programmer-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
+Each actor waits for the other to return the resource. Neither can proceed, and the system is stuck. Since Pony terminates when all mailboxes are empty, this program exits prematurely. The core issue is that although the runtime mailboxes are empty, there is still work to be done from the perspective of the programmer (the wait queues of the scheduler actors are not empty). Compilers cannot be expected to catch such bugs as they cannot interpret programmer intent encoded in user-defined structures. However, expressive languages should eliminate the need for such error-prone patterns altogether.
 
 \textit{Coherence} solves this through the \textsf{locked<L>} capability. Shared data is protected by associating it with a lock, and operations spanning multiple shared structures are wrapped in an \textsf{atomic} block. As shown below, swapping two shared integers reduces to a straightforward sequential program. Locks are acquired and released automatically and safely, eliminating the need for patterns prone to logical deadlocks.
 
@@ -115,7 +121,7 @@ The solution uses a mutex for data-race free access of \textsf{shop.queue} and a
 
 \textit{Coherence} does not provide direct access to synchronization primitives like semaphores or condition variables. However, equivalent patterns can be simulated through message passing combined with shared state. The key insight is that shared data structures and actor fields persist across behaviour invocations. To sleep, an actor simply allows its current behaviour to complete. All necessary state is retained in actor members. To wake up, another actor sends a message that triggers a new behaviour invocation, resuming operation. Using this insight, we can solve the \textit{sleeping barber problem} as follows.
 
-\begin{lstlisting}
+\begin{minted}{Pony}
 actor Barber {
   // A FIFO queue storing customer information
   queue: customer_queue locked<L>;
@@ -157,7 +163,7 @@ actor Customer {
     }
   }
 }
-\end{lstlisting}
+\end{minted}
 
 When a customer arrives, it atomically checks for space in \textsf{queue}, enqueues itself if space exists, and sends a \textsf{wake\_up} message to the barber if the queue is empty. The barber processes all queued customers within its behaviour. When the queue empties, the behaviour completes and the barber effectively "sleeps" until another \textsf{wake\_up} arrives.
 
@@ -174,14 +180,14 @@ Regarding expressive power, the \textit{Coherence} memory model offers greater f
 We analyse the limitations from the perspective of concurrent programming and general code style.
 
 \paragraph{Concurrent programming} \textit{Coherence}'s type system cannot capture lock-free programming patterns (for example, compare and swap). While lock-free operations are not more expressive (any such operation can be simulated by acquiring a lock, performing the operation, and then releasing the lock), they are significantly more efficient in practice. Additionally, the \textsf{locked<L>} capability lacks the granularity to support multiple-reader single-writer patterns. Another major limitation of \textit{Coherence} is that the number of locks is fixed at compile time, with each protected object tied to a statically known lock. Consequently, patterns such as a shared linked list where each node is protected by a distinct lock cannot be expressed:
-\begin{lstlisting}
-type linked_list = struct {
+\begin{minted}[escapeinside=||]{text}
+|\textcolor{mygreen}{\textbf{type}}| linked_list = struct {
   value: int;
   // All nodes share lock L. No way to vary locks per node
   next: linked_list locked<L>; 
 }
-\end{lstlisting}
-Type systems exist that guarantee deadlock freedom while allowing for dynamic creation of locks at runtime\cite{dynamic_locks}. Integrating such a system into \textit{Coherence} was planned as an extension. However, it proved more complex than anticipated, requiring substantial changes to the language, and was ultimately abandoned.
+\end{minted}
+Type systems exist that guarantee deadlock freedom while allowing dynamic creation of locks at runtime\cite{dynamic_locks}. Integrating such a system into \textit{Coherence} was planned as an extension. However, it proved more complex than anticipated, requiring substantial changes to the language, and was ultimately abandoned.
 
 \paragraph{General code style} \textit{Coherence} lacks first-class functions, making callback-based patterns difficult to express directly. It also lacks parametric polymorphism over types, so common abstractions like a generic list cannot be implemented. This limitation is exacerbated by the lock system: data protected by different locks constitute distinct types, and without the ability to abstract over types, a function operating on \textsf{unit locked<A>} for example, cannot accept \textsf{unit locked<B>}.
 

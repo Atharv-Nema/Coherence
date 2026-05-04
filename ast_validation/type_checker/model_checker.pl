@@ -35,12 +35,6 @@ view(locked(X), val, val) :- lock(X).
 view(locked(X), iso, iso) :- lock(X).
 view(locked(X), locked(Y), locked(Y)) :- lock(X), lock(Y).
 
-% check_nonassociativity(K1, K2, K3): succeeds if (K1 > K2) > K3 is
-% not equal to (K1 > (K2 > K3)).
-check_nonassociativity(K1, K2, K3) :- 
-    view(K1, K2, K1_2), view(K1_2, K3, K1_2_3), 
-    view(K2, K3, K2_3), \+ view(K1, K2_3, K1_2_3).
-
 % assignable(K1, K2): succeeds if K2 is assignable to K1
 assignable(X, X) :- capability(X), \+ (member(X, [iso, iso_cap])).
 assignable(X, iso_cap) :- capability(X), \+ (X = iso_cap).
@@ -100,7 +94,6 @@ check_sendable_inconsistencies(K1, K2) :-
 
 % Checks all the inconsistencies
 
-check_inconsistencies :- check_nonassociativity(K1, K2, K3).
 check_inconsistencies :- 
     check_nested_assignment_inconsistencies(K, K1, K2).
 check_inconsistencies :- 

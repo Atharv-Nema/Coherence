@@ -2,16 +2,16 @@
 %TC:envir tabular [] word
 %TC:envir table [] word
 \chapter{Conclusion}
-In this project, I developed \textit{Coherence}, an actor-based programming language that combines ideas from Pony, Kappa and Lockguard to create a novel language suited for writing expressive and safe concurrent code.
+In this project, I developed \textit{Coherence}, an actor-based programming language that combines ideas from Pony, Kappa and Lockguard to create a novel language suited for writing safe and expressive concurrent code.
 
-This chapter summarizes the work completed, discusses potential directions for future work, and reflects on the progression of the project.
+This chapter summarizes the work completed, discusses potential directions for future work, and reflects on the project evolution.
 
 \section{Work completed}
 I successfully achieved the core objectives established in the project proposal:
 \begin{itemize}
   \item Successfully devised a type system and implemented a type checker that ensures all accepted programs are data-race and deadlock free. 
   \item Implemented a compiler that translates \textit{Coherence} programs to LLVM IR, along with a runtime to manage scheduling and actor state.
-  \item Developed a test suite containing both unit and end-to-end tests to empirically verify implementation correctness. Evaluated \textit{Coherence}'s expressive power by implementing representative concurrent programs that demonstrate the language's expressive power and ergonomics.
+  \item Developed a test suite containing both unit and end-to-end tests to empirically verify implementation correctness. Evaluated \textit{Coherence}'s expressive power by examining common concurrency patterns and their implementation in \textit{Coherence}, demonstrating the language's expressive power and ergonomics.
 \end{itemize}
 Beyond the core objectives, I pursued several extensions:
 \begin{itemize}
@@ -19,21 +19,21 @@ Beyond the core objectives, I pursued several extensions:
   \item Performed time-complexity analysis and ran a benchmark to evaluate the runtime implementation.
   \item Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
 \end{itemize}
-In its present form, \textit{Coherence} successfully incorporates locks and atomic sections into a reference-capability based actor model, supporting a wider range of concurrent algorithms without sacrificing data-race and deadlock freedom.
+
+By successfully incorporating locks and atomic sections into a reference-capability based actor model, \textit{Coherence} manages to support a wider range of concurrent idioms than its inspirations while preserving freedom from data races and deadlocks.
 
 \section{Future work}
-Several directions for future work remain unexplored due to time constraints and their tangential relationship to the success criteria:
+The current implementation of \textit{Coherence} provides a robust foundation for safe concurrent programming. Future work will focus on expanding the language's practical utility in the following ways:
 \begin{itemize}
   \item \textbf{Richer language features}: 
-  Introducing parametric polymorphism via generics and first-class functions would enable cleaner representation of common programming patterns. Generics could be implemented using a compile-time instantiation approach similar to C++ templates. Type-checking rules to ensure the safe use of first-class functions could also be incorporated, drawing inspiration from Pony which already support first-class functions within a capability-based type system.
+  Introducing parametric polymorphism via generics and first-class functions would enable cleaner representation of common programming patterns. Generics could be implemented using a compile-time instantiation approach similar to C++ templates. Type-checking rules to ensure the safe use of first-class functions could also be incorporated, drawing inspiration from Pony which already supports first-class functions within a capability-based type system.
   \item \textbf{Dynamic lock allocation}: I believe \textit{Coherence} could be extended to support dynamic lock allocation following the work of existing type systems\cite{dynamic_locks} while preserving deadlock freedom guarantees. This would significantly increase \textit{Coherence}'s expressive power. 
-  \item \textbf{Garbage collector}: An extension that was abandoned was implementing a garbage collector for the language, as it was deemed to be tangential to the success criteria. Implementing a garbage collector would allow \textit{Coherence} to be used in long-running programs where memory efficiency is important.
+  \item \textbf{Garbage collector}: Implementing a garbage collector would allow \textit{Coherence} to be used in long-running programs or where memory efficiency is important.
 \end{itemize}
 
-\section{Reflections}
-
+\section{Reflections} \label{sec:reflections}
 Reflecting on the engineering process, the most consequential early decision was selecting C++ over OCaml for the compiler implementation. While C++ is standard for systems programming, its lack of native algebraic data types and pattern matching introduced significant syntactic overhead. Because the compiler relies heavily on recursive tree traversals, in hindsight, a functional language like OCaml would have allowed for a much cleaner and more succinct implementation.
 
 By working on \textit{Coherence}, I gained a practical appreciation for upfront architectural planning. A more rigorous initial design for the AST validation pipeline and the runtime system would have prevented substantial refactoring and debugging later in the project. On the theoretical side, I learned the importance of understanding the fundamental intent behind language semantics rather than just their mechanical rules. This deeper understanding was essential when adapting Pony's viewpoint adaptation rules to safely support \textit{Coherence}'s memory model.
 
-Overall, this project successfully achieved all core objectives and several extensions, combining ideas from Pony, Kappa, and Lockguard into a safe and expressive language for concurrent programming.
+Ultimately, \textit{Coherence} demonstrates that safety and expressiveness need not be at odds with each other. By synthesizing ideas of Pony, Kappa, and Lockguard, \textit{Coherence} shows that developers can be provided with expressive abstractions without compromising on data-race and deadlocks freedom.
