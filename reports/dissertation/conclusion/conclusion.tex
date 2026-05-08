@@ -16,7 +16,7 @@ I successfully achieved the core objectives established in the project proposal:
 Beyond the core objectives, I pursued several extensions:
 \begin{itemize}
   \item Extended the core \textit{Coherence} type system to support nested pointer structures. This involved careful translating the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
-  \item Performed time-complexity analysis and ran a benchmark to evaluate the runtime implementation.
+  \item Performed a time-complexity analysis of the compiler and benchmarked the runtime implementation.
   \item Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
 \end{itemize}
 
@@ -26,7 +26,7 @@ By successfully incorporating locks and atomic sections into a reference-capabil
 The current implementation of \textit{Coherence} provides a robust foundation for safe concurrent programming. Future work will focus on expanding the language's practical utility in the following ways:
 \begin{itemize}
   \item \textbf{Richer language features}: 
-  Introducing parametric polymorphism via generics and first-class functions would enable cleaner representation of common programming patterns. Generics could be implemented using a compile-time instantiation approach similar to C++ templates. Type-checking rules to ensure the safe use of first-class functions could also be incorporated, drawing inspiration from Pony which already supports first-class functions within a capability-based type system.
+  Introducing parametric polymorphism via generics and first-class functions would enable a cleaner representation of common programming patterns. Generics could be implemented using \textit{monomorphization}, a compile-time process that generates specialized code for every unique type instantiation. Type-checking rules to ensure the safe use of first-class functions could also be incorporated, drawing inspiration from Pony which already supports first-class functions within a capability-based type system.
   \item \textbf{Dynamic lock allocation}: I believe \textit{Coherence} could be extended to support dynamic lock allocation following the work of existing type systems\cite{dynamic_locks} while preserving deadlock freedom guarantees. This would significantly increase \textit{Coherence}'s expressive power. 
   \item \textbf{Garbage collector}: Implementing a garbage collector would allow \textit{Coherence} to be used in long-running programs or where memory efficiency is important.
 \end{itemize}

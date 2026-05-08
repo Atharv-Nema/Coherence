@@ -11,7 +11,7 @@
 \usepackage[margin=2cm]{geometry}
 \usepackage[utf8]{inputenc} % Added from Appendix
 \usepackage[T1]{fontenc}
-\usepackage{libertine}
+% \usepackage{libertine}
 \usepackage{diagbox}
 \usepackage[table]{xcolor}
 \definecolor{mygreen}{HTML}{008000}
@@ -21,6 +21,10 @@
 \usepackage{mathpartir}
 \usepackage{hyperref}
 \usepackage{minted}
+\definecolor{codebg}{gray}{0.96}
+\setminted{
+    bgcolor=codebg
+}
 \newtheorem{lemma}{Lemma}
 % --- Math & Inference Rules ---
 \usepackage{amsmath, amssymb, amsthm}
@@ -34,6 +38,7 @@
 % --- Code & Algorithms ---
 \usepackage{listings}
 \usepackage{algorithmicx}
+
 \usepackage{graphicx}
 \usepackage{algpseudocode}
 
@@ -46,7 +51,10 @@
 
 % --- Bibliography ---
 \usepackage[backend=bibtex]{biblatex}
+\usepackage{cleveref}
 \addbibresource{bibliography.bib} 
+
+
 
 % --- Global Document Settings ---
 
@@ -111,8 +119,8 @@ I, the candidate for Part II of the Computer Science Tripos with Blind Grading N
     \item[Candidate Number:] \myBGN
     \item[Project Title:] \myTitle
     \item[Examination and Year:] \myExam, \myYear
-    \item[Word Count:] \myWordCount
-    \item[Code Line Count:] \myLinesOfCode
+    \item[Word Count:] \myWordCount\footnote{Computed with \texttt{texcount}.}
+    \item[Code Line Count:] \myLinesOfCode\footnote{Computed with \texttt{cloc}.}
     \item[Project Originator:] \myOriginator
     \item[Supervisors:] \mySupervisor~(Day-to-Day and Marking)
     \item[Ethics Approval:] \myEthicsStatus
