@@ -56,7 +56,6 @@ std::optional<Cap> viewpoint_adaptation_op(std::optional<Cap> outer_view, std::o
 
         // Viewing through iso
         [](const Cap::Iso&, const Cap::Ref&) -> std::optional<Cap> { 
-            // CR: Potentially [Iso]???
             return Cap{Cap::Iso{}}; 
         },
         [](const Cap::Iso&, const Cap::Val&) -> std::optional<Cap> { 
@@ -145,7 +144,6 @@ bool capability_compatible(Cap c1, Cap c2) {
 // Takes in a [type]. If [type] is a pointer, it returns the type corresponding to the dereference of 
 // it. Otherwise, returns [nullptr] 
 std::shared_ptr<const Type> get_dereferenced_type(std::shared_ptr<const Type> type) {
-    // It should not modify Type basically
     auto* ptr_type = std::get_if<Type::Pointer>(&type->t);
     if(ptr_type == nullptr) {
         return nullptr;
@@ -338,7 +336,7 @@ bool pointer_property_compare_template(
             // 2. In cases of recursive types, a simple recursive check will lead to an infinite
             // loop. To prevent this, we can do an early check on whether the two base types are 
             // named with the same viewpoint. If so, we can simply return true. Note that this
-            // is only true for the pointer assignment case. It is questionable whether I should
+            // is only true for the pointer assignment case. It is arguable whether I should
             // be doing this check here, but it seems like the cleanest solution at the moment.
             bool inner_type_equal = std::visit(Overload{
                 [](const Type::TNamed& lhs_named, const Type::TNamed& rhs_named) {

@@ -72,7 +72,6 @@ std::shared_ptr<LLVMTypeInfo> llvm_type_of_coh_type(
             return std::make_shared<LLVMTypeInfo>("i1");
         },
         [&](const Type::TNamed& t_named) {
-            // std::cerr << t_named.name << std::endl;
             assert(gen_state.type_name_info_map.find(t_named.name) != gen_state.type_name_info_map.end());
             return gen_state.type_name_info_map.at(t_named.name);
         },

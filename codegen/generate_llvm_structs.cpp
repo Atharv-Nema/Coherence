@@ -6,8 +6,6 @@
 #include "defer.cpp"
 #include <cassert>
 
-
-
 void emit_type_definition(
     GenState& gen_state, 
     const TopLevelItem::TypeDef& type_def) {

@@ -27,26 +27,26 @@ bool update_valexpr_validity_info(
             }
             return true;
         },
-        [&](ValExpr::Consume& consume) {
-            auto var_status = var_valid.get_value(consume.var_name);
+        [&](ValExpr::Unalias& unalias) {
+            auto var_status = var_valid.get_value(unalias.var_name);
             if(var_status == std::nullopt) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Consuming a variable that either has not been defined or is not local" << std::endl;
+                std::cerr << "Unaliasing a variable that either has not been defined or is not local" << std::endl;
                 return false;
             }
             if(*var_status == false) {
-                std::cerr << "Consuming a variable twice" << std::endl;
+                std::cerr << "Unaliasing a variable twice" << std::endl;
                 return false;
             }
-            var_valid.insert(consume.var_name, false);
+            var_valid.insert(unalias.var_name, false);
             return true;
         },
         [&](ValExpr::Assignment& assignment) {
-            // The lhs is compiled before the rhs. But cases like [a = consume a] make this a bit more subtle
+            // The lhs is compiled before the rhs. But cases like [a = unalias a] make this a bit more subtle
             // That is why you see a slightly odd repetition of code here
             ValExpr::VVar* lhs_var;
             if((lhs_var = std::get_if<ValExpr::VVar>(&assignment.lhs->t)) != nullptr) {
-                // We just compile the rhs as the lhs cannot influence the consume status and then refresh the lhs
+                // We just compile the rhs as the lhs cannot influence the unalias status and then refresh the lhs
                 if(!update_valexpr_validity_info(var_valid, assignment.rhs)) {
                     return false;
                 }
@@ -79,11 +79,11 @@ void apply_control_flow_validity_updates(
     ScopedStore<std::string, bool>& var_valid,
     std::vector<std::unordered_map<std::string, bool>>& control_path_updates) {
     assert(control_path_updates.size() > 0);
-    std::unordered_set<std::string> consumed_vars;
+    std::unordered_set<std::string> unaliased_vars;
     for(auto& update: control_path_updates) {
         for(const auto& [var_name, var_available]: update) {
             if(!var_available) {
-                consumed_vars.insert(var_name);
+                unaliased_vars.insert(var_name);
             }
         }
     }
@@ -100,8 +100,8 @@ void apply_control_flow_validity_updates(
             }
         }
     }
-    for(const std::string& consumed_var: consumed_vars) {
-        var_valid.insert(consumed_var, false);
+    for(const std::string& unaliased_var: unaliased_vars) {
+        var_valid.insert(unaliased_var, false);
     }
     for(const std::string& refreshed_var: refreshed_vars) {
         var_valid.insert(refreshed_var, true);
@@ -168,9 +168,9 @@ bool update_stmt_validity_info(
         },
         [&](const Stmt::While& while_stmt) {
             // This is the most tricky case. The condition is always executed atleast once.
-            // If something is consumed in the condition but replinished in the body, this is fine
-            // (the compiler will still assume it is consumed). But if it is not replinished in the body,
-            // this is bad (double consume). Easy way to implement is to wrap the condition in a statement
+            // If something is unaliased in the condition but replenished in the body, this is fine
+            // (the compiler will still assume it is unaliased). But if it is not replenished in the body,
+            // this is bad (double unalias). Easy way to implement is to wrap the condition in a statement
             // and then pass it along with the body. Then call the val_expr function on the condition
             std::vector<std::shared_ptr<Stmt>> loop_stmts;
             loop_stmts.reserve(while_stmt.body.size() + 1);
@@ -183,7 +183,7 @@ bool update_stmt_validity_info(
             }
             for(auto& [var_name, var_available]: *body_valchange) {
                 if(!var_available) {
-                    std::cerr << "Variable " << orig_name(var_name) << " may be consumed twice" << std::endl;
+                    std::cerr << "Variable " << orig_name(var_name) << " may be unaliased twice" << std::endl;
                     return false;
                 }
             }
@@ -192,11 +192,11 @@ bool update_stmt_validity_info(
             return true;
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_stmt) {
-            auto atomic_consumed = get_scope_validity_change(var_valid, atomic_stmt->body);
-            if(atomic_consumed == std::nullopt) {
+            auto atomic_unaliased = get_scope_validity_change(var_valid, atomic_stmt->body);
+            if(atomic_unaliased == std::nullopt) {
                 return false;
             }
-            std::vector<std::unordered_map<std::string, bool>> v{std::move(atomic_consumed.value())};
+            std::vector<std::unordered_map<std::string, bool>> v{std::move(atomic_unaliased.value())};
             apply_control_flow_validity_updates(var_valid, v);
             return true;
         },
@@ -206,9 +206,9 @@ bool update_stmt_validity_info(
     }, stmt->t);
 }
 
-// Returns variables whose status was changed from the outer scope scene. It does this by adding consumed variables to 
-// [var_valid] that were not already in the latest scope. Also, it refreshes variables only in the latest scope. At the 
-// end, it pops the outer scope and returns the variables in it. If it ever encounters a consume violation, it reports an
+// Returns variables whose status was changed from the outer scope. It does this by adding unaliased variables to
+// [var_valid] that were not already in the latest scope. Also, it refreshes variables only in the latest scope. At the
+// end, it pops the outer scope and returns the variables in it. If it ever encounters an unalias violation, it reports an
 // error and returns std::nullopt
 std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     ScopedStore<std::string, bool>& var_valid,
@@ -217,12 +217,12 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     // For eg, unalias check wants to add some more stuff to the scope, so it creates it itself
     // This is a bit hacky, but it should not be too bad
 ) {
-    // Returns the variables that will be consumed from the upper scopes after control exits this scope
+    // Returns the variables that will be unaliased from the upper scopes after control exits this scope
     std::optional<ScopeGuard<std::string, bool>> g = std::nullopt;
     if(create_new_scope) {
         g.emplace(var_valid);
     }
-    std::unordered_set<std::string> consumed_vars;
+    std::unordered_set<std::string> unaliased_vars;
     for(std::shared_ptr<Stmt> stmt: stmt_list) {
         if(!update_stmt_validity_info(var_valid, stmt)) {
             return std::nullopt;

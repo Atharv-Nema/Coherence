@@ -14,6 +14,7 @@ CallableGraph reverse_graph(std::shared_ptr<CallableGraph> graph) {
     return rev_graph;
 }
 
+// Implementation of kosaraju's algorithm
 void find_sccs(std::shared_ptr<CallableGraph> graph) {
     std::vector<SyncCallable> visit_order;
     std::unordered_set<SyncCallable> visited;

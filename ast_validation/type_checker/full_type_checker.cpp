@@ -170,11 +170,9 @@ bool type_check_program(
         program_typechecks = type_check_toplevel_item(env, top_level_item) && program_typechecks;
     }
     if(!program_typechecks) {
-        // CR: This error message is probably redundant
         std::cerr << "Program does not typecheck" << std::endl;
         return false;
     }
-    // CR: Should not be at this stage
     // Checking whether there is an actor with name [Main]
     if(!env.decl_collection->actor_frontend_map.contains("Main")) {
         std::cerr << "Error: Actor Main not found" << std::endl;

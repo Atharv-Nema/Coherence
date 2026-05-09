@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <optional>
 
-
+// Class for efficiently maintaining scoped mappings
 template <typename K, typename V>
 class ScopedStore {
 private:

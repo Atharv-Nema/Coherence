@@ -247,13 +247,13 @@ std::pair<std::string, ValueCategory> emit_valexpr(
             // 4. Returning the register storing the pointer as an rvalue
             return make_pair(actor_id_reg, ValueCategory::RVALUE);
         },
-        [&](const ValExpr::Consume& consume) {
-            // consume x is basically the same as just the internal variable name
+        [&](const ValExpr::Unalias& unalias) {
+            // unalias x is basically the same as just the internal variable name
             // There really is no need to create an RValue, because we can afford to
             // modify the variable in-place (the variable will not be used until it is
             // assigned again)
             return make_pair(
-                gen_state.var_reg_mapping.at(consume.var_name), 
+                gen_state.var_reg_mapping.at(unalias.var_name),
                 ValueCategory::LVALUE);
         },
         [&](const ValExpr::PointerAccess& pointer_access) {
@@ -335,7 +335,6 @@ std::pair<std::string, ValueCategory> emit_valexpr(
         },
         [&](const ValExpr::FuncCall& func_call) {
             std::vector<std::pair<std::string, std::string>> func_args;
-            // CR: Separate this common code to another function
             for(std::shared_ptr<ValExpr> arg_expr: func_call.args) {
                 std::string llvm_type = 
                     llvm_type_of_coh_type(gen_state, arg_expr->expr_type)->llvm_type_name;
@@ -738,7 +737,6 @@ void generate_coherence_initialize(GenState& gen_state) {
 }
 
 void emit_behaviour(GenState& gen_state, std::shared_ptr<TopLevelItem::Behaviour> behaviour_def) {
-    // CR: [struct_mem_vec] is not needed here. Refactor to remove it.
     assert(gen_state.curr_actor != nullptr);
     gen_state.refresh_var_reg_info();
     std::string be_name_llvm = llvm_name_of_behaviour(behaviour_def->name, gen_state.curr_actor->name);

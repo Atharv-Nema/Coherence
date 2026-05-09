@@ -17,7 +17,6 @@ ReturnStatus logical_and_with_invalids(ReturnStatus s1, ReturnStatus s2) {
 }
 
 ReturnStatus statement_return_status(std::shared_ptr<Stmt> last_statement) {
-    // Adds error messages here I guess
     return std::visit(Overload{
         [&](const Stmt::Atomic& atomic_block) {
             return statement_list_return_status(atomic_block.body);
@@ -25,7 +24,7 @@ ReturnStatus statement_return_status(std::shared_ptr<Stmt> last_statement) {
         [&](const Stmt::Return& return_stmt) {
             // It is already checked that [return_stmt] has the correct type.
             // Perhaps an assert here will be good, but I guess semantically
-            // this guy just checks that the statement returns.
+            // this just checks that the statement returns.
             return ReturnStatus::RETURNS;
         },
         [&](const Stmt::If& if_stmt) {

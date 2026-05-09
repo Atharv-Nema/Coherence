@@ -1,5 +1,0 @@
-actor Main {
-    new create() {
-        OUT 42;
-    }
-}

@@ -47,8 +47,8 @@ struct ValExpr {
         std::vector<std::shared_ptr<ValExpr>> args; 
     };
 
-    // Consume
-    struct Consume {
+    // Unalias
+    struct Unalias {
         std::string var_name;
     };
 
@@ -77,8 +77,8 @@ struct ValExpr {
 
     SourceSpan source_span;
     std::shared_ptr<const Type> expr_type;
-    std::variant<VUnit, VNullptr, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction, 
-    Consume, PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
+    std::variant<VUnit, VNullptr, VInt, VBool, VVar, VStruct, NewInstance, ActorConstruction,
+    Unalias, PointerAccess, Field, Assignment, FuncCall, BinOpExpr> t;
 };
 
 

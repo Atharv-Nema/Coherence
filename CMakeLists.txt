@@ -31,7 +31,7 @@ add_subdirectory(coherence)
 
 set(COH_COMPILER_TARGET coherence)
 
-include(CTest)          # defines BUILD_TESTING option
+include(CTest)
 if (BUILD_TESTING)
   enable_testing()
   add_subdirectory(tests)

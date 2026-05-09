@@ -34,7 +34,6 @@ add_library(lexer_parser
     parse_file.cpp
 )
 
-# CR: Probably make [ast] a library
 target_include_directories(lexer_parser PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR} 

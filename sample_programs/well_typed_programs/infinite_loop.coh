@@ -1,6 +1,0 @@
-actor Main {
-    new create() {
-        while(true) {
-        }
-    }
-}

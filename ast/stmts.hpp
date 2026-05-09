@@ -2,12 +2,6 @@
 #include "expr.hpp"
 #include <unordered_set>
 
-// These define everything that can be in a line ending with a semi-colon as a part of a body (so not
-// top level function declarations and stuff like that). Unlike expr, it also includes statements
-// that do not return anything, like if and atomic. The purpose of separating stmts and expr is to 
-// prevent weird things like an if in the condition of an if and so on (although perhaps I could deal
-// with the types of such weirdness, but I don't want to for now)
-
 struct Stmt {
     struct VarDeclWithInit { 
         std::string name;
@@ -36,7 +30,6 @@ struct Stmt {
         std::shared_ptr<ValExpr> cond;
         std::vector<std::shared_ptr<Stmt>> body; 
     };
-    // CR: I dont think there is a point of the atomic statement being shared
     struct Atomic { 
         std::shared_ptr<std::unordered_set<std::string>> locks_dereferenced;
         std::vector<std::shared_ptr<Stmt>> body;

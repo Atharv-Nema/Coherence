@@ -5,11 +5,11 @@ actor Main {
         var c: int = 2;
         var cond: bool = true;
 
-        // IF with different consume patterns but fully refreshed
+        // IF with different unalias patterns but fully refreshed
         if (unalias(cond)) {
             cond = true;
 
-            // consume + refresh
+            // unalias + refresh
             unalias(a);
             a = 10;
 
@@ -18,7 +18,7 @@ actor Main {
         }
         else {
             cond = true;
-            // consume + refresh
+            // unalias + refresh
             unalias(b);
             b = 5;
             if (cond) {
@@ -29,16 +29,16 @@ actor Main {
         // Values should still be valid here
         var t: bool = cond;
 
-        // Assignment with consume on RHS
+        // Assignment with unalias on RHS
         a = unalias(a);
 
-        // While loop: consume in condition, refreshed in body
+        // While loop: unalias in condition, refreshed in body
         while (unalias(cond)) {
             cond = true;
             a = a + 1;
         }
 
-        // Atomic block: consume but refresh inside
+        // Atomic block: unalias but refresh inside
         atomic {
             unalias(b);
             b = 42;

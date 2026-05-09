@@ -2,8 +2,6 @@
 #include "stmts.hpp"
 #include <unordered_map>
 
-// TODO: Change the type here to include a span probably
-
 struct TopLevelItem {
     struct TypeDef {
         std::string type_name;
@@ -33,7 +31,6 @@ struct TopLevelItem {
     };
     struct Actor {
         std::string name;
-        // CR: In the parser, are repeats handled properly?
         std::unordered_map<std::string, std::shared_ptr<const Type>> member_vars;
         std::vector<std::variant<
             std::shared_ptr<Func>,

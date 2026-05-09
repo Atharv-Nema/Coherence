@@ -12,7 +12,7 @@ struct OverrideEnv {
 };
 
 bool variable_overridable(OverrideEnv& env, const std::string& var_name) {
-    // Need this for parameters stuff
+    // Need this for parameters
     if(var_name == "this") {
         return false;
     }
@@ -86,7 +86,6 @@ bool override_check_callable(
     env.var_scope_info.create_new_scope();
     // Add arguments to scope
     for(TopLevelItem::VarDecl var_decl: params) {
-        // CR: Figure out how to add error location here
         if(!variable_overridable(env, var_decl.name)) {
             std::cerr << "Parameter " << orig_name(var_decl.name) << " not valid" << std::endl;
             return false;

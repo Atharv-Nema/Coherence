@@ -42,7 +42,6 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
             return false;
         },
         [&](const ValExpr::VStruct& struct_instance) {
-            // CR: Try using advanced C++ features to do this functionally using [valexpr_list_accesses_vars]
             for(const auto&[k, v]: struct_instance.fields) {
                 if(valexpr_accesses_vars(vars, v)) {
                     return true;
@@ -56,10 +55,10 @@ bool valexpr_accesses_vars(const std::unordered_set<std::string>& vars, std::sha
         [&](const ValExpr::ActorConstruction& actor_construction) {
             return valexpr_list_accesses_vars(vars, actor_construction.args);
         },
-        [&](const ValExpr::Consume& consume) {
-            if(vars.contains(consume.var_name)) {
+        [&](const ValExpr::Unalias& unalias) {
+            if(vars.contains(unalias.var_name)) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Accessing invalid variable via consume " << consume.var_name << std::endl;
+                std::cerr << "Accessing invalid variable via unalias " << unalias.var_name << std::endl;
                 return true;
             }
             return false;
@@ -219,7 +218,6 @@ std::optional<std::unordered_set<std::string>> new_assigned_variable_in_stmt(
             return new_assigned_var;
         },
         [&](const Stmt::While& while_expr) -> std::optional<std::unordered_set<std::string>> {
-            // TODO hard thing need to implement
             if(valexpr_accesses_uninitialized(env, unassigned_members, while_expr.cond)) {
                 return std::nullopt;
             }

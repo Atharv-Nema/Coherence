@@ -66,7 +66,7 @@ From the root of the repository, follow these steps:
 6. **Run the compiler on a source file:**
 
     ```sh
-    ./build/compiler/coherence --input-file=./sample_programs/well_typed_programs/hello_world_equivalent.coh --output-dir=temp
+    ./build/compiler/coherence --input-file=./tests/e2e_tests/functional_tests/simple/prog.coh --output-dir=temp
     ```
 
     This runs the full compiler pipeline and emits all generated artifacts into the specified output directory (`temp`).

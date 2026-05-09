@@ -67,7 +67,6 @@ struct ActorInstanceState {
     State state;
     std::mutex instance_lock;
     void* llvm_actor_object;
-    // CR: Think carefully about the initialization status to avoid UB
     boost_ctx::fcontext_t next_continuation;
     void* running_be_sp;
     const uint64_t instance_id;
@@ -84,7 +83,6 @@ struct ActorInstanceState {
 
 struct RuntimeDS {
     // When the schedule queue is empty, threads can sleep in [thread_bed]
-    // CR: Potential undefined behaviour here
     std::condition_variable thread_bed;
     std::mutex schedule_queue_lock;
     std::atomic<uint8_t> threads_asleep;

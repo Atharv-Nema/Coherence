@@ -30,7 +30,7 @@ void add_valexpr_lock_info(std::shared_ptr<ValExpr> val_expr, LockInfoEnv& env) 
             std::shared_ptr<TopLevelItem::Func> called_func 
                 = get_func_def(func_call.func, env.curr_actor, env.decl_collection);
             if(env.locks_dereferenced == called_func->locks_dereferenced) {
-                // May be the case when a function is running for eg
+                // May be the case when a function is running, for example
                 return;
             }
             if(env.locks_dereferenced == nullptr) {

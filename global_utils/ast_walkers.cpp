@@ -1,7 +1,6 @@
 #include "ast_walkers.hpp"
 #include "pattern_matching_boilerplate.hpp"
 
-// CR: Better name
 // Unwraps a valexpr once (looked at through valexpr's) and applies the function to the subcases. Ignores
 // the default cases. Follows predicate logic and stops early.
 bool predicate_valexpr_walker(
@@ -64,7 +63,6 @@ void visitor_valexpr_walker(
         });
 }
 
-// CR: THE NAMES ARE SO BAD HELP
 void valexpr_and_stmt_visitors_stmt_walker(
     std::shared_ptr<Stmt> stmt,
     std::function<void(std::shared_ptr<ValExpr>)> val_expr_visitor,

@@ -97,10 +97,7 @@ def compile_pony(ponyc: str, source_dir: Path, output_dir: Path, binary_name: st
     if release:
         cmd.extend(["-D", "release"])
     cmd.extend(["-o", str(output_dir), "-b", binary_name, str(source_dir)])
-    
-    print(f"    Compiling: {' '.join(cmd)}")
     result = run(cmd, check=True)
-    
     expected_out = output_dir / binary_name
     if not expected_out.exists():
         print(f"Compilation did not produce expected output: {expected_out}")
@@ -165,8 +162,6 @@ def benchmark_ping_pong(config: BenchmarkConfig):
         t_pp_pony, e_pp_pony = time_exe([str(bin_dirs["pony"] / "main"), "--ponymaxthreads", "16"])
         t_pp_cpp,  e_pp_cpp  = time_exe([str(bin_dirs["cpp"] / "ping_pong")])
 
-        print(f"  Results: coh={t_pp_coh:.3f}±{e_pp_coh:.3f}s, pony={t_pp_pony:.3f}±{e_pp_pony:.3f}s, cpp={t_pp_cpp:.3f}±{e_pp_cpp:.3f}s")
-
         # Plot
         labels   = ['Coherence', 'Pony', 'C++']
         times    = [t_pp_coh, t_pp_pony, t_pp_cpp]
@@ -199,9 +194,6 @@ def benchmark_ping_pong(config: BenchmarkConfig):
         plt.tight_layout()
         plt.savefig(config.output_dir / "ping_pong_report.png")
         plt.close()
-
-    print("  Done.")
-
 
 def get_func_str(n: int):
     return f"""
@@ -238,8 +230,6 @@ def benchmark_compilation_time(config: BenchmarkConfig, sizes: list[int] = None)
         times = []
 
         for n in sizes:
-            print(f"  Testing n={n}...")
-
             # Generate the code
             source_file = compile_dir / f"phi_{n}.coh"
             generate_phi(n, source_file)
@@ -253,20 +243,9 @@ def benchmark_compilation_time(config: BenchmarkConfig, sizes: list[int] = None)
 
             elapsed, _ = time_compilation(cmd)
             times.append(elapsed)
-            print(f"    n={n}: {elapsed:.3f}s")
 
         # Fit quadratic curve for comparison
         coeffs = np.polyfit(sizes, times, 2)
-        fitted = np.polyval(coeffs, sizes)
-
-        # Print results
-        print("\n  Results:")
-        print(f"    {'n':>6} | {'Time (s)':>10}")
-        print(f"    {'-'*6}-+-{'-'*10}")
-        for n, t in zip(sizes, times):
-            print(f"    {n:>6} | {t:>10.3f}")
-
-        print(f"\n  Quadratic fit: {coeffs[0]:.2e}n² + {coeffs[1]:.2e}n + {coeffs[2]:.2e}")
 
         # Plot
         plt.figure(figsize=(10, 6))
@@ -289,26 +268,6 @@ def benchmark_compilation_time(config: BenchmarkConfig, sizes: list[int] = None)
 
         plt.savefig(config.output_dir / "compilation_time_report.png")
         plt.close()
-
-        # Also save a log-log plot to verify polynomial degree
-        plt.figure(figsize=(10, 6))
-        plt.loglog(sizes, times, 'o-', color='#3b82f6', linewidth=2, markersize=8, label='Measured')
-        
-        # Reference lines for O(n) and O(n²)
-        ref_n = np.array(sizes, dtype=float)
-        scale_linear = times[-1] / sizes[-1]
-        scale_quad = times[-1] / (sizes[-1] ** 2)
-        plt.loglog(sizes, scale_linear * ref_n, '--', color='#22c55e', alpha=0.7, label='O(n)')
-        plt.loglog(sizes, scale_quad * ref_n ** 2, '--', color='#ef4444', alpha=0.7, label='O(n²)')
-        
-        plt.xlabel('Code Size (n)')
-        plt.ylabel('Compilation Time (s)')
-        plt.title('Compilation Time vs Code Size (Log-Log Scale)')
-        plt.legend()
-        plt.grid(True, which="both", linestyle='--', alpha=0.3)
-        plt.savefig(config.output_dir / "compilation_time_loglog_report.png")
-        plt.close()
-
     print("  Done.")
 
 

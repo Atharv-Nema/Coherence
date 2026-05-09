@@ -24,7 +24,6 @@ struct RuntimeDS {
 RuntimeDS* runtime_ds;
 
 enum State {RUNNING, NOT_RUNNING};
-// CR: Rename this to [Peer]
 class Actor {
 private:
     int id;

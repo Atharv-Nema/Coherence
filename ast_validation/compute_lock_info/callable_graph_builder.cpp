@@ -24,8 +24,6 @@ void add_valexpr_callable_neighbours(
                 env.decl_collection->actor_frontend_map.at(actor_construction.actor_name);
             std::shared_ptr<TopLevelItem::Constructor> constructor_def =
                 actor_frontend->constructors.at(actor_construction.constructor_name);
-            // Finding the actor definition pointer. This is pretty bad code. However, it is the simplest way
-            // to find the actor definition
             std::shared_ptr<TopLevelItem::Actor> actor_def = 
                 env.graph->find(SyncCallable{constructor_def, nullptr})->first.curr_actor;
             assert(actor_def != nullptr);

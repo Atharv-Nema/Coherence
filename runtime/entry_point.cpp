@@ -10,9 +10,6 @@ Lock order:
 (lock mutex) ---> (Actor-instance lock) --> (schedule queue lock)
 */
 
-
-// CR: May not need [coherence_initialize]. Probably better to directly create [#Start] actor instance 
-// and call its behaviour
 extern "C" void coherence_initialize();
 extern "C" uint64_t num_locks;
 

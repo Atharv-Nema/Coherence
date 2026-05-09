@@ -48,7 +48,7 @@ static int curr_column = 1;
 "val"       return TOK_VAL;
 "locked"    return TOK_LOCKED;
 
-"unalias"   return TOK_CONSUME;
+"unalias"   return TOK_UNALIAS;
 
 "true"      return TOK_TRUE;
 "false"     return TOK_FALSE;
@@ -90,8 +90,8 @@ static int curr_column = 1;
 
 [a-zA-Z_][a-zA-Z0-9_']*   { yylval->str_val = new string(yytext); return TOK_IDENT; }
 
-[ \t\r\n]+                { /* ignore */ }
+[ \t\r\n]+                { }
 
-.                         { /* ignore for now */ }
+.                         { }
 
 %%

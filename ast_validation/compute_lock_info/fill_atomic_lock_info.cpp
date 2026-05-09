@@ -13,7 +13,6 @@ void fill_stmt_info(
     auto valexpr_visitor = [&](std::shared_ptr<ValExpr> val_expr) {
         add_valexpr_lock_info(val_expr, env);
     };
-    // Can do this directly with val_expr
     auto stmt_visitor = [&](std::shared_ptr<Stmt> stmt) {
         fill_stmt_info(stmt, env);
     };

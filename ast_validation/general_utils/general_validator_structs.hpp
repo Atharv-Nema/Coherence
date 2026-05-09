@@ -1,7 +1,7 @@
 #pragma once
 #include "top_level.hpp"
 
-// Sometimes, different stages need to use the same structure. These structures are put here.
+// Sometimes, different stages need to use the same structures. These structures are put here.
 // Ideally, we should try to separate out the different stages as much as possible, but sometimes
 // it cannot be helped. 
 

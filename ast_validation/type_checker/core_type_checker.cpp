@@ -28,7 +28,6 @@ struct CoreEnv {
 
 std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr> val_expr);
 
-// CR: Think carefully about including mutability here
 bool can_appear_in_lhs(CoreEnv& env, std::shared_ptr<ValExpr> expr) {
     // This assumes that expr is well-typed
     return std::visit(Overload{
@@ -95,7 +94,6 @@ bool check_type_expr_list_assignable(
     return true;
 }
 
-// CR: Need to improve the API here. A boolean flag is pretty bad code
 bool passed_in_parameters_valid(
     CoreEnv& env,
     const std::vector<TopLevelItem::VarDecl>& signature,
@@ -244,14 +242,14 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
             return std::make_shared<Type>(Type{Type::TActor{actor_constr_expr.actor_name}, std::nullopt});
         },
 
-        // Consume
-        [&](const ValExpr::Consume& consume) -> std::shared_ptr<const Type> {
-            if(!env.local_var_context.contains(consume.var_name)) {
+        // Unalias
+        [&](const ValExpr::Unalias& unalias) -> std::shared_ptr<const Type> {
+            if(!env.local_var_context.contains(unalias.var_name)) {
                 report_error_location(val_expr->source_span);
-                std::cerr << "Consumed variable is not a local variable" << std::endl;
+                std::cerr << "Unaliased variable is not a local variable" << std::endl;
                 return nullptr;
             }
-            return unaliased_type(env.local_var_context.at(consume.var_name));
+            return unaliased_type(env.local_var_context.at(unalias.var_name));
         },
 
         // Accesses
@@ -330,7 +328,7 @@ std::shared_ptr<const Type> val_expr_type(CoreEnv& env, std::shared_ptr<ValExpr>
                 std::cerr << "These types are not compatible in an assignment" << std::endl;
                 return nullptr;
             }
-            // Now just need to check whether the thingy is actually assignable scene
+            // Now just need to check whether the thing is actually assignable
             if(can_appear_in_lhs(env, assignment.lhs)) {
                 return unaliased_type(lhs_type);
             }

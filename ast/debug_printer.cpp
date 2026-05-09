@@ -139,9 +139,9 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "]}";
         },
 
-        // --- Consume --- 
-        [&](const ValExpr::Consume& c) {
-            std::cout << "Conume{var=" << c.var_name << "}" << std::endl;
+        // --- Unalias ---
+        [&](const ValExpr::Unalias& c) {
+            std::cout << "Unalias{var=" << c.var_name << "}" << std::endl;
         },
 
         // --- Pointer access ---

@@ -1,7 +1,0 @@
-actor Main {
-    new create() {
-        var x: int locked<A> = new[1] int(0);
-        // Error here
-        x[0];
-    }
-}

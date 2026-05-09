@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
         ("help", "produce help message")
         ("input-file", po::value<std::string>()->required(), "coherence program to compile")
         ("only-typecheck", po::value<bool>(), "whether to only typecheck the program")
-        ("optimize", po::value<bool>(), "whether to optimize the program") // Added here
+        ("optimize", po::value<bool>(), "whether to optimize the program")
         ("output-dir", po::value<std::string>(), "directory where the generated files will be stored");
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);

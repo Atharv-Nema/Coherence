@@ -54,8 +54,8 @@ void alpha_rename_val_expr(
                 alpha_rename_val_expr(rename_info, val_expr);
             }
         },
-        [&](ValExpr::Consume& consume) {
-            rename_info.rename_variable(consume.var_name);
+        [&](ValExpr::Unalias& unalias) {
+            rename_info.rename_variable(unalias.var_name);
         },
         [&](ValExpr::PointerAccess& pointer_access) {
             alpha_rename_val_expr(rename_info, pointer_access.index);

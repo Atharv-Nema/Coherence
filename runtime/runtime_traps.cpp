@@ -46,7 +46,6 @@ void* get_instance_struct(uint64_t instance_id) {
 // Called by LLVM right after allocating actor memory.
 // Only registers the actor and returns its unique instance_id.
 // Constructor runs synchronously in the caller, not the actor.
-// CR: Slightly misleading name
 uint64_t handle_actor_creation(void* llvm_actor_object)
 {
     uint64_t instance_id = ++(runtime_ds->instances_created);
