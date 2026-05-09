@@ -196,20 +196,18 @@ To empirically verify this bound, we measure the compilation time of the adversa
 \end{figure}
 
 \subsection{Runtime performance}
-A key design decision in the \textit{Coherence} runtime was to employ $M:N$ scheduling with user-level context switching, rather than dedicating an OS thread to each actor instance (see section \ref{sec:preparation_runtime}). To empirically evaluate this choice, I implemented the ring-token benchmark, a standard test in which a token is passed $m$ times around a ring of $n$ actors. I configured the benchmark with $m = 10^6$ passes and $n = 10^3$ actors, chosen to stress-test the runtime with frequent context switches and high message-passing volume.
+A key design decision in the \textit{Coherence} runtime was to employ $M:N$ scheduling with user-level context switching, rather than dedicating an OS thread to each actor instance (see section \ref{sec:preparation_runtime}). To empirically evaluate this choice, I implemented the many-to-many ping-pong benchmark. In this test, $n$ actor instances are created and each is tasked with initiating $m$ request-response exchanges with peers selected randomly. I configured the benchmark with $m = 100$ exchanges and $n = 1000$ actors, chosen to stress-test the runtime with numerous actor instances, frequent context switches and high message-passing volume.
 
-I compared three implementations: \textit{Coherence}, Pony, and a C++ implementation meant to simulate a thread-per-actor runtime implementation. The C++ implementation arranges $1000$ OS threads in a ring and uses semaphores to coordinate token passing. This implementation understates the true cost of a thread-per-actor design, as it omits the additional overhead of supporting message queues and message passing that a complete implementation would require.
+I compared three implementations: \textit{Coherence}, Pony, and a C++ implementation meant to simulate a thread-per-behaviour runtime implementation. The results, shown in \Cref{fig:ping-pong}, demonstrate that \textit{Coherence} (0.63s) greatly outperforms the C++ implementation (6.20s). This supports the claim that efficiently managing thousands of actor instances requires lighter-weight abstractions than OS threads.
 
-The results, shown in figure~\ref{fig:ring-token}, demonstrate that \textit{Coherence} (4.49s) outperforms the C++ implementation (4.98s) despite the latter's simplified implementation. This supports the claim that efficiently managing thousands of actor instances requires lighter-weight abstractions than OS threads.
-
-However, \textit{Coherence} is slower than Pony (2.97s), which is expected for two reasons. Firstly, Pony is a more mature language that benefits from various runtime optimization. Secondly, Pony's runtime executes behaviours directly on worker thread stacks. In contrast, as \textit{Coherence} behaviours might suspend mid-execution, the \textit{Coherence} runtime must allocate and deallocate a separate stack for each behaviour invocation and perform explicit user-space context switches (see section \ref{sec:preparation_runtime}), introducing additional overhead.
+However, \textit{Coherence} is significantly slower than Pony (0.19s), which is expected for two reasons. Firstly, Pony is a more mature language that benefits from various runtime optimization. Secondly, Pony's runtime executes behaviours directly on worker thread stacks. In contrast, as \textit{Coherence} behaviours might suspend mid-execution, the \textit{Coherence} runtime must allocate and deallocate a separate stack for each behaviour invocation and perform explicit user-space context switches (see section \ref{sec:preparation_runtime}), introducing additional overhead.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{evaluation/ring_token_report.png}
-    \caption{Ring token benchmark}
-    \label{fig:ring-token}
+    \includegraphics[width=0.8\textwidth]{evaluation/ping_pong_report.png}
+    \caption{Ping-pong benchmark results}
+    \label{fig:ping-pong}
 \end{figure}
 
 \subsection{Methodology}
-All benchmarks were executed on a machine equipped with an Intel Core Ultra 7 155H processor (3.80 GHz, 22 cores) and 32 GB RAM. Each measurement represents the mean of five runs. When comparing \textit{Coherence} and Pony, both runtimes were configured to use the same number of worker threads.
+All benchmarks were executed on a machine equipped with an Intel Core Ultra 7 155H processor (3.80 GHz, 22 cores) and 32 GB RAM. Each measurement represents the mean of five runs, with error bars indicating one sample standard deviation. When comparing \textit{Coherence} and Pony, both runtimes were configured to use the same number of worker threads.

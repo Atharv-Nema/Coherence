@@ -1,4 +1,4 @@
-#include "consume_checker.hpp"
+#include "unalias_checker.hpp"
 #include "utils.hpp"
 #include "scoped_store.cpp"
 #include "pattern_matching_boilerplate.hpp"
@@ -187,8 +187,8 @@ bool update_stmt_validity_info(
                     return false;
                 }
             }
-            bool cond_consume_check = update_valexpr_validity_info(var_valid, while_stmt.cond);
-            assert(cond_consume_check);
+            bool cond_unalias_check = update_valexpr_validity_info(var_valid, while_stmt.cond);
+            assert(cond_unalias_check);
             return true;
         },
         [&](std::shared_ptr<Stmt::Atomic> atomic_stmt) {
@@ -214,7 +214,7 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
     ScopedStore<std::string, bool>& var_valid,
     const std::vector<std::shared_ptr<Stmt>>& stmt_list,
     bool create_new_scope
-    // For eg, consume check wants to add some more stuff to the scope, so it creates it itself
+    // For eg, unalias check wants to add some more stuff to the scope, so it creates it itself
     // This is a bit hacky, but it should not be too bad
 ) {
     // Returns the variables that will be consumed from the upper scopes after control exits this scope
@@ -238,7 +238,7 @@ std::optional<std::unordered_map<std::string, bool>> get_scope_validity_change(
 }
 
 // Returns true if passes
-bool consume_check(
+bool unalias_check(
     std::vector<TopLevelItem::VarDecl>& params,
     std::vector<std::shared_ptr<Stmt>>& stmt_list) {
     ScopedStore<std::string, bool> var_valid;

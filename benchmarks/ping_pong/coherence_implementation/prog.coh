@@ -1,0 +1,73 @@
+actor Peer {
+    id: int;
+    peers: Peer val;
+    num_peers: int;
+    pings_remaining: int;
+
+    new create(int id_arg, int n, int m) {
+        id := id_arg;
+        peers := nullptr;
+        num_peers := n;
+        pings_remaining := m;
+    }
+
+    be set_peer_list((Peer val) peers_arg) {
+        peers = peers_arg;
+    }
+
+    // Pseudorandom function
+    func random_gen() => int {
+        // We use large primes to distribute targets across the 'num_peers' range.
+        // Maximum value of "mixed" is (1001 * 1000003) + (1000 * 500009) = 1500012003.
+        // This is safely below the 32-bit signed max of 2,147,483,647. 
+        var mixed: int = ((id + 1) * 1000003) + (pings_remaining * 500009);
+        return mixed % num_peers;
+    }
+    func send_next_ping() => unit {
+        if (pings_remaining > 0) {
+            var target_idx: int = random_gen();
+            peers[target_idx]->receive_ping(this);
+            pings_remaining = pings_remaining - 1;
+        }
+        return ();
+    }
+    // Start the concurrent storm
+    be start() {
+        send_next_ping();
+    }
+    // Immediately send a confirmation
+    be receive_ping(Peer from) {
+        from->receive_pong();
+    }
+    // Upon receiving a pong, this actor immediately picks a new target
+    be receive_pong() {
+        send_next_ping();
+    }
+}
+
+actor Main {
+    new create() {
+        var n: int = 1000;
+        var m: int = 100; // Each actor instance performs 1,000 pings
+        // Start out with an iso
+        var peer_list_iso: Peer iso = new iso[n] Peer(new Peer.create(0, n, m));
+        // Initialize n actor instances
+        var i: int = 1;
+        while (i < n) {
+            peer_list_iso[i] = new Peer.create(i, n, m);
+            i = i + 1;
+        }
+        var peer_list: Peer val = unalias(peer_list_iso);
+        i = 0;
+        while(i < n) {
+            peer_list[i]->set_peer_list(peer_list);
+            i = i + 1;
+        }
+        // Start the n actor instances
+        i = 0;
+        while (i < n) {
+            peer_list[i]->start();
+            i = i + 1;
+        }
+    }
+}

@@ -1,0 +1,55 @@
+Implementation stuff:
+I think I do not need "tag" for my viewpoint adaptation rules
+
+
+Damon comments questions:
+Why does viewpoint adaptation seem horrible.
+
+
+Dissertation refactoring plan:
+
+Preparation:
+Main thing: Need to rewrite the requirement analysis, and then also need to explain why I chose named
+locks and stuff. I think the implementation must have a brief mention of the design of Coherence (atleast a mention of why
+I chose the lock name approach or an outline of the entire language at the beginning (perhaps in the formal theory section)).
+
+Evaluation:
+Rephrase the formal proof section to state the formal lemmas. Also look at mycroft's comments.
+
+Conclusion:
+Modify the conclusion following mycrofts comments: slightly rephrase work completed and rewrite parts of reflections
+
+
+
+MYCROFT REVIEW REQUESTS:
+Modification to project objectives in section 1.3
+
+
+
+Review request:
+I guess we just do a single read of the dissertation. 
+I have been told that I am a bit dogshit at explaining stuff, and also why I am doing stuff, so if you notice anything like this, please let me know. Also my grammar is a bit cooked at times so please let me know if you spot anything. Also I have been told that at times my writing is extremely boring. If you can spot any particular place, or have any easy to implement suggestions on how to improve it, let me know. (also dont spend too much time reviewing, just a single read is enough (I will also just do a single read through cause exams))
+
+Suggestions for my diss:
+Use cref
+Better syntax for code
+Inline code using minted inline (lstinline)
+More references
+Can use cf in my text
+A bit about Pony behaviours being synchronous
+About the locked capability: associate a locked capability with a lock.
+Say lock-label instead of locks.
+Extricate for switching traps: say that the function is on the LLVM stack, and then extricates off it.
+For time complexity analysis, mention the relation to bellmann ford
+Say compound instead of complex in section 3.7
+Mention explicitly that B k is 
+Purely functional structures (okasaki)
+Monomorphization`
+
+First pass:
+All the comments
+
+Second pass:
+Also modify the declaration
+Need to rewrite the runtime performace section, and also the compilation time graph
+Also rename the consume checker to unalias checker

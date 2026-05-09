@@ -1,6 +1,6 @@
-# Deterministic Tests
+# Functional Tests
 
-A **deterministic test** is represented as a **single directory** containing the program and the expected outputs.
+A **functional test** is represented as a **single directory** containing the program and the expected outputs.
 
 ## Directory Layout
 

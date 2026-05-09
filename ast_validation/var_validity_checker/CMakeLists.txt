@@ -1,5 +1,5 @@
 add_library(var_validity_checker
-    consume_checker.cpp
+    unalias_checker.cpp
     override_checker.cpp
     var_validity_checker.cpp
 )

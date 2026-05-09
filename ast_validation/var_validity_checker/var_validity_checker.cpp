@@ -6,7 +6,7 @@
 #include "alpha_renaming.hpp"
 #include "override_checker.hpp"
 #include "defer.cpp"
-#include "consume_checker.hpp"
+#include "unalias_checker.hpp"
 
 bool var_validity_check_callable(
     std::shared_ptr<TopLevelItem::Actor> curr_actor,
@@ -19,8 +19,8 @@ bool var_validity_check_callable(
     // Alpha rename the callable body
     alpha_rename_callable_body(callable_body);
 
-    // Now run the consume checker
-    if(!consume_check(params, callable_body)) {
+    // Now run the unalias checker
+    if(!unalias_check(params, callable_body)) {
         return false;
     }
     return true;

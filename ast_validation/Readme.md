@@ -13,7 +13,7 @@ It performs the following:
    - Actor members are not overridden.
    - No variable is defined to be called `"this"`.
 3. Alpha-renames all variables so that different variables have different names.
-4. Runs the consume checker to prevent unsafe uses of consumed variables.
+4. Runs the unalias checker to prevent unsafe uses of unaliased variables.
 
 ---
 

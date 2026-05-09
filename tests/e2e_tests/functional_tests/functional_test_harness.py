@@ -17,7 +17,7 @@ def find_test_dirs():
 TEST_DIRS = find_test_dirs()
 
 @pytest.mark.parametrize("test_dir", TEST_DIRS, ids=[d.name for d in TEST_DIRS])
-def test_deterministic(test_dir, tmp_path):
+def test_functional(test_dir, tmp_path):
     coh = test_dir / "prog.coh"
     with open(test_dir / 'test_info.json', 'r') as file:
         data = json.load(file)

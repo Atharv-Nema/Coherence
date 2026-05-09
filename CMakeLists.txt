@@ -35,5 +35,5 @@ include(CTest)          # defines BUILD_TESTING option
 if (BUILD_TESTING)
   enable_testing()
   add_subdirectory(tests)
-  # add_subdirectory(benchmarks)
+  add_subdirectory(benchmarks)
 endif()
