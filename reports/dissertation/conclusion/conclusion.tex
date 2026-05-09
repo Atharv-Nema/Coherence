@@ -15,7 +15,7 @@ I successfully achieved the core objectives established in the project proposal:
 \end{itemize}
 Beyond the core objectives, I pursued several extensions:
 \begin{itemize}
-  \item Extended the core \textit{Coherence} type system to support nested pointer structures. This involved careful translating the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
+  \item Extended the core \textit{Coherence} type system to support nested pointer structures. This involved carefully translating the viewpoint adaptation rules of Pony so that they work with \textit{Coherence}'s type system.
   \item Performed a time-complexity analysis of the compiler and benchmarked the runtime implementation.
   \item Wrote a Prolog program to mechanically verify that the $\triangleright$ operator satisfies properties required for soundness.
 \end{itemize}
@@ -36,4 +36,4 @@ Reflecting on the engineering process, the most consequential early decision was
 
 By working on \textit{Coherence}, I gained a practical appreciation for upfront architectural planning. A more rigorous initial design for the AST validation pipeline and the runtime system would have prevented substantial refactoring and debugging later in the project. On the theoretical side, I learned the importance of understanding the fundamental intent behind language semantics rather than just their mechanical rules. This deeper understanding was essential when adapting Pony's viewpoint adaptation rules to safely support \textit{Coherence}'s memory model.
 
-Ultimately, \textit{Coherence} demonstrates that safety and expressiveness need not be at odds with each other. By synthesizing ideas of Pony, Kappa, and Lockguard, \textit{Coherence} shows that developers can be provided with expressive abstractions without compromising on data-race and deadlocks freedom.
+Ultimately, \textit{Coherence} demonstrates that safety and expressiveness need not be at odds with each other. By synthesizing ideas from Pony, Kappa, and Lockguard, \textit{Coherence} shows that developers can be provided with expressive abstractions without compromising on data-race and deadlocks freedom.

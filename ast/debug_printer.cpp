@@ -81,7 +81,7 @@ void print_binop(BinOp op) {
 void print_val_expr(const ValExpr& v) {
     std::visit(Overload{
 
-        // --- Simple values ---
+        //  Simple values 
         [&](const ValExpr::VUnit&) {
             std::cout << "VUnit{}";
         },
@@ -95,12 +95,12 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "VBool{v=" << (x.v ? "true" : "false") << "}";
         },
 
-        // --- Variable ---
+        // Variable 
         [&](const ValExpr::VVar& x) {
             std::cout << "VVar{name=" << x.name << "}";
         },
 
-        // --- Struct literal ---
+        // Struct literal 
         [&](const ValExpr::VStruct& s) {
             std::cout << "VStruct{type=";
             std::cout << "VStruct{type=";
@@ -116,7 +116,7 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "]}";
         },
 
-        // --- Allocation ---
+        // Allocation 
         [&](const ValExpr::NewInstance& n) {
             std::cout << "NewInstance{type=";
             print_type(n.type);
@@ -127,7 +127,7 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "}";
         },
 
-        // --- Actor construction ---
+        // Actor construction 
         [&](const ValExpr::ActorConstruction& a) {
             std::cout << "ActorConstruction{actor=" << a.actor_name
                       << ", ctor=" << a.constructor_name
@@ -139,12 +139,12 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "]}";
         },
 
-        // --- Unalias ---
+        // Unalias 
         [&](const ValExpr::Unalias& c) {
             std::cout << "Unalias{var=" << c.var_name << "}" << std::endl;
         },
 
-        // --- Pointer access ---
+        // Pointer access 
         [&](const ValExpr::PointerAccess& p) {
             std::cout << "PointerAccess{value=";
             print_val_expr(*p.value);
@@ -153,14 +153,14 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "}";
         },
 
-        // --- Struct field access ---
+        // Struct field access 
         [&](const ValExpr::Field& f) {
             std::cout << "Field{base=";
             print_val_expr(*f.base);
             std::cout << ", field=" << f.field << "}";
         },
 
-        // --- Assignment ---
+        // Assignment 
         [&](const ValExpr::Assignment& a) {
             std::cout << "Assignment{lhs=";
             print_val_expr(*a.lhs);
@@ -169,7 +169,7 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "}";
         },
 
-        // --- Function call ---
+        // Function call 
         [&](const ValExpr::FuncCall& c) {
             std::cout << "FuncCall{func=" << c.func << ", args=[";
             for (size_t i = 0; i < c.args.size(); i++) {
@@ -179,7 +179,7 @@ void print_val_expr(const ValExpr& v) {
             std::cout << "]}";
         },
 
-        // --- Binary op ---
+        // Binary op 
         [&](const ValExpr::BinOpExpr& b) {
             std::cout << "BinOpExpr{lhs=";
             print_val_expr(*b.lhs);

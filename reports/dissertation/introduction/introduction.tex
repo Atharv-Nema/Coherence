@@ -2,12 +2,11 @@
 %TC:envir tabular [] word
 %TC:envir table [] word
 \chapter{Introduction}
-The trajectory of processor development has shifted fundamentally in recent decades. Due to physical limitations, the era of rapid single-core performance gains effectively ended. In response, manufacturers pivoted towards multi-core architectures. %cite
-Software performance gains are no longer a "free lunch" provided by hardware improvements\cite{free_lunch}. To utilize modern processors to their greatest extent, writing concurrent code is essential.
+The trajectory of processor development has shifted fundamentally in recent decades. Due to physical limitations, the era of rapid single-core performance gains effectively ended. In response, manufacturers pivoted towards multi-core architectures. Software performance gains are no longer a "free lunch" provided by hardware improvements\cite{free_lunch}. To utilize modern processors to their greatest extent, writing concurrent code is essential.
 
-However, moving from a sequential to a concurrent execution model introduces significant cognitive overhead. Managing multiple threads requires a departure from the intuitive, linear flow of traditional programming. This complexity leads to various hard-to-catch concurrency errors, which are notoriously subtle and difficult to reproduce.
+However, moving from a sequential to a concurrent execution model introduces significant cognitive overhead. Managing multiple threads requires a departure from the intuitive, linear flow of traditional programming. This complexity leads to various hard-to-catch concurrency errors.
 
-This project designs and implements a language named \textit{Coherence}. \textit{Coherence} presents a novel combination of ideas from Pony, Kappa and Gudka's Lockguard (described in section \ref{sec:related_work}) to create a language suited for writing safe and expressive concurrent programs.
+This project designs and implements a language named \textit{Coherence}. \textit{Coherence} presents a novel combination of ideas from Pony, Kappa and Gudka's Lockguard (described in \Cref{sec:related_work}) to create a language suited for writing safe and expressive concurrent programs.
 
 \section{Motivation} \label{sec:intro_motivation}
 Concurrent code carries the risk of two types of errors: \textit{data races} and \textit{deadlocks}.
@@ -24,7 +23,7 @@ This project aims to demonstrate that safety does not need to come at the cost o
 
 \section{Related Work} \label{sec:related_work}
 
-This section briefly introduces three prior works that \textit{Coherence} synthesises. A more detailed technical treatment of each is in Chapter 2.
+This section briefly introduces three prior works that \textit{Coherence} synthesizes. A more detailed technical treatment of each is in Chapter 2.
 
 \subsection{The Pony Programming Language}
 The \textit{Pony} programming language\cite{pony_language} safely adds shared-memory into the actor model. The core innovation of Pony is its system of \textit{reference capabilities}. In Pony, every \textit{reference}\footnote{The terms \textit{pointer} and \textit{reference} will be used interchangeably throughout this document.} type has an associated capability that restricts how the reference can be used. The programmer assigns these capabilities to references they use, and the Pony compiler uses these capabilities to statically forbid programs that may lead to data-races. 
