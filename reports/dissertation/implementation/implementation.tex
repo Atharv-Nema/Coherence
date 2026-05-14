@@ -6,8 +6,8 @@
 \chapter{Implementation}
 This chapter describes the theory and code needed for \textit{Coherence}'s implementation.
 \begin{itemize}
-    \item We begin by introducing the formal syntax and type-checking rules of \textit{Coherence} (\Cref{sec:theory}).
-    \item We then describe the compiler frontend (\Cref{sec:frontend}) and the AST validation stage where the typing rules are implemented and lock-inference is performed (\Cref{sec:ast-validation}).
+    \item We begin by introducing the formal syntax and typing rules of \textit{Coherence} (\Cref{sec:theory}).
+    \item We then describe the compiler frontend (\Cref{sec:frontend}) and the AST validation stage (\Cref{sec:ast-validation}), which is performs type-checking and lock-inference.
     \item Next, the runtime implementation (\Cref{sec:runtime}) and the lowering to LLVM IR (\Cref{sec:codegen}) are discussed.
     \item We then analyse the compilation pipeline's time complexity (\Cref{sec:time-complexity-analysis}).
     \item \Cref{sec:pointers-to-pointers} presents an extension to the core language, allowing multi-level pointers.
@@ -101,7 +101,7 @@ e & ::= & () & \text{(unit)} \\
 \]
 While most constructs are fairly standard, some warrant further explanation:
 \begin{itemize}
-    \item \textbf{Allocation:} Pointers in \textit{Coherence} are treated as arrays. The allocation syntax $\mathtt{new}\ \kappa \ [e]\ B\ (e)$ requires the explicit declaration of a capability, the array size (within \texttt{[]}), and a default initialization value (within \texttt{()}). 
+    \item \textbf{Allocation:} Pointers in \textit{Coherence} are treated as arrays. The allocation $\mathtt{new}\ \kappa \ [e]\ B\ (e)$ requires the explicit declaration of a capability, the array size (within \texttt{[]}), and a default initialization value (within \texttt{()}). 
     \item \textbf{Operators:} Explanation of the specific binary operators ($\mathit{op}$) supported by \textit{Coherence} is omitted as the rules followed are fairly standard across programming languages.
     \item \textbf{Assignment:} Assignment is treated as an expression because it evaluates to the previous LHS value (unlike conventional languages, which evaluate to the RHS). This design enables safe transfer of \texttt{iso} references (see \Cref{sec:implementation_expression_typing}).
     \item \textbf{Ownership transfer:} The \texttt{unalias} keyword (equivalent to Pony's \texttt{consume} keyword) allows the programmer to invalidate a local variable, returning the "unaliased" value. \texttt{unalias} is used to maintain the single-alias property of \texttt{iso}. The compiler statically ensures that the unaliased variable remains inaccessible until it has been replenished with a new value.
@@ -196,9 +196,8 @@ actor_instance->receive_iso(x = ...);
     \draw[arrow] (isoh) -- (iso);
     \draw[arrow] (isoh) to [right=25] (ref);
     \draw[arrow] (isoh) to [left=25] (val);
-    \draw[arrow] (isoh) to [bend left=35] (lock);
+    \draw[arrow] (isoh) to [left=35] (lock);
 
-    \draw[arrow] (isoh) to [loop above, looseness=5] (isoh);
     \draw[arrow] (ref)  to [loop below, looseness=5] (ref);
     \draw[arrow] (val)  to [loop below, looseness=5] (val);
     \draw[arrow] (lock) to [loop below, looseness=2.5] (lock);
@@ -207,7 +206,7 @@ actor_instance->receive_iso(x = ...);
     \caption{Visualization of $<:$}
     \label{fig:capability_hierarchy}
 \end{figure}
-  Edges A -> B in \Cref{fig:capability_hierarchy} mean $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single-alias invariant. A reference with a locked capability is assignable to another reference with a locked capability if they are protected by the same lock.
+  Edges A -> B in \Cref{fig:capability_hierarchy} mean $B <: A$. So, \texttt{iso\textasciicircum} is assignable to all other capabilities, and \texttt{iso} is not assignable to anything (including itself) to maintain the single-alias invariant. A reference with a \texttt{locked} capability is assignable to another reference with a \texttt{locked} capability if they are protected by the same lock.
   The destination of an assignment needs to satisfy two additional constraints: it must evaluate to an \textit{L-value}, and the memory location corresponding to the L-value must be writable.
   \begin{notebox}
     \textbf{L-value}\\
@@ -253,8 +252,8 @@ The complete statement typing rules are in \Cref{appendix:statement_typing}. Som
     \vspace{0.5em}\\
     This rule extends $\Gamma_V$ with the new binding $x \mapsto T$.
   \item
-    \AxiomC{$\Gamma \tack e_a : \text{Actor}(A_{\text{name}})$}
-    \AxiomC{$b \in \Gamma_A(A_{\text{name}})_{behv}$}
+    \AxiomC{$\Gamma \tack e_a : \text{Actor}(A)$}
+    \AxiomC{$b \in \Gamma_A(A)_{behv}$}
     \AxiomC{$\Gamma \tack \overline{e} : \overline{T_e}$}
     \AxiomC{$\Gamma \tack \text{assignable}(b_{\text{param}}, \overline{T_e})$}
     \RightLabel{(Behv-Call)}
@@ -272,7 +271,7 @@ Top-level items, like statements, are typed using the judgement $\Gamma \tack D 
     \UnaryInfC{$\Gamma \tack \text{type } N = T_N \tack \Gamma[C \mapsto C[N \mapsto T_N]]$}
     \DisplayProof
     \vspace{1.5em}\\
-    $\Gamma_C$ maintains information about type-definitions. This rule updates $\Gamma_C$. The predicate \texttt{valid} checks that all named types present in the AST of $T_N$ are already present in $\Gamma_C$.
+    $\Gamma_C$ maintains information about type-definitions. This rule updates $\Gamma_C$. The predicate valid checks that all named types present in the AST of $T_N$ are already present in $\Gamma_C$.
   \item
     \AxiomC{$\Gamma' = \Gamma[V \mapsto \{\overline{x : \phi_p}\}]$}
     \AxiomC{$\Gamma \tack \text{sendable}(\overline{\phi_p})$}
@@ -583,7 +582,7 @@ Most stages of the compiler are linear in the source program size $N$. However, 
 
 In the calculations below, let $F$ denote the number of synchronous callables, $E$ the number of callable invocations, and $L$ the number of locks in the program.
 
-The fixed-point iteration approach described in \Cref{sec:fixed-point-iter} requires at most $F$ iterations, since the \textit{diameter} of the call graph (the maximum path length) is less than $F$, and each iteration extends the dependency path lengths considered by one. The lock set associated with any callable has size $O(L)$, and hence the work performed in each iteration is $O(F + EL)$. The total time complexity is therefore $O(F \times (F + EL))$. Since $F$, $L$, and $E$ are all $O(N)$, this yields an upper bound of $O(N^3)$.
+The fixed-point iteration approach (\Cref{sec:fixed-point-iter}) requires at most $F$ iterations, since the \textit{diameter} of the call graph (the maximum path length) is less than $F$, and each iteration extends the dependency path lengths considered by one. The lock set associated with any callable has size $O(L)$, and hence the work performed in each iteration is $O(F + EL)$. The total time complexity is therefore $O(F \times (F + EL))$. Since $F$, $L$, and $E$ are all $O(N)$, this yields an upper bound of $O(N^3)$.
 
 The optimised approach (\Cref{sec:optimised-inference}) uses Kosaraju's algorithm to condense the call graph in $O(F + E)$ time. A single reverse-topological pass then computes the final lock sets in $O(F + EL)$ time, reducing the overall complexity to $O(N^2)$.
 
@@ -594,7 +593,7 @@ Thus, the optimised approach provides an asymptotic speedup from $\Theta(N^3)$ t
 \section{Extension: Pointers-to-pointers} \label{sec:pointers-to-pointers}
 We extend \textit{Coherence1.0} to allow pointers-to-pointers, creating \textit{Coherence2.0}. This addresses a major limitation of \textit{Coherence1.0}: the inability to represent many useful types. In \textit{Coherence1.0}, compound types are created using structs, but these cannot contain pointers as members. Consequently, data structures like dynamic arrays (which must store a pointer to an underlying buffer) cannot be encapsulated into a single type. Recursive data structures such as trees and linked lists are similarly impossible to represent. Since struct instances in \textit{Coherence} follow \textit{value semantics} (stored directly without pointer indirection), embedding a struct within itself would result in undefined size. The standard workaround of storing pointers to the struct as members instead is unavailable without this extension.
 \subsection{Modifications to the syntax}
-We develop the new syntax by working through examples and carefully considering the requirements of the programmer. \Cref{sec:preparation_viewpoint_adaptation} talks about the need for viewpoint adaptation to maintain the deny-properties of nested references. As a reminder, viewpoint adaptation tells us that if we have a pointer $x$ of type $(T \ \kappa_1) \ \kappa_2$, the type of *$x$ is $T \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $T \ \kappa$ is $\kappa \triangleright T$, where $\kappa \triangleright T$ represents applying the viewpoint adaptation operator to type $T$. Here, $\kappa \ \triangleright \_$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright T$:
+We develop the new syntax by working through examples and carefully considering the requirements of the programmer. \Cref{sec:preparation_viewpoint_adaptation} talks about the need for viewpoint adaptation to maintain the deny-properties of nested references. As a reminder, viewpoint adaptation tells us that if we have a pointer $x$ of type $(T \ \kappa_1) \ \kappa_2$, the type of *$x$ is $T \ \kappa_2 \triangleright \kappa_1$. Hence, in general, the type of the dereference of $T \ \kappa$ is $\kappa \triangleright T$, where $\kappa \triangleright T$ represents applying the viewpoint adaptation operator to type $T$. Here, $\kappa \triangleright \_$ is overloaded to operate on both individual capabilities and on types. Let us reason through the behaviour of $\kappa \triangleright T$:
 \begin{itemize}
   \item \textbf{Simple types}: For simple types that do not contain pointers, $\kappa \triangleright \_$ acts as an identity function and has no effect on the type.
   \item \textbf{Pointers}: As demonstrated previously in this section, the operator composes $\kappa$ with the capability of the pointer.
@@ -626,7 +625,7 @@ To create an instance of a pointer to this structure, we need to do something li
 \begin{minted}[escapeinside=||]{pony}
 new ref[1] list({value = 3; next = <instance of list |ref|>}: list);
 \end{minted}
-To create an instance of \texttt{list ref}, we need to create an instance of the structs field, which is also of type \texttt{list ref}. There is no end to this recursion! There are a few approaches to solve this problem:
+To create an instance of \texttt{list ref}, we need to create an instance of the field \texttt{next}, which is also of type \texttt{list ref}. There is no end to this recursion! There are a few approaches to solve this problem:
 \begin{itemize}
   \item \textbf{Variants}: By allowing a field to be a sum type, we maintain the invariant of strict pointers (where every pointer dereference is guaranteed to be defined) while providing a non-recursive base case.
   \begin{minted}[escapeinside=<>]{text}
@@ -634,9 +633,7 @@ To create an instance of \texttt{list ref}, we need to create an instance of the
     value: int;
     next: (list <\textcolor{mygreen}{\textbf{ref}}>) | unit;
 }
-  \end{minted}
-  \begin{minted}{pony}
-new ref[1] list({value = 3; next = ()}: list)
+<\textcolor{mygreen}{\textbf{new}}> <\textcolor{blue}{\textbf{ref}}>[1] list({value = 3; next = ()}: list)
   \end{minted}
   \item \textbf{Nullptr}: An alternative approach is to relax the strictness of the pointer model by introducing a \texttt{nullptr} value. \texttt{nullptr} acts as default pointer capable of inhabiting any pointer type. This allows the recursive loop to be broken by assigning a \texttt{nullptr} value to the terminal node of a structure:
   \begin{minted}{pony}
@@ -669,7 +666,7 @@ The table below gives the definition of the $\triangleright$ operator used in \t
 \caption{\textit{Coherence2.0} Viewpoint Adaptation Definition: rows represent $\kappa_1$, columns represent $\kappa_2$}
 \end{table}
 
-One notable choice in the definition of $\triangleright$ warrants justification: $\text{ref}\ \triangleright\ \text{iso} = \text{iso}$. This may appear to violate the uniqueness property of \texttt{iso}. However, assigning a $(T\ \texttt{iso})\ \texttt{ref}$ to another $(T\ \texttt{iso})\ \texttt{ref}$ does not increase the number of memory locations storing the $T\ \texttt{iso}$ reference (it remains in a single heap location). We simply have multiple paths (via \texttt{ref} aliases of the parent structure) leading to that unique location. This is safe within an actor because all accesses occur sequentially within its execution context, preventing concurrent data races. For a similar reason, $\texttt{locked<A>} \triangleright \texttt{iso} = \texttt{iso}$ (mutual exclusion ensures only one actor can access the \texttt{iso} at a time).
+One notable choice in the definition of $\triangleright$ warrants justification: $\text{ref}\ \triangleright\ \text{iso} = \text{iso}$. This may appear to violate the uniqueness property of \texttt{iso}. However, assigning a $(T\ \texttt{iso})\ \texttt{ref}$ to another $(T\ \texttt{iso})\ \texttt{ref}$ does not increase the number of memory locations storing the $T\ \texttt{iso}$ reference (it remains in a single heap location). We simply have multiple paths (via \texttt{ref} aliases of the parent structure) leading to that unique location. This is safe within an actor because all accesses occur sequentially within its execution context, preventing concurrent data races. For similar reasons, $\texttt{locked<A>} \triangleright \texttt{iso} = \texttt{iso}$ (mutual exclusion ensures only one actor can access the \texttt{iso} at a time).
 
 \subsection{Modifications to the type-system} \label{sec:extension-typing-rules}
 The core challenge in supporting nested indirection is extending the \texttt{assignable} relation described in \Cref{sec:implementation_expression_typing} to correctly account for viewpoint adaptation. To determine if a source type $S\ \kappa_{s_1}$ is assignable to a target type $T\ \kappa_{t_1}$, the compiler must first verify that the outer capabilities satisfy $\kappa_{s_1} <: \kappa_{t_1}$ ($<:$ is defined in \Cref{sec:implementation_expression_typing}). However, because $S$ and $T$ may themselves contain references, the compiler must recursively ensure that the viewpoint-adapted types visible through these references are compatible. Suppose that $S$ has a reference with capability $\kappa_{s_2}$ and $T$ a reference with capability $\kappa_{t_2}$. The type-checker recursively uses the \textit{compatible} relation to check that $(\kappa_{s_1} \triangleright \kappa_{s_2})$ is compatible with $(\kappa_{t_1} \triangleright \kappa_{t_2})$.
@@ -681,7 +678,6 @@ var y: (int iso) ref = x;
 \end{minted}
 
 Notably, this system does not require the complicated covariance or invariance checks typical of pointer subtyping. The \texttt{compatible} relation naturally assumes the role of both. This is because a capability $\kappa_1$ is compatible with $\kappa_2$ only if they are identical or if $\kappa_2 = \texttt{iso\textasciicircum}$ (a reference with no aliases). Hence, there is no risk of assigning to a weaker reference, subsequently writing invalid data and then reading from the original reference.
-
 
 Using the new \texttt{assignable} predicate, the rules below are the adjusted typing rules for \textit{Coherence2.0}.
 \AxiomC{$\Gamma \tack e_s : \text{Int}$}
